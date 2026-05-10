@@ -1,0 +1,102 @@
+// src/hooks/useTimer.js
+// FIX: Worker singleton — tab switch pe terminate nahi hoga
+// Timer background mein bhi chalta rahe (YouTube chalao, kuch bhi karo)
+
+import { useEffect, useRef, useCallback } from 'react'
+import useTimerStore from '@/store/timerStore'
+import useUserStore from '@/store/userStore'
+import { saveSession, addPendingSync } from '@/api/sessions'
+import { midnightSplit, getTodayString } from '@/utils/time'
+
+// Module-level singleton worker — component mount/unmount se affect nahi hoga
+let _worker = null
+
+function getWorker() {
+  if (!_worker) {
+    _worker = new Worker('/timer.worker.js')
+  }
+  return _worker
+}
+
+export function useTimer() {
+  const store = useTimerStore()
+  const { uid } = useUserStore()
+  const listenerAttached = useRef(false)
+
+  useEffect(() => {
+    const worker = getWorker()
+
+    // Sirf ek baar listener attach karo
+    if (!listenerAttached.current) {
+      listenerAttached.current = true
+      worker.onmessage = (e) => {
+        if (e.data.type === 'TICK') {
+          useTimerStore.getState().setElapsed(e.data.elapsed)
+        }
+      }
+    }
+
+    // Page reload ke baad: agar timer chal raha tha to worker restart karo
+    const s = useTimerStore.getState()
+    if (s.isRunning && !s.isPaused && s.sessionStartTime) {
+      const alreadyElapsed = Math.round((Date.now() - new Date(s.sessionStartTime).getTime()) / 1000)
+      worker.postMessage({ type: 'START', payload: { elapsed: alreadyElapsed } })
+    } else if (s.isPaused) {
+      // Paused — worker ko sirf current elapsed bata do, start mat karo
+    }
+
+    // Cleanup: worker terminate mat karo — tab switch handle karna hai
+    return () => {}
+  }, [])
+
+  const start = useCallback((subject) => {
+    store.start(subject)
+    getWorker().postMessage({ type: 'START', payload: { elapsed: 0 } })
+  }, [store])
+
+  const pause = useCallback(() => {
+    store.pause()
+    getWorker().postMessage({ type: 'PAUSE' })
+  }, [store])
+
+  const resume = useCallback(() => {
+    store.resume()
+    getWorker().postMessage({ type: 'RESUME', payload: { elapsed: store.elapsed } })
+  }, [store])
+
+  const stop = useCallback(async () => {
+    getWorker().postMessage({ type: 'STOP' })
+
+    const endTime   = new Date().toISOString()
+    const startTime = store.sessionStartTime
+    const elapsed   = store.elapsed
+
+    if (!startTime || elapsed < 10) { store.reset(); return }
+
+    const splits = midnightSplit(startTime, endTime)
+    for (const split of splits) {
+      const duration = Math.round((new Date(split.endTime) - new Date(split.startTime)) / 1000)
+      const session = {
+        subjectId:    store.subjectId,
+        subjectName:  store.subjectName,
+        subjectColor: store.subjectColor,
+        startTime:    split.startTime,
+        endTime:      split.endTime,
+        duration,
+        date:         split.date,
+        notes:        '',
+      }
+      try {
+        if (uid) { await saveSession(session) }
+        else { addPendingSync(session) }
+      } catch { addPendingSync(session) }
+    }
+
+    store.reset()
+    return elapsed
+  }, [store, uid])
+
+  return { start, pause, resume, stop }
+}
+
+export default useTimer

@@ -1,0 +1,36 @@
+import express from 'express'
+import mongoose from 'mongoose'
+import cors from 'cors'
+import dotenv from 'dotenv'
+import authRoutes    from './routes/auth.js'
+import subjectRoutes from './routes/subjects.js'
+import sessionRoutes from './routes/sessions.js'
+import todoRoutes    from './routes/todos.js'
+import badgeRoutes   from './routes/badges.js'
+import groupRoutes   from './routes/groups.js'
+import uploadRoutes  from './routes/upload.js'
+
+dotenv.config()
+const app = express()
+
+app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }))
+app.use(express.json())
+
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch((e) => { console.error('❌ MongoDB error:', e.message); process.exit(1) })
+
+app.use('/api/auth',     authRoutes)
+app.use('/api/subjects', subjectRoutes)
+app.use('/api/sessions', sessionRoutes)
+app.use('/api/todos',    todoRoutes)
+app.use('/api/badges',   badgeRoutes)
+app.use('/api/groups',   groupRoutes)
+app.use('/api/upload',   uploadRoutes)
+
+// Health check
+app.get('/api/health', (_, res) => res.json({ ok: true }))
+
+app.listen(process.env.PORT || 4000, () =>
+  console.log(`🚀 Server running on port ${process.env.PORT || 4000}`)
+)

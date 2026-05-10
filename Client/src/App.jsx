@@ -1,0 +1,129 @@
+// App.jsx
+// Routes setup, PrivateRoute wrapper (useAuth), Sidebar+BottomNav conditional on screen size
+// MiniPlayer always rendered when timer is active, all 12 routes
+
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from './hooks/useAuth';
+import { useUserStore } from './store/userStore';
+import { useBootstrap } from './hooks/useBootstrap';
+
+// Layout
+import Sidebar    from './components/layout/Sidebar';
+import BottomNav  from './components/layout/BottomNav';
+import MiniPlayer from './components/layout/MiniPlayer';
+
+// Pages (lazy imports for code-splitting)
+import { lazy, Suspense } from 'react';
+
+const Login        = lazy(() => import('./pages/Login'));
+const Home         = lazy(() => import('./pages/Home'));
+const Timer        = lazy(() => import('./pages/Timer'));
+const Stats        = lazy(() => import('./pages/Stats'));
+const Calendar     = lazy(() => import('./pages/Calendar'));
+const History      = lazy(() => import('./pages/History'));
+const Todo         = lazy(() => import('./pages/Todo'));
+const Achievements = lazy(() => import('./pages/Achievements'));
+const StudyGroup   = lazy(() => import('./pages/StudyGroup'));
+const Wellbeing    = lazy(() => import('./pages/Wellbeing'));
+const Profile      = lazy(() => import('./pages/Profile'));
+const Settings     = lazy(() => import('./pages/Settings'));
+
+// ── Private Route Guard ──────────────────────────────────────────────────────
+function PrivateRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <PageLoader />;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+// ── Full-screen loader ───────────────────────────────────────────────────────
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-[#0f172a]">
+      <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
+// ── Shell: Sidebar + BottomNav wrap ─────────────────────────────────────────
+function AppShell({ children }) {
+  return (
+    <div className="flex h-screen bg-[#0f172a] text-slate-200 overflow-hidden">
+      <Sidebar />
+      <main className="flex-1 min-w-0 pb-[56px] md:pb-0 overflow-y-auto h-full">
+        <Suspense fallback={
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          {children}
+        </Suspense>
+      </main>
+      <BottomNav />
+    </div>
+  );
+}
+
+// ── App ──────────────────────────────────────────────────────────────────────
+export default function App() {
+  const theme = useUserStore((s) => s.theme);
+  useBootstrap(); // FIX: login ke baad subjects fetch + todaySeconds calculate
+
+  return (
+    <div className={theme === 'light' ? 'light' : ''}>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* Public */}
+          <Route path="/login" element={<Login />} />
+
+          {/* Protected — all wrapped in AppShell */}
+          <Route
+            path="/"
+            element={
+              <PrivateRoute>
+                <AppShell><Home /></AppShell>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/timer"
+            element={
+              <PrivateRoute>
+                {/* Timer page is full-screen — no shell padding needed */}
+                <div className="min-h-screen bg-[#0f172a]">
+                  <Timer />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          {[
+            ['/stats',        <Stats />],
+            ['/calendar',     <Calendar />],
+            ['/history',      <History />],
+            ['/todo',         <Todo />],
+            ['/achievements', <Achievements />],
+            ['/group',        <StudyGroup />],
+            ['/wellbeing',    <Wellbeing />],
+            ['/profile',      <Profile />],
+            ['/settings',     <Settings />],
+          ].map(([path, page]) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <PrivateRoute>
+                  <AppShell>{page}</AppShell>
+                </PrivateRoute>
+              }
+            />
+          ))}
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        {/* MiniPlayer globally — persists across ALL routes including /timer */}
+        <MiniPlayer />
+      </Suspense>
+    </div>
+  );
+}

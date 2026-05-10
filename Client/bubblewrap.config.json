@@ -1,0 +1,20 @@
+{
+  "packageId": "com.tapasya.app",
+  "host": "your-deployed-domain.web.app",
+  "name": "Tapasya",
+  "launcherName": "तपस्या",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#f97316",
+  "navigationColor": "#0f172a",
+  "backgroundColor": "#0f172a",
+  "startUrl": "/",
+  "iconUrl": "https://your-deployed-domain.web.app/icons/icon-512.png",
+  "maskableIconUrl": "https://your-deployed-domain.web.app/icons/icon-512.png",
+  "appVersionCode": 1,
+  "appVersionName": "1.0.0",
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "tapasya"
+  }
+}

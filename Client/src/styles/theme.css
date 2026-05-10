@@ -1,0 +1,62 @@
+/* theme.css */
+/* CSS variables — dark + light mode */
+
+:root {
+  /* Brand */
+  --color-brand:          #f97316;
+  --color-brand-light:    #fb923c;
+  --color-brand-dark:     #ea580c;
+
+  /* Backgrounds */
+  --bg-primary:           #0f172a;
+  --bg-secondary:         #1e293b;
+  --bg-tertiary:          #0c1526;
+  --bg-card:              #1e293b;
+
+  /* Text */
+  --text-primary:         #e2e8f0;
+  --text-secondary:       #94a3b8;
+  --text-muted:           #64748b;
+  --text-disabled:        #334155;
+
+  /* Borders */
+  --border:               #1e293b;
+  --border-subtle:        #0f172a;
+  --border-strong:        #334155;
+
+  /* Status colors */
+  --color-success:        #22c55e;
+  --color-warning:        #f59e0b;
+  --color-error:          #ef4444;
+  --color-info:           #3b82f6;
+
+  /* Misc */
+  --radius-sm:            6px;
+  --radius-md:            10px;
+  --radius-lg:            14px;
+  --radius-xl:            20px;
+}
+
+/* Light mode override */
+.light {
+  --bg-primary:           #f8fafc;
+  --bg-secondary:         #f1f5f9;
+  --bg-tertiary:          #e2e8f0;
+  --bg-card:              #ffffff;
+
+  --text-primary:         #0f172a;
+  --text-secondary:       #475569;
+  --text-muted:           #94a3b8;
+  --text-disabled:        #cbd5e1;
+
+  --border:               #e2e8f0;
+  --border-subtle:        #f1f5f9;
+  --border-strong:        #cbd5e1;
+}
+
+/* Apply CSS vars to Tailwind-like utility classes for manual use */
+.bg-app        { background-color: var(--bg-primary); }
+.bg-card       { background-color: var(--bg-card); }
+.text-primary  { color: var(--text-primary); }
+.text-muted    { color: var(--text-muted); }
+.border-app    { border-color: var(--border); }
