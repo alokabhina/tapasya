@@ -1,8 +1,23 @@
 // src/components/achievements/BadgeCard.jsx
-// Modal: badge icon + name + description + unlock condition + unlock date
+// Redesign: Premium modal — colored top band, glow ring, unlock date
 // props: badge, isUnlocked, unlockData, onClose
 
 import { useEffect } from 'react';
+
+const BADGE_COLORS = {
+  first_session:    '#f97316',
+  five_hours_day:   '#eab308',
+  streak_7:         '#3b82f6',
+  streak_30:        '#6366f1',
+  hours_100:        '#f97316',
+  midnight_session: '#8b5cf6',
+  early_bird:       '#f59e0b',
+  hours_500:        '#06b6d4',
+  five_subjects:    '#10b981',
+  perfect_week:     '#ec4899',
+  hours_1000:       '#f97316',
+  group_join:       '#22c55e',
+};
 
 function formatUnlockDate(ts) {
   if (!ts) return '';
@@ -11,7 +26,8 @@ function formatUnlockDate(ts) {
 }
 
 export default function BadgeCard({ badge, isUnlocked, unlockData, onClose }) {
-  // Escape key
+  const color = BADGE_COLORS[badge.id] || '#f97316';
+
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose?.(); }
     document.addEventListener('keydown', onKey);
@@ -24,56 +40,95 @@ export default function BadgeCard({ badge, isUnlocked, unlockData, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm px-5"
       onClick={handleBackdrop}
     >
-      <div className="w-full max-w-xs bg-[#1a2234] border border-slate-700/50 rounded-2xl shadow-2xl text-center overflow-hidden">
-        {/* Top color band */}
+      <div
+        className="w-full max-w-xs rounded-2xl overflow-hidden border shadow-2xl"
+        style={{
+          background: `linear-gradient(160deg, ${color}18 0%, #0d1420 40%)`,
+          borderColor: isUnlocked ? color + '40' : '#1e293b',
+          boxShadow: isUnlocked ? `0 0 40px ${color}20` : 'none',
+        }}
+      >
+        {/* Top color bar */}
         <div
-          className={`h-1.5 w-full ${isUnlocked ? 'bg-orange-500' : 'bg-slate-700'}`}
+          className="h-1 w-full"
+          style={{ background: isUnlocked ? `linear-gradient(90deg, ${color}88, ${color})` : '#1e293b' }}
         />
 
-        <div className="px-6 py-6 space-y-3">
-          {/* Badge icon */}
+        {/* Content */}
+        <div className="px-6 py-7 flex flex-col items-center gap-3 text-center">
+
+          {/* Glow ring around icon */}
           <div
-            className="text-6xl mx-auto"
-            style={!isUnlocked ? { filter: 'grayscale(1) blur(1.5px)', opacity: 0.4 } : {}}
+            className="w-20 h-20 rounded-full flex items-center justify-center relative"
+            style={{
+              background: isUnlocked ? `radial-gradient(circle, ${color}20, transparent 70%)` : '#111827',
+              border: `2px solid ${isUnlocked ? color + '40' : '#1f2937'}`,
+              boxShadow: isUnlocked ? `0 0 24px ${color}30` : 'none',
+            }}
           >
-            {badge.icon}
+            <span
+              className="text-4xl"
+              style={!isUnlocked ? { filter: 'grayscale(1) blur(1.5px)', opacity: 0.3 } : {}}
+            >
+              {badge.icon}
+            </span>
+          </div>
+
+          {/* Status pill */}
+          <div
+            className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
+            style={
+              isUnlocked
+                ? { background: color + '20', color }
+                : { background: '#1f2937', color: '#475569' }
+            }
+          >
+            {isUnlocked ? '✓ Unlocked' : 'Locked'}
           </div>
 
           {/* Name */}
-          <h2 className={`text-base font-semibold ${isUnlocked ? 'text-orange-300' : 'text-slate-500'}`}>
+          <h2
+            className="text-lg font-bold"
+            style={{
+              color: isUnlocked ? color : '#475569',
+              fontFamily: "'Sora', sans-serif",
+              letterSpacing: '-0.02em',
+            }}
+          >
             {badge.name}
           </h2>
 
           {/* Description */}
-          <p className="text-sm text-slate-400 leading-relaxed">
-            {badge.description}
-          </p>
+          <p className="text-[13px] text-slate-400 leading-relaxed">{badge.description}</p>
 
           {/* Condition */}
-          <div className="flex items-center justify-center gap-1.5 text-xs text-slate-600">
-            <i className="ti ti-lock text-[11px]" />
-            <span>{badge.condition}</span>
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] text-slate-500 border border-slate-800/80 bg-slate-900/40 w-full justify-center"
+          >
+            <i className="ti ti-target text-slate-600 text-xs" />
+            {badge.condition}
           </div>
 
           {/* Unlock date */}
-          {isUnlocked && unlockData?.unlockedAt ? (
-            <div className="flex items-center justify-center gap-1.5 text-xs text-orange-400/80">
-              <i className="ti ti-calendar-check text-[11px]" />
-              <span>Unlocked {formatUnlockDate(unlockData.unlockedAt)}</span>
+          {isUnlocked && unlockData?.unlockedAt && (
+            <div className="flex items-center gap-1.5 text-[11px]" style={{ color: color + 'bb' }}>
+              <i className="ti ti-calendar-check text-xs" />
+              Unlocked {formatUnlockDate(unlockData.unlockedAt)}
             </div>
-          ) : !isUnlocked ? (
-            <p className="text-xs text-slate-700 italic">Not yet unlocked</p>
-          ) : null}
+          )}
+          {!isUnlocked && (
+            <p className="text-[11px] text-slate-700 italic">Complete the condition to unlock</p>
+          )}
         </div>
 
-        {/* Close */}
-        <div className="px-6 pb-5">
+        {/* Close button */}
+        <div className="px-5 pb-5">
           <button
             onClick={onClose}
-            className="w-full py-2.5 rounded-xl text-sm text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors"
+            className="w-full py-3 rounded-xl text-[13px] font-medium text-slate-400 border border-slate-800 hover:bg-slate-800/60 transition-colors"
           >
             Close
           </button>

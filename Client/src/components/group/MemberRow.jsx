@@ -33,13 +33,15 @@ function SubjectBar({ subjects = [] }) {
   );
 }
 
-export default function MemberRow({ member, rank, isCurrentUser }) {
+export default function MemberRow({ member, rank, isCurrentUser, onClick }) {
   const rankStyle = RANK_STYLES[rank];
   const weeklySeconds = member.weeklySeconds || 0;
 
   return (
     <div
+      onClick={onClick}
       className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors
+        ${onClick ? 'cursor-pointer hover:brightness-125' : ''}
         ${rankStyle
           ? `${rankStyle.bg} ${rankStyle.border}`
           : isCurrentUser

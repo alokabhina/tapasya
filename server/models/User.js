@@ -7,6 +7,6 @@ const userSchema = new mongoose.Schema({
   isGuest:     { type: Boolean, default: false },
   googleId:    String,
   dailyGoalSeconds: { type: Number, default: 21600 },
-  groupId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Group' },
+  // groupId removed — users can now create/join unlimited groups freely
 }, { timestamps: true })
 export default mongoose.model('User', userSchema)

@@ -1,11 +1,13 @@
 // src/hooks/useTimer.js
+// FIX: Session save ke baad group hours update hota hai (addSessionHours)
 // Back navigation auto-stops timer; <10 sec sessions are discarded
 
 import { useEffect, useRef, useCallback } from 'react'
 import useTimerStore from '@/store/timerStore'
 import useUserStore from '@/store/userStore'
 import { saveSession, addPendingSync } from '@/api/sessions'
-import { midnightSplit, getTodayString } from '@/utils/time'
+import { updateMemberHours } from '@/api/groups'
+import { midnightSplit } from '@/utils/time'
 
 let _worker = null
 
@@ -56,7 +58,7 @@ export function useTimer() {
     getWorker().postMessage({ type: 'RESUME', payload: { elapsed: store.elapsed } })
   }, [store])
 
-  // Core save logic — shared by stop() and stopAndDiscard()
+  // Core save logic
   const _saveAndReset = useCallback(async (minSeconds = 10) => {
     getWorker().postMessage({ type: 'STOP' })
 
@@ -71,6 +73,8 @@ export function useTimer() {
     }
 
     const splits = midnightSplit(startTime, endTime)
+    let totalSaved = 0
+
     for (const split of splits) {
       const duration = Math.round((new Date(split.endTime) - new Date(split.startTime)) / 1000)
       const session = {
@@ -84,9 +88,27 @@ export function useTimer() {
         notes:        '',
       }
       try {
-        if (uid) { await saveSession(session) }
-        else { addPendingSync(session) }
-      } catch { addPendingSync(session) }
+        if (uid) {
+          await saveSession(session)
+          totalSaved += duration
+        } else {
+          addPendingSync(session)
+        }
+      } catch {
+        addPendingSync(session)
+      }
+    }
+
+    // FIX: Group leaderboard update karo — session ke total seconds bhejo
+    if (uid && totalSaved > 0) {
+      const { groupId } = useUserStore.getState()
+      if (groupId) {
+        try {
+          await updateMemberHours(uid, groupId, totalSaved)
+        } catch (e) {
+          console.warn('Group hours update failed (non-critical):', e.message)
+        }
+      }
     }
 
     store.reset()

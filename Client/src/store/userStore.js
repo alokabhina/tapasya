@@ -14,18 +14,28 @@ const useUserStore = create(
       bgImageUrl: null,
       streakDays: 0,
       totalHoursAllTime: 0,
-      groupId: null, // joined group ka id
+      // groupId removed — users can now join/create unlimited groups
 
       setUser: (user) =>
-        set({
+        set((state) => ({
           uid: user.uid,
-          displayName: user.displayName || 'Aspirant',
-          photoURL: user.photoURL || null,
-          email: user.email || '',
-          isGuest: user.isAnonymous || false,
-        }),
+          // Only use server value if user hasn't set a custom local name
+          displayName: state.displayName && state.displayName !== 'Aspirant'
+            ? state.displayName
+            : (user.displayName || 'Aspirant'),
+          // Only use server photoURL if user hasn't set a custom local photo
+          photoURL: state.photoURL
+            ? state.photoURL
+            : (user.photoURL || null),
+          email: user.email || state.email || '',
+          isGuest: user.isAnonymous || user.isGuest || false,
+        })),
 
       setGoal: (seconds) => set({ dailyGoalSeconds: seconds }),
+
+      setDisplayName: (name) => set({ displayName: name }),
+
+      setPhotoURL: (url) => set({ photoURL: url }),
 
       setTheme: (theme) => {
         document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -38,16 +48,12 @@ const useUserStore = create(
 
       setTotalHours: (hours) => set({ totalHoursAllTime: hours }),
 
-      setGroupId: (id) => set({ groupId: id }),
-
       clearUser: () =>
         set({
           uid: null,
-          displayName: '',
-          photoURL: null,
           email: '',
           isGuest: false,
-          groupId: null,
+          // displayName and photoURL intentionally kept — user set them locally
         }),
     }),
     {
@@ -56,7 +62,8 @@ const useUserStore = create(
         theme: state.theme,
         bgImageUrl: state.bgImageUrl,
         dailyGoalSeconds: state.dailyGoalSeconds,
-        groupId: state.groupId,
+        displayName: state.displayName,
+        photoURL: state.photoURL,
       }),
     }
   )

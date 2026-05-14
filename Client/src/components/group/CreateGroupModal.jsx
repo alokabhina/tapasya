@@ -1,21 +1,21 @@
-import { useState } from 'react';
-import useGroup from '@/hooks/useGroup';
+// src/components/group/CreateGroupModal.jsx
+// FIXED:
+// 1. createGroup passed as prop (avoids dual-instance hook bug)
+// 2. Real server error message shown (not just generic text)
+// 3. Emoji picker icon shown as preview next to name in modal
 
-// Modal: group name input + emoji/icon picker
-// createGroup() on submit via useGroup hook
-// Auto-generates 6-char invite code, adds creator as first member
+import { useState } from 'react';
 
 const EMOJI_OPTIONS = [
   '📚', '🔥', '⚡', '🎯', '🧠', '🏆', '💡', '🌙',
   '⭐', '🚀', '💪', '🦁', '🌿', '🎓', '🧪', '🗺️',
 ];
 
-export default function CreateGroupModal({ onClose }) {
-  const { createGroup } = useGroup();
-  const [name, setName] = useState('');
-  const [emoji, setEmoji] = useState('📚');
+export default function CreateGroupModal({ onClose, createGroup }) {
+  const [name, setName]       = useState('');
+  const [emoji, setEmoji]     = useState('📚');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]     = useState('');
 
   const handleCreate = async () => {
     if (!name.trim()) {
@@ -28,14 +28,14 @@ export default function CreateGroupModal({ onClose }) {
       await createGroup(`${emoji} ${name.trim()}`);
       onClose?.();
     } catch (err) {
-      setError('Group create nahi hua — dobara try karo');
+      // Show the actual server error message, fall back to generic
+      setError(err?.message || 'Group create nahi hua — dobara try karo');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    /* Backdrop */
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4"
       onClick={(e) => e.target === e.currentTarget && onClose?.()}
@@ -93,7 +93,7 @@ export default function CreateGroupModal({ onClose }) {
           </div>
         )}
 
-        {/* Error */}
+        {/* Error — shows real server message */}
         {error && (
           <p className="text-xs text-red-400 mb-3 flex items-center gap-1">
             <i className="ti ti-alert-circle" />

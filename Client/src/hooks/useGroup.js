@@ -1,86 +1,149 @@
-import { useState, useEffect, useRef } from 'react'
-// ✅ FIX: '@/firebase/groups' → '@/api/groups' (firebase folder exist hi nahi karta)
+// src/hooks/useGroup.js
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  createGroup,
-  joinGroupByCode,
-  leaveGroup,
-  subscribeToGroup,
+  createGroup as apiCreateGroup,
+  joinGroupByCode as apiJoinGroup,
+  leaveGroup as apiLeaveGroup,
+  deleteGroup as apiDeleteGroup,
+  kickMember as apiKickMember,
+  fetchMyGroups,
+  fetchGroupMembers,
   updateMemberHours,
 } from '@/api/groups'
 import useUserStore from '@/store/userStore'
 
 export function useGroup() {
-  const { uid, displayName, groupId, setGroupId } = useUserStore()
-  const [group, setGroup] = useState(null)
-  const [members, setMembers] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const unsubRef = useRef(null)
+  const { uid } = useUserStore()
+  const [groups, setGroups]           = useState([])
+  const [activeGroupId, setActiveGroupId] = useState(null)
+  const [members, setMembers]         = useState([])
+  const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState(null)
+  const pollRef = useRef(null)
+
+  const group = groups.find(g => g._id === activeGroupId) || groups[0] || null
 
   useEffect(() => {
-    if (!groupId) {
-      setMembers([])
-      setGroup(null)
-      return
+    if (!uid) { setGroups([]); setActiveGroupId(null); setMembers([]); return }
+    loadAllGroups()
+  }, [uid])
+
+  useEffect(() => {
+    clearInterval(pollRef.current)
+    if (!activeGroupId) { setMembers([]); return }
+    let active = true
+    async function pollMembers() {
+      try { const data = await fetchGroupMembers(activeGroupId); if (active) setMembers(data) } catch {}
     }
-    // subscribeToGroup ab REST polling karta hai (30s interval) — same API
-    unsubRef.current = subscribeToGroup(groupId, (updatedMembers) => {
-      setMembers(updatedMembers)
-    })
-    return () => unsubRef.current?.()
-  }, [groupId])
+    pollMembers()
+    pollRef.current = setInterval(pollMembers, 30_000)
+    return () => { active = false; clearInterval(pollRef.current) }
+  }, [activeGroupId])
+
+  useEffect(() => {
+    if (groups.length > 0 && !activeGroupId) setActiveGroupId(groups[0]._id)
+    else if (groups.length === 0) setActiveGroupId(null)
+  }, [groups])
+
+  async function loadAllGroups() {
+    setLoading(true)
+    try { const data = await fetchMyGroups(); setGroups(data) }
+    catch (e) { console.error('Groups load error:', e) }
+    finally { setLoading(false) }
+  }
 
   async function handleCreateGroup(name) {
-    if (!uid) return
     setLoading(true); setError(null)
     try {
-      const { groupId: newId } = await createGroup(uid, displayName, name)
-      setGroupId(newId)
-    } catch {
-      setError('Group create nahi hua. Try again.')
-    } finally {
-      setLoading(false)
-    }
+      const { group: newGroup } = await apiCreateGroup(name)
+      setGroups(prev => [...prev, newGroup])
+      setActiveGroupId(newGroup._id)
+      return newGroup
+    } catch (e) {
+      const msg = e?.response?.data?.error || 'Group create nahi hua. Try again.'
+      setError(msg); throw new Error(msg)
+    } finally { setLoading(false) }
   }
 
   async function handleJoinGroup(code) {
-    if (!uid) return
     setLoading(true); setError(null)
     try {
-      const newId = await joinGroupByCode(uid, displayName, code)
-      setGroupId(newId)
-    } catch {
-      setError('Invalid invite code. Check karke try karo.')
-    } finally {
-      setLoading(false)
-    }
+      const { group: joinedGroup } = await apiJoinGroup(code)
+      setGroups(prev => { const exists = prev.find(g => g._id === joinedGroup._id); return exists ? prev : [...prev, joinedGroup] })
+      setActiveGroupId(joinedGroup._id)
+      return joinedGroup
+    } catch (e) {
+      const msg = e?.response?.data?.error || 'Invalid invite code.'
+      setError(msg); throw new Error(msg)
+    } finally { setLoading(false) }
   }
 
-  async function handleLeaveGroup() {
-    if (!uid || !groupId) return
+  async function handleLeaveGroup(groupId) {
+    const targetId = groupId || activeGroupId
+    if (!targetId) return
     setLoading(true)
     try {
-      await leaveGroup(uid, groupId)
-      setGroupId(null)
+      await apiLeaveGroup(targetId)
+      clearInterval(pollRef.current)
+      const remaining = groups.filter(g => g._id !== targetId)
+      setGroups(remaining)
+      setActiveGroupId(remaining[0]?._id || null)
       setMembers([])
-    } catch {
-      setError('Leave nahi hua. Try again.')
-    } finally {
-      setLoading(false)
+    } catch (e) {
+      const msg = e?.response?.data?.error || 'Leave nahi hua. Try again.'
+      setError(msg); throw new Error(msg)
+    } finally { setLoading(false) }
+  }
+
+  async function handleDeleteGroup(groupId) {
+    const targetId = groupId || activeGroupId
+    if (!targetId) return
+    setLoading(true)
+    try {
+      await apiDeleteGroup(targetId)
+      clearInterval(pollRef.current)
+      const remaining = groups.filter(g => g._id !== targetId)
+      setGroups(remaining)
+      setActiveGroupId(remaining[0]?._id || null)
+      setMembers([])
+    } catch (e) {
+      const msg = e?.response?.data?.error || 'Delete nahi hua. Try again.'
+      setError(msg); throw new Error(msg)
+    } finally { setLoading(false) }
+  }
+
+  async function handleKickMember(groupId, userId) {
+    try {
+      await apiKickMember(groupId, userId)
+      setMembers(prev => prev.filter(m => m.userId?.toString() !== userId))
+      setGroups(prev => prev.map(g => g._id === groupId
+        ? { ...g, members: g.members.filter(m => m.userId?.toString() !== userId), memberCount: (g.memberCount || 1) - 1 }
+        : g
+      ))
+    } catch (e) {
+      const msg = e?.response?.data?.error || 'Kick nahi hua.'
+      throw new Error(msg)
     }
   }
 
   async function addSessionHours(seconds) {
-    if (!uid || !groupId) return
-    await updateMemberHours(uid, groupId, seconds)
+    if (!groups.length) return
+    for (const g of groups) {
+      try { await updateMemberHours(g._id, seconds) } catch (e) { console.error(`Group hours update failed for ${g._id}:`, e) }
+    }
   }
 
   return {
-    group, members, loading, error, groupId,
-    createGroup: handleCreateGroup,
-    joinGroup: handleJoinGroup,
-    leaveGroup: handleLeaveGroup,
+    groups, group, activeGroupId, setActiveGroupId,
+    members, loading, error,
+    createGroup:  handleCreateGroup,
+    joinGroup:    handleJoinGroup,
+    leaveGroup:   handleLeaveGroup,
+    deleteGroup:  handleDeleteGroup,
+    kickMember:   handleKickMember,
     addSessionHours,
+    refresh:      loadAllGroups,
   }
 }
+
 export default useGroup

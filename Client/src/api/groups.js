@@ -1,52 +1,60 @@
-// ✅ FIX: Complete rewrite — was using Firebase Firestore, now uses REST API
-// Real-time onSnapshot polling ke through simulate kiya hai (setInterval)
+// src/api/groups.js
 import api from './client'
 
-// Naya group create karo
-export async function createGroup(uid, displayName, name) {
+export async function createGroup(name) {
   const { data } = await api.post('/groups', { name })
-  return { groupId: data.groupId, code: data.group.inviteCode }
+  return { groupId: data.groupId, group: { _id: data.groupId, name: data.group.name, inviteCode: data.group.inviteCode, memberCount: data.group.members?.length || 1, ownerUserId: data.group.ownerUserId, members: data.group.members || [] } }
 }
 
-// Invite code se group join karo
-export async function joinGroupByCode(uid, displayName, code) {
+export async function joinGroupByCode(code) {
   const { data } = await api.post('/groups/join', { code })
-  return data.groupId
+  return { groupId: data.groupId, group: { _id: data.groupId, name: data.group.name, inviteCode: data.group.inviteCode, memberCount: data.group.members?.length || 1, ownerUserId: data.group.ownerUserId, members: data.group.members || [] } }
 }
 
-// Group leave karo
-export async function leaveGroup(uid, groupId) {
+export async function fetchMyGroups() {
+  const { data } = await api.get('/groups/mine')
+  return data.map(g => ({ _id: g._id, name: g.name, inviteCode: g.inviteCode, memberCount: g.members?.length || 0, ownerUserId: g.ownerUserId, members: g.members || [] }))
+}
+
+export async function fetchGroup(groupId) {
+  const { data } = await api.get(`/groups/${groupId}`)
+  return { _id: data._id, name: data.name, inviteCode: data.inviteCode, memberCount: data.members?.length || 0, ownerUserId: data.ownerUserId, members: data.members || [] }
+}
+
+export async function leaveGroup(groupId) {
   await api.delete(`/groups/${groupId}/leave`)
 }
 
-// Members fetch karo (REST — no real-time, use polling via subscribeToGroup)
+export async function deleteGroup(groupId) {
+  await api.delete(`/groups/${groupId}`)
+}
+
+export async function kickMember(groupId, userId) {
+  await api.delete(`/groups/${groupId}/kick/${userId}`)
+}
+
 export async function fetchGroupMembers(groupId) {
   const { data } = await api.get(`/groups/${groupId}/members`)
   return data
 }
 
-// Poll every 30s to simulate real-time — returns stop function (same API as Firebase onSnapshot)
-export function subscribeToGroup(groupId, callback) {
-  let active = true
-
-  async function poll() {
-    try {
-      const members = await fetchGroupMembers(groupId)
-      if (active) callback(members)
-    } catch {}
-  }
-
-  poll() // immediate first call
-  const id = setInterval(poll, 30_000)
-
-  // Unsubscribe fn — same signature as Firebase
-  return () => {
-    active = false
-    clearInterval(id)
-  }
+export async function fetchMemberStats(groupId, userId) {
+  const { data } = await api.get(`/groups/${groupId}/members/${userId}/stats`)
+  return data
 }
 
-// Session save ke baad member hours update karo
-export async function updateMemberHours(uid, groupId, addSeconds) {
+export async function updateMemberHours(groupId, addSeconds) {
   await api.put(`/groups/${groupId}/hours`, { addSeconds })
+}
+
+export async function fetchGroupMessages(groupId, before = null, limit = 50) {
+  const params = { limit }
+  if (before) params.before = before
+  const { data } = await api.get(`/groups/${groupId}/messages`, { params })
+  return data
+}
+
+export async function sendGroupMessage(groupId, text) {
+  const { data } = await api.post(`/groups/${groupId}/messages`, { text })
+  return data
 }

@@ -70,3 +70,14 @@ button, [role="button"] {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.05em;
 }
+
+/* ─── Smooth scroll everywhere ─── */
+* {
+  scroll-behavior: smooth;
+}
+
+/* ─── Sidebar nav smooth scroll ─── */
+nav {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}

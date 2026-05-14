@@ -43,31 +43,59 @@ function getTodayQuote() {
 }
 
 // ── Notification Panel ────────────────────────────────────────────────────────
-function NotificationPanel({ onClose, streakDays, todayTotal, dailyGoalSeconds, subjects }) {
+function NotificationPanel({ onClose, streakDays, todayTotal, dailyGoalSeconds, subjects, todos }) {
   const goalPct = dailyGoalSeconds > 0 ? (todayTotal / dailyGoalSeconds) * 100 : 0;
-  const notifications = [];
 
+  // Build a rich pool of varied notifications (priority-ordered)
+  const pool = [];
+
+  // Goal / streak
   if (streakDays >= 7)
-    notifications.push({ icon: 'ti-flame', color: 'text-orange-400', bg: 'bg-orange-500/10', text: `${streakDays}-day streak! You're on fire — keep it up!` });
+    pool.push({ icon: 'ti-flame', color: 'text-orange-400', bg: 'bg-orange-500/10', text: `🔥 ${streakDays}-day streak! You're on fire — keep it up!` });
   else if (streakDays > 0)
-    notifications.push({ icon: 'ti-flame', color: 'text-orange-400', bg: 'bg-orange-500/10', text: `${streakDays}-day streak. Don't break it today!` });
+    pool.push({ icon: 'ti-flame', color: 'text-orange-400', bg: 'bg-orange-500/10', text: `${streakDays}-day streak active. Don't break it today!` });
 
   if (goalPct >= 100)
-    notifications.push({ icon: 'ti-trophy', color: 'text-yellow-400', bg: 'bg-yellow-500/10', text: 'Daily goal completed! Amazing work today.' });
+    pool.push({ icon: 'ti-trophy', color: 'text-yellow-400', bg: 'bg-yellow-500/10', text: '🏆 Daily goal completed! Amazing work today.' });
+  else if (goalPct >= 75)
+    pool.push({ icon: 'ti-target', color: 'text-green-400', bg: 'bg-green-500/10', text: `Almost there! ${Math.round(goalPct)}% of your daily goal done.` });
   else if (goalPct >= 50)
-    notifications.push({ icon: 'ti-target', color: 'text-green-400', bg: 'bg-green-500/10', text: `${Math.round(goalPct)}% of daily goal done. Keep going!` });
-  else if (todayTotal === 0)
-    notifications.push({ icon: 'ti-alarm', color: 'text-purple-400', bg: 'bg-purple-500/10', text: "You haven't studied yet today. Start now!" });
+    pool.push({ icon: 'ti-target', color: 'text-green-400', bg: 'bg-green-500/10', text: `Halfway there! ${Math.round(goalPct)}% of daily goal done.` });
+  else if (goalPct > 0)
+    pool.push({ icon: 'ti-clock', color: 'text-blue-400', bg: 'bg-blue-500/10', text: `${Math.round(goalPct)}% of goal done. Keep the momentum!` });
+  else
+    pool.push({ icon: 'ti-alarm', color: 'text-purple-400', bg: 'bg-purple-500/10', text: "You haven't studied yet today. Start now!" });
 
-  const noSubjects = subjects.length === 0;
-  if (noSubjects)
-    notifications.push({ icon: 'ti-books', color: 'text-blue-400', bg: 'bg-blue-500/10', text: 'Add your first subject to start tracking study time.' });
+  // Todo reminders
+  const pendingTodos = (todos || []).filter(t => !t.done);
+  if (pendingTodos.length > 0)
+    pool.push({ icon: 'ti-checkbox', color: 'text-purple-400', bg: 'bg-purple-500/10', text: `📋 ${pendingTodos.length} pending task${pendingTodos.length > 1 ? 's' : ''} for today. Stay on track!` });
+  if (pendingTodos.length > 0 && pendingTodos[0]?.text)
+    pool.push({ icon: 'ti-point', color: 'text-slate-300', bg: 'bg-slate-700/30', text: `Next: "${pendingTodos[0].text}"` });
 
-  if (notifications.length === 0)
-    notifications.push({ icon: 'ti-check', color: 'text-slate-400', bg: 'bg-slate-700/30', text: 'All caught up! Keep studying to hit your goal.' });
+  // Subject reminders
+  if (subjects.length === 0)
+    pool.push({ icon: 'ti-books', color: 'text-blue-400', bg: 'bg-blue-500/10', text: 'Add your first subject to start tracking study time.' });
+  else {
+    const untouched = subjects.filter(s => (s.todaySeconds || 0) === 0);
+    if (untouched.length > 0)
+      pool.push({ icon: 'ti-books', color: 'text-blue-400', bg: 'bg-blue-500/10', text: `${untouched.length} subject${untouched.length > 1 ? 's' : ''} not started today. Begin with "${untouched[0].name}"!` });
+  }
+
+  // Rotating motivational quote (changes every hour)
+  const motivational = [
+    { icon: 'ti-bulb', color: 'text-yellow-400', bg: 'bg-yellow-500/10', text: '"Discipline is doing what needs to be done, even when you don\'t feel like it."' },
+    { icon: 'ti-rocket', color: 'text-purple-400', bg: 'bg-purple-500/10', text: '"Every expert was once a beginner. Keep going!"' },
+    { icon: 'ti-heart', color: 'text-pink-400', bg: 'bg-pink-500/10', text: '"Small daily improvements over time lead to stunning results."' },
+    { icon: 'ti-star', color: 'text-yellow-400', bg: 'bg-yellow-500/10', text: '"The secret of getting ahead is getting started."' },
+    { icon: 'ti-brain', color: 'text-green-400', bg: 'bg-green-500/10', text: '"Focused deep work is your superpower in a distracted world."' },
+  ];
+  pool.push(motivational[new Date().getHours() % motivational.length]);
+
+  const shown = pool.slice(0, 3);
 
   return (
-    <div className="absolute top-full right-0 mt-2 w-72 bg-[#141d2e] border border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden">
+    <div className="absolute top-full right-0 mt-2 w-80 bg-[#141d2e] border border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
         <h3 className="text-white font-semibold text-sm">Notifications</h3>
         <button onClick={onClose} className="text-slate-500 hover:text-white">
@@ -75,7 +103,7 @@ function NotificationPanel({ onClose, streakDays, todayTotal, dailyGoalSeconds, 
         </button>
       </div>
       <div className="p-2 space-y-1 max-h-72 overflow-y-auto">
-        {notifications.map((n, i) => (
+        {shown.map((n, i) => (
           <div key={i} className={`flex items-start gap-3 p-3 rounded-xl ${n.bg}`}>
             <i className={`ti ${n.icon} ${n.color} text-base flex-shrink-0 mt-0.5`} />
             <p className="text-slate-300 text-xs leading-relaxed">{n.text}</p>
@@ -674,8 +702,8 @@ export default function Home() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const firstName = displayName?.split(' ')[0] || 'Aspirant';
 
-  // Notification dot: show if hasn't hit goal or streak about to break
-  const hasAlert = goalPct < 100 || streakDays > 0;
+  // Notification dot: only show when user hasn't opened it today
+  const hasAlert = !notifRead && (goalPct < 100 || streakDays > 0 || todayTodos.filter(t => !t.done).length > 0);
 
   return (
     <div className="h-screen bg-[#0f172a] flex overflow-hidden">
@@ -700,7 +728,13 @@ export default function Home() {
             </button>
             <div className="relative" ref={notifRef}>
               <button
-                onClick={() => setShowNotif((v) => !v)}
+                onClick={() => {
+                  setShowNotif((v) => !v);
+                  // Mark as read
+                  const readState = { date: new Date().toDateString(), read: true };
+                  localStorage.setItem('tapasya_notif_read', JSON.stringify(readState));
+                  setNotifRead(true);
+                }}
                 className="relative w-9 h-9 rounded-xl bg-[#141d2e] border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
               >
                 <i className="ti ti-bell text-base" />
@@ -713,6 +747,7 @@ export default function Home() {
                   todayTotal={todayTotal}
                   dailyGoalSeconds={dailyGoalSeconds}
                   subjects={subjects}
+                  todos={todayTodos}
                 />
               )}
             </div>
@@ -783,7 +818,9 @@ export default function Home() {
 
       {/* ── Right panel ── */}
       <div className="hidden xl:flex flex-col w-[290px] flex-shrink-0 border-l border-slate-800 p-4 gap-4 overflow-y-auto h-screen sticky top-0 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-        <MiniCalendar />
+
+        {/* Focus Mode - Pomodoro (FIRST) */}
+        <FocusMode subjects={subjects} />
 
         {/* Quote */}
         <div className="bg-[#141d2e] rounded-2xl p-4 border border-slate-800">
@@ -831,8 +868,8 @@ export default function Home() {
           )}
         </div>
 
-        {/* Focus Mode - Pomodoro */}
-        <FocusMode subjects={subjects} />
+        {/* Mini Calendar (LAST) */}
+        <MiniCalendar />
 
         {/* Streak */}
         {streakDays > 0 && (

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { OAuth2Client } from 'google-auth-library'
 import User from '../models/User.js'
+import Group from '../models/Group.js'
 import authMiddleware from '../middleware/auth.js'
 
 const router = express.Router()
@@ -64,6 +65,35 @@ router.put('/name', authMiddleware, async (req, res) => {
     const { displayName } = req.body
     if (!displayName?.trim()) return res.status(400).json({ error: 'Name required' })
     const user = await User.findByIdAndUpdate(req.user.id, { displayName: displayName.trim() }, { new: true }).select('-password')
+    res.json(user)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// PUT /auth/profile — update displayName and/or photoURL, sync across all groups
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const { displayName, photoURL } = req.body
+    const updates = {}
+    if (displayName !== undefined) updates.displayName = displayName?.trim() || 'Aspirant'
+    if (photoURL !== undefined) updates.photoURL = photoURL  // null = remove, string = set
+
+    const user = await User.findByIdAndUpdate(req.user.id, updates, { new: true }).select('-password')
+
+    // Sync displayName + photoURL into every group this user is a member of
+    if (Object.keys(updates).length > 0) {
+      const groups = await Group.find({ 'members.userId': req.user.id })
+      await Promise.all(groups.map(async (group) => {
+        let changed = false
+        group.members.forEach(m => {
+          if (m.userId.toString() === req.user.id) {
+            if (updates.displayName !== undefined) { m.displayName = updates.displayName; changed = true }
+            if (updates.photoURL !== undefined) { m.photoURL = updates.photoURL; changed = true }
+          }
+        })
+        if (changed) await group.save()
+      }))
+    }
+
     res.json(user)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
