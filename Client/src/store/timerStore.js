@@ -6,6 +6,7 @@ const useTimerStore = create(
     (set) => ({
       isRunning: false, isPaused: false, elapsed: 0,
       subjectId: null, subjectName: '', subjectColor: '#f97316', sessionStartTime: null,
+      miniPlayerMinimized: false,
 
       setSubject: (s) => set({ subjectId: s.id||s._id, subjectName: s.name, subjectColor: s.color }),
 
@@ -13,13 +14,15 @@ const useTimerStore = create(
         isRunning: true, isPaused: false, elapsed: 0,
         subjectId: s.id||s._id, subjectName: s.name, subjectColor: s.color,
         sessionStartTime: new Date().toISOString(),
+        miniPlayerMinimized: false,
       }),
 
       tick:       ()        => set((state) => ({ elapsed: state.elapsed + 1 })),
       setElapsed: (elapsed) => set({ elapsed }),  // FIX: worker se exact value
       pause:  () => set({ isPaused: true,  isRunning: false }),
       resume: () => set({ isPaused: false, isRunning: true  }),
-      reset:  () => set({ isRunning: false, isPaused: false, elapsed: 0, subjectId: null, subjectName: '', subjectColor: '#f97316', sessionStartTime: null }),
+      setMiniPlayerMinimized: (val) => set({ miniPlayerMinimized: val }),
+      reset:  () => set({ isRunning: false, isPaused: false, elapsed: 0, subjectId: null, subjectName: '', subjectColor: '#f97316', sessionStartTime: null, miniPlayerMinimized: false }),
     }),
     {
       name: 'tapasya_timer',
@@ -27,6 +30,7 @@ const useTimerStore = create(
         isRunning: state.isRunning, isPaused: state.isPaused, elapsed: state.elapsed,
         subjectId: state.subjectId, subjectName: state.subjectName,
         subjectColor: state.subjectColor, sessionStartTime: state.sessionStartTime,
+        miniPlayerMinimized: state.miniPlayerMinimized,
       }),
     }
   )

@@ -1,8 +1,7 @@
 // src/components/layout/MiniPlayer.jsx
 // FEATURE: Document Picture-in-Picture (PiP) — browser ke upar floating window
-// Chahe koi bhi tab ho, YouTube ho, ya koi bhi app — timer hamesha visible rahega
-// Minimize button → PiP window open karo (always-on-top)
-// PiP window mein: pause/resume/stop buttons + live timer
+// Desktop: draggable pill + PiP button (documentPictureInPicture)
+// Mobile: minimized state persisted in timerStore — survives page navigation
 
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -10,7 +9,7 @@ import useTimerStore from '@/store/timerStore';
 import { useTimer } from '@/hooks/useTimer';
 import { formatDuration } from '@/utils/time';
 
-// PiP support check
+// PiP support check — only on desktop Chrome (documentPictureInPicture API)
 const PIP_SUPPORTED = 'documentPictureInPicture' in window;
 
 export default function MiniPlayer() {
@@ -19,18 +18,19 @@ export default function MiniPlayer() {
   const elapsed      = useTimerStore((s) => s.elapsed);
   const subjectName  = useTimerStore((s) => s.subjectName);
   const subjectColor = useTimerStore((s) => s.subjectColor);
+  // Persisted in store — survives navigation on mobile
+  const minimized    = useTimerStore((s) => s.miniPlayerMinimized);
+  const setMinimized = useTimerStore((s) => s.setMiniPlayerMinimized);
 
   const { pause, resume, stop } = useTimer();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Timer page pe MiniPlayer nahi dikhana — wahan full UI hai
   const isTimerPage = location.pathname === '/timer';
 
   const [pipOpen, setPipOpen]     = useState(false);
-  const [minimized, setMinimized] = useState(false);
   const pipWindowRef  = useRef(null);
-  const pipTimerRef   = useRef(null); // interval to update PiP display
+  const pipTimerRef   = useRef(null);
 
   // Drag support (desktop, non-PiP mode)
   const pillRef  = useRef(null);
@@ -38,7 +38,7 @@ export default function MiniPlayer() {
   const didDrag  = useRef(false);
   const [pos, setPos] = useState({ x: null, y: null });
 
-  // ── Update PiP window content every second ──────────────────────────────────
+  // ── Update PiP window content every second ───────────────────────────────────
   useEffect(() => {
     if (!pipOpen || !pipWindowRef.current) return;
     updatePipContent();
@@ -57,34 +57,33 @@ export default function MiniPlayer() {
     const pipWin = pipWindowRef.current;
     if (!pipWin || pipWin.closed) { setPipOpen(false); return; }
 
-    const timerEl = pipWin.document.getElementById('pip-timer');
-    const subEl   = pipWin.document.getElementById('pip-subject');
-    const dotEl   = pipWin.document.getElementById('pip-dot');
-    const stateEl = pipWin.document.getElementById('pip-state');
-    const pauseEl = pipWin.document.getElementById('pip-pause');
-
     const currentElapsed = useTimerStore.getState().elapsed;
     const currentPaused  = useTimerStore.getState().isPaused;
     const currentName    = useTimerStore.getState().subjectName;
     const currentColor   = useTimerStore.getState().subjectColor;
 
-    if (timerEl) timerEl.textContent = formatDuration(currentElapsed);
+    const timerEl    = pipWin.document.getElementById('pip-timer');
     const timerBigEl = pipWin.document.getElementById('pip-timer-big');
+    const subEl      = pipWin.document.getElementById('pip-subject');
+    const dotEl      = pipWin.document.getElementById('pip-dot');
+    const stateEl    = pipWin.document.getElementById('pip-state');
+    const pauseEl    = pipWin.document.getElementById('pip-pause');
+
+    if (timerEl)    timerEl.textContent    = formatDuration(currentElapsed);
     if (timerBigEl) timerBigEl.textContent = formatDuration(currentElapsed);
-    if (subEl)   subEl.textContent   = currentName || 'Tapasya';
-    if (dotEl)   dotEl.style.backgroundColor = currentColor || '#f97316';
-    if (stateEl) stateEl.textContent = currentPaused ? '⏸ Paused' : '▶ Running';
-    if (pauseEl) pauseEl.textContent = currentPaused ? '▶ Resume' : '⏸ Pause';
+    if (subEl)      subEl.textContent      = currentName || 'Tapasya';
+    if (dotEl)      dotEl.style.backgroundColor = currentColor || '#f97316';
+    if (stateEl)    stateEl.textContent    = currentPaused ? '⏸ Paused' : '▶ Running';
+    if (pauseEl)    pauseEl.textContent    = currentPaused ? '▶ Resume' : '⏸ Pause';
   }
 
   async function openPip() {
+    // Mobile: PiP not supported → use persisted minimized state
     if (!PIP_SUPPORTED) {
-      // Fallback: sirf minimize karo
       setMinimized(true);
       return;
     }
     try {
-      // Open Picture-in-Picture window (160x200 px — always on top)
       const pipWin = await window.documentPictureInPicture.requestWindow({
         width: 160,
         height: 52,
@@ -92,7 +91,6 @@ export default function MiniPlayer() {
       pipWindowRef.current = pipWin;
       setPipOpen(true);
 
-      // Copy Tapasya styles into PiP window
       const style = pipWin.document.createElement('style');
       style.textContent = `
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
@@ -123,7 +121,6 @@ export default function MiniPlayer() {
       `;
       pipWin.document.head.appendChild(style);
 
-      // Build PiP UI — compact (timer only), hover = controls
       pipWin.document.body.innerHTML = `
         <div id="compact">
           <div id="pip-dot" style="background:${subjectColor||'#f97316'}"></div>
@@ -140,8 +137,6 @@ export default function MiniPlayer() {
         </div>
       `;
 
-      // Wire up buttons
-            // Wire up buttons — they call back into main window's store
       pipWin.document.getElementById('pip-pause').onclick = () => {
         const s = useTimerStore.getState();
         if (s.isPaused) resume(); else pause();
@@ -151,7 +146,6 @@ export default function MiniPlayer() {
         stop();
         closePip();
       };
-      // Handle PiP window being closed by user
       pipWin.addEventListener('pagehide', () => {
         setPipOpen(false);
         pipWindowRef.current = null;
@@ -160,7 +154,7 @@ export default function MiniPlayer() {
 
     } catch (err) {
       console.error('PiP failed:', err);
-      // Fallback
+      // Fallback for unsupported even if check passed
       setMinimized(true);
     }
   }
@@ -174,7 +168,7 @@ export default function MiniPlayer() {
     setPipOpen(false);
   }
 
-  // Drag handlers
+  // Drag handlers (desktop only)
   function onMouseDown(e) {
     if (window.innerWidth < 768 || pipOpen) return;
     didDrag.current = false;
@@ -204,12 +198,13 @@ export default function MiniPlayer() {
     : {};
 
   const baseClass = `z-50 fixed
-    bottom-[calc(56px+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2
+    bottom-[calc(56px+8px+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2
     md:bottom-auto md:top-5 md:right-5 md:left-auto md:translate-x-0
     bg-slate-800/95 backdrop-blur border border-slate-700/60 shadow-xl
     flex items-center rounded-full select-none`;
 
-  // ── Minimized pill (when PiP not supported) ──────────────────────────────────
+  // ── Minimized pill ────────────────────────────────────────────────────────────
+  // shown when PiP not supported (mobile) and user tapped minimize
   if (minimized && !pipOpen) {
     return (
       <div
@@ -218,28 +213,30 @@ export default function MiniPlayer() {
         onMouseDown={onMouseDown}
         onClick={() => { if (!didDrag.current) setMinimized(false); }}
         className={`${baseClass} px-3 py-2 gap-2 cursor-pointer`}
-        title="Expand"
+        title="Expand timer"
       >
         <div className="w-2.5 h-2.5 rounded-full animate-pulse flex-shrink-0"
           style={{ backgroundColor: subjectColor || '#f97316' }} />
         <span className="text-xs font-mono font-semibold text-orange-400">
           {formatDuration(elapsed)}
         </span>
+        {/* Tap to expand hint */}
+        <i className="ti ti-chevron-up text-[10px] text-slate-500" />
       </div>
     );
   }
 
-  // ── PiP active indicator (small badge in corner) ──────────────────────────────
+  // ── PiP active badge ──────────────────────────────────────────────────────────
   if (pipOpen) {
     return (
-      <div className="z-50 fixed bottom-[calc(56px+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 md:bottom-auto md:top-5 md:right-5 md:left-auto md:translate-x-0">
+      <div className="z-50 fixed bottom-[calc(56px+8px+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 md:bottom-auto md:top-5 md:right-5 md:left-auto md:translate-x-0">
         <button
           onClick={closePip}
           className="flex items-center gap-2 px-3 py-2 rounded-full bg-slate-800/95 border border-orange-500/40 text-xs text-orange-400 hover:bg-slate-700 transition-colors shadow-xl"
           title="Close floating timer"
         >
           <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-          PiP active · click to close
+          PiP active · tap to close
         </button>
       </div>
     );
@@ -287,14 +284,14 @@ export default function MiniPlayer() {
         <i className="ti ti-player-stop text-xs text-red-400" />
       </button>
 
-      {/* Minimize → PiP (always on top, any tab) */}
+      {/* Minimize → PiP on desktop, minimized pill on mobile */}
       <button
         onClick={openPip}
         className="w-7 h-7 rounded-full bg-orange-500/20 hover:bg-orange-500/40 border border-orange-500/40 flex items-center justify-center transition-colors flex-shrink-0"
-        title={PIP_SUPPORTED ? 'Float on top (works on any tab!)' : 'Minimize'}
-        aria-label="Picture in Picture"
+        title={PIP_SUPPORTED ? 'Float on top (any tab)' : 'Minimize to pill'}
+        aria-label="Minimize"
       >
-        <i className="ti ti-picture-in-picture text-xs text-orange-400" />
+        <i className={`ti ${PIP_SUPPORTED ? 'ti-picture-in-picture' : 'ti-minus'} text-xs text-orange-400`} />
       </button>
     </div>
   );
