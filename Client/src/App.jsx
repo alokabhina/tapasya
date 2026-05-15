@@ -8,6 +8,7 @@ import { useUserStore } from './store/userStore';
 import { useBootstrap } from './hooks/useBootstrap';
 
 // Layout
+import PageLoader from './components/layout/PageLoader';
 import Sidebar    from './components/layout/Sidebar';
 import BottomNav  from './components/layout/BottomNav';
 import MiniPlayer from './components/layout/MiniPlayer';
@@ -36,14 +37,7 @@ function PrivateRoute({ children }) {
   return children;
 }
 
-// ── Full-screen loader ───────────────────────────────────────────────────────
-function PageLoader() {
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-[#0f172a]">
-      <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
-}
+// ── Full-screen loader — imported from PageLoader.jsx ───────────────────────
 
 // ── Shell: Sidebar + BottomNav wrap ─────────────────────────────────────────
 function AppShell({ children }) {
@@ -51,11 +45,7 @@ function AppShell({ children }) {
     <div className="flex h-screen bg-[#0f172a] text-slate-200 overflow-hidden">
       <Sidebar />
       <main className="flex-1 min-w-0 pb-[56px] md:pb-0 overflow-y-auto h-full">
-        <Suspense fallback={
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        }>
+        <Suspense fallback={<PageLoader mini />}>
           {children}
         </Suspense>
       </main>

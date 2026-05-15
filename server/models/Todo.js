@@ -5,7 +5,8 @@ const todoSchema = new mongoose.Schema({
   subjectId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Subject' },
   subjectName:  String,
   subjectColor: String,
-  photoUrl:     String,
+  photoUrl:      String,
+  photoUploadedAt: Date,
   done:         { type: Boolean, default: false },
   date:         String, // "YYYY-MM-DD"
 }, { timestamps: true })

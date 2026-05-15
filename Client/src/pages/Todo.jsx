@@ -11,6 +11,8 @@ import { getTodos, addTodo, updateTodo, deleteTodo } from "../api/todos";
 import { useUserStore } from "../store/userStore";
 import { useSubjectStore } from "../store/subjectStore";
 import { getDateString } from "../utils/time";
+import PhotoUpload from "../components/todo/PhotoUpload";
+import PhotoJournal from "../components/todo/PhotoJournal";
 
 // ── 4am-to-4am day logic ──────────────────────────────────────────────────────
 function get4amDateString() {
@@ -82,12 +84,14 @@ const todayQuote = QUOTES[new Date().getDate() % QUOTES.length];
 
 // ── Add Task Modal ─────────────────────────────────────────────────────────────
 function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
-  const [text,      setText]      = useState("");
-  const [subjectId, setSubjectId] = useState("");
-  const [priority,  setPriority]  = useState("Medium");
-  const [estMins,   setEstMins]   = useState("");
-  const [taskDate,  setTaskDate]  = useState(defaultDate || get4amDateString());
-  const [adding,    setAdding]    = useState(false);
+  const [text,           setText]          = useState("");
+  const [subjectId,      setSubjectId]     = useState("");
+  const [priority,       setPriority]      = useState("Medium");
+  const [estMins,        setEstMins]       = useState("");
+  const [taskDate,       setTaskDate]      = useState(defaultDate || get4amDateString());
+  const [adding,         setAdding]        = useState(false);
+  const [photoUrl,       setPhotoUrl]      = useState("");
+  const [photoUploadedAt, setPhotoUploadedAt] = useState("");
   const inputRef = useRef(null);
 
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
@@ -98,13 +102,15 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
     const sub = subjects.find((s) => (s.id || s._id) === subjectId);
     await onAdd({
       text: text.trim(),
-      subjectId:    subjectId || null,
-      subjectName:  sub?.name  || null,
-      subjectColor: sub?.color || null,
+      subjectId:      subjectId || null,
+      subjectName:    sub?.name  || null,
+      subjectColor:   sub?.color || null,
       priority,
-      estMins: parseInt(estMins) || null,
-      done: false,
-      date: taskDate,
+      estMins:        parseInt(estMins) || null,
+      done:           false,
+      date:           taskDate,
+      photoUrl:       photoUrl || null,
+      photoUploadedAt: photoUploadedAt || null,
     });
     setAdding(false);
     setText(""); setEstMins("");
@@ -347,6 +353,16 @@ function TaskRow({ task, onToggle, onDelete }) {
       )}
       {task.estMins && (
         <span className="text-xs text-slate-500 flex-shrink-0 font-medium tabular-nums">{formatEstTime(task.estMins)}</span>
+      )}
+      {/* Photo thumbnail */}
+      {task.photoUrl && (
+        <img
+          src={task.photoUrl}
+          alt="Task photo"
+          title={task.photoUploadedAt ? `Uploaded: ${new Date(task.photoUploadedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}` : 'Task photo'}
+          className="w-9 h-9 rounded-lg object-cover flex-shrink-0 border border-slate-700 cursor-pointer hover:border-orange-400 transition-colors"
+          onClick={(e) => { e.stopPropagation(); window.open(task.photoUrl, '_blank'); }}
+        />
       )}
       <div className="relative flex-shrink-0">
         <button onClick={() => setMenuOpen((v) => !v)}
@@ -628,6 +644,7 @@ export default function Todo() {
             { id: "today",    label: "Today",    icon: "ti-calendar" },
             { id: "upcoming", label: "Upcoming", icon: "ti-calendar-event" },
             { id: "goals",    label: "Goals",    icon: "ti-target" },
+            { id: "journal",  label: "Journal",  icon: "ti-polaroid" },
           ].map(({ id, label, icon }) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all -mb-px
@@ -777,6 +794,13 @@ export default function Todo() {
               </>)}
             </div>
           )}
+        </div>
+      )}
+
+      {/* JOURNAL TAB */}
+      {tab === "journal" && (
+        <div className="p-5">
+          <PhotoJournal />
         </div>
       )}
 
