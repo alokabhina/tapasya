@@ -1,26 +1,23 @@
 // SessionControls.jsx
 // Stop / Pause / Switch buttons
-// Stop → saveSession + navigate home
-// Pause → useTimer.pause()
-// import useTimer, timerStore, sessions.js
+// Group button Timer.jsx mein shift ho gaya
 
 import { useNavigate } from 'react-router-dom';
 import { useTimerStore } from '../../store/timerStore';
 import { useTimer } from '../../hooks/useTimer';
 
 export default function SessionControls() {
-  const isRunning   = useTimerStore((s) => s.isRunning);
-  const isPaused    = useTimerStore((s) => s.isPaused);
+  const isRunning = useTimerStore((s) => s.isRunning);
+  const isPaused  = useTimerStore((s) => s.isPaused);
   const { stop, pause, resume } = useTimer();
   const navigate = useNavigate();
 
   async function handleStop() {
-    await stop(); // saves session inside useTimer → sessions.js
+    await stop();
     navigate('/');
   }
 
   function handleSwitch() {
-    // Timer chalta rehega MiniPlayer mein, home pe new subject se start kar sakte hain
     navigate('/');
   }
 
@@ -28,6 +25,7 @@ export default function SessionControls() {
 
   return (
     <div className="flex items-center justify-center gap-4">
+
       {/* Stop */}
       <button
         onClick={handleStop}
@@ -66,6 +64,7 @@ export default function SessionControls() {
         </div>
         <span className="text-[11px] text-slate-500">Switch</span>
       </button>
+
     </div>
   );
 }
