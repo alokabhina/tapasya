@@ -100,7 +100,7 @@ export default function Achievements() {
           <p className="text-[11px] text-slate-600 uppercase tracking-[0.15em] font-semibold">
             All Badges
           </p>
-          <p className="text-[11px] text-slate-700">Tap to view details</p>
+          <p className="text-[11px] text-slate-700">Tap to view details..</p>
         </div>
         <BadgeGrid />
       </div>
