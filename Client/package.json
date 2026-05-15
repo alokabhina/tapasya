@@ -12,6 +12,7 @@
     "axios": "^1.7.2",
     "heic2any": "^0.0.4",
     "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "qrcode": "^1.5.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -24,6 +25,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.39",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.4",
     "vite": "^5.4.21",
     "vite-plugin-pwa": "^0.20.1"

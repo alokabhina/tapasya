@@ -39,6 +39,26 @@ body {
   background: #475569;
 }
 
+/* ─── Google Sign-In button responsive fix ─── */
+/* Force GSI iframe to never overflow on small screens */
+div[id^="credential_picker_container"],
+iframe[src*="accounts.google.com/gsi"] {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* ─── Mobile scroll improvements ─── */
+/* Native momentum scrolling on iOS */
+.overflow-y-auto,
+[class*="overflow-y-auto"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent pull-to-refresh causing stuck scroll */
+html {
+  overscroll-behavior-y: none;
+}
+
 /* ─── Safe-area utilities ─── */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);

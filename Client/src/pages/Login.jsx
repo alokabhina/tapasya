@@ -78,10 +78,16 @@ export default function Login() {
       });
 
       if (btnRef.current) {
+        // Responsive width: card is max-w-md (448px) with p-6 (24px each side) = 400px inner
+        // On small screens use container width minus padding
+        const containerWidth = Math.min(
+          btnRef.current.parentElement?.offsetWidth || 320,
+          400
+        );
         window.google.accounts.id.renderButton(btnRef.current, {
           theme: 'filled_black',
           size: 'large',
-          width: 340,
+          width: containerWidth,
           text: 'signin_with',
           shape: 'pill',
           logo_alignment: 'left',
@@ -346,9 +352,10 @@ export default function Login() {
                 ref={btnRef}
                 className={
                   gsiReady
-                    ? 'w-full flex justify-center'
+                    ? 'w-full flex justify-center overflow-hidden'
                     : 'hidden'
                 }
+                style={{ maxWidth: '100%' }}
               />
             </div>
 

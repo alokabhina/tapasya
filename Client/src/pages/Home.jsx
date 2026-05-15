@@ -706,10 +706,10 @@ export default function Home() {
   const hasAlert = !notifRead && (goalPct < 100 || streakDays > 0 || todayTodos.filter(t => !t.done).length > 0);
 
   return (
-    <div className="h-screen bg-[#0f172a] flex overflow-hidden">
+    <div className="min-h-full bg-[#0f172a] flex flex-col xl:flex-row xl:overflow-hidden xl:h-screen">
       {/* ── Main content ── */}
-      <div className="flex-1 min-w-0 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-        <div className="p-5 max-w-4xl">
+      <div className="flex-1 min-w-0 xl:overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+        <div className="p-4 md:p-5 max-w-4xl pb-2 md:pb-5">
 
           {/* Header */}
           <div className="flex items-start justify-between mb-5">
@@ -817,7 +817,7 @@ export default function Home() {
       </div>
 
       {/* ── Right panel ── */}
-      <div className="hidden xl:flex flex-col w-[290px] flex-shrink-0 border-l border-slate-800 p-4 gap-4 overflow-y-auto h-screen sticky top-0 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+      <div className="flex flex-col w-full xl:w-[290px] xl:flex-shrink-0 border-t xl:border-t-0 xl:border-l border-slate-800 p-4 gap-4 xl:overflow-y-auto xl:h-screen xl:sticky xl:top-0 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent pb-24 xl:pb-4">
 
         {/* Focus Mode - Pomodoro (FIRST) */}
         <FocusMode subjects={subjects} />
