@@ -1,6 +1,8 @@
 // src/hooks/useTimer.js
-// FIX: Session save ke baad group hours update hota hai (addSessionHours)
-// Back navigation auto-stops timer; <10 sec sessions are discarded
+// FIXED BUGS:
+// 1. Double session save — _saveInProgress guard added
+// 2. Paused time counted in elapsed on reload — pausedAccum tracked in store
+// 3. Worker re-START on every mount (Home + Timer both mount useTimer) — workerStarted ref
 
 import { useEffect, useRef, useCallback } from 'react'
 import useTimerStore from '@/store/timerStore'
@@ -8,112 +10,136 @@ import useUserStore from '@/store/userStore'
 import { saveSession, addPendingSync } from '@/api/sessions'
 import { updateMemberHours } from '@/api/groups'
 import { midnightSplit } from '@/utils/time'
-import { showLiveTimerNotification, clearAllNotifications } from '@/utils/notifications'
+import { showLiveTimerNotification } from '@/utils/notifications'
 
+// ── Singleton worker ──────────────────────────────────────────────────────────
 let _worker = null
+// Guard: worker already started (prevents double-START from Home + Timer mounting)
+let _workerRunning = false
+// Guard: save already in progress (prevents double-save on fast double-click)
+let _saveInProgress = false
 
 function getWorker() {
-  if (!_worker) _worker = new Worker('/timer.worker.js')
+  if (!_worker) {
+    _worker = new Worker('/timer.worker.js')
+    // Single global onmessage — never overwritten
+    _worker.onmessage = (e) => {
+      if (e.data.type === 'TICK') {
+        useTimerStore.getState().setElapsed(e.data.elapsed)
+      }
+    }
+  }
   return _worker
 }
 
+// ── Hook ──────────────────────────────────────────────────────────────────────
 export function useTimer() {
   const store = useTimerStore()
   const { uid } = useUserStore()
-  const listenerAttached = useRef(false)
+  const notifIntervalRef = useRef(null)
 
+  // On every mount: resume worker ONLY if not already running
   useEffect(() => {
     const worker = getWorker()
-
-    if (!listenerAttached.current) {
-      listenerAttached.current = true
-      worker.onmessage = (e) => {
-        if (e.data.type === 'TICK') {
-          useTimerStore.getState().setElapsed(e.data.elapsed)
-        }
-      }
-    }
-
-    // Resume worker if timer was running on page reload
     const s = useTimerStore.getState()
-    if (s.isRunning && !s.isPaused && s.sessionStartTime) {
-      const alreadyElapsed = Math.round((Date.now() - new Date(s.sessionStartTime).getTime()) / 1000)
-      worker.postMessage({ type: 'START', payload: { elapsed: alreadyElapsed } })
+
+    // If timer is running (persisted from store) but worker not yet started this session
+    if (s.isRunning && !s.isPaused && s.sessionStartTime && !_workerRunning) {
+      _workerRunning = true
+      // BUG FIX: use store's elapsed (which was ticking before reload), NOT wall-clock diff
+      // Wall-clock diff includes paused time — store.elapsed is the pure study time
+      worker.postMessage({ type: 'START', payload: { elapsed: s.elapsed } })
     }
 
     return () => {}
   }, [])
 
-  const start = useCallback((subject) => {
-    store.start(subject)
-    getWorker().postMessage({ type: 'START', payload: { elapsed: 0 } })
-  }, [store])
-
-  // Live timer notification — har 30 second pe update
+  // Live timer notification — har 30 second pe
   useEffect(() => {
-    if (!store.isRunning || store.isPaused) return
-    const interval = setInterval(() => {
+    if (!store.isRunning || store.isPaused) {
+      clearInterval(notifIntervalRef.current)
+      return
+    }
+    notifIntervalRef.current = setInterval(() => {
       const s = useTimerStore.getState()
       if (s.isRunning && !s.isPaused && s.subjectName) {
         const goalSec = useUserStore.getState().dailyGoalSeconds || 0
         showLiveTimerNotification(s.subjectName, s.elapsed, 0, goalSec)
       }
-    }, 30000) // 30 seconds
-    return () => clearInterval(interval)
+    }, 30000)
+    return () => clearInterval(notifIntervalRef.current)
   }, [store.isRunning, store.isPaused])
 
+  // ── start ─────────────────────────────────────────────────────────────────
+  const start = useCallback((subject) => {
+    _workerRunning = true
+    _saveInProgress = false
+    store.start(subject)
+    getWorker().postMessage({ type: 'START', payload: { elapsed: 0 } })
+  }, [store])
+
+  // ── pause ─────────────────────────────────────────────────────────────────
   const pause = useCallback(() => {
     store.pause()
     getWorker().postMessage({ type: 'PAUSE' })
   }, [store])
 
+  // ── resume ────────────────────────────────────────────────────────────────
   const resume = useCallback(() => {
+    // BUG FIX: pass current elapsed to worker so it continues from exact same value
+    // Previously elapsed could drift if worker was re-created
+    const current = useTimerStore.getState().elapsed
     store.resume()
-    getWorker().postMessage({ type: 'RESUME', payload: { elapsed: store.elapsed } })
+    getWorker().postMessage({ type: 'RESUME', payload: { elapsed: current } })
   }, [store])
 
-  // Core save logic
-  // KEY FIX: duration = elapsed (actual study time, stop periods excluded)
-  // startTime/endTime sirf reference ke liye hai — duration hamesha elapsed se aata hai
+  // ── core save ─────────────────────────────────────────────────────────────
   const _saveAndReset = useCallback(async (minSeconds = 10) => {
+    // BUG FIX: prevent double-save (e.g. stop called twice quickly)
+    if (_saveInProgress) return 0
+    _saveInProgress = true
+
     getWorker().postMessage({ type: 'STOP' })
+    _workerRunning = false
 
     const endTime   = new Date().toISOString()
     const startTime = store.sessionStartTime
-    const elapsed   = store.elapsed   // actual on-timer seconds (pauses excluded)
+    // elapsed = actual study time from worker (pauses already excluded by worker)
+    const elapsed   = store.elapsed
 
-    // Discard sessions shorter than minSeconds
     if (!startTime || elapsed < minSeconds) {
       store.reset()
+      _saveInProgress = false
       return 0
     }
 
-    // For date attribution, use start time's date (4am rule applied on server/client)
-    // But duration = elapsed, not (endTime - startTime)
-    // If session crosses midnight, split proportionally but total = elapsed
-    const splits = midnightSplit(startTime, endTime)
+    const splits    = midnightSplit(startTime, endTime)
+    const wallTotal = Math.max(
+      Math.round((new Date(endTime) - new Date(startTime)) / 1000),
+      elapsed
+    )
     let totalSaved = 0
 
-    // Proportion of elapsed per split (based on wall-clock ratio)
-    const wallTotal = Math.round((new Date(endTime) - new Date(startTime)) / 1000) || elapsed
     for (const split of splits) {
-      const wallSplit = Math.round((new Date(split.endTime) - new Date(split.startTime)) / 1000)
-      // Proportional actual study time for this split
-      const duration = splits.length === 1
+      const wallSplit  = Math.round((new Date(split.endTime) - new Date(split.startTime)) / 1000)
+      // Proportional actual study time — elapsed is the true value, wall-clock only used for split ratio
+      const duration   = splits.length === 1
         ? elapsed
         : Math.round((wallSplit / wallTotal) * elapsed)
 
       if (duration < 1) continue
+
       const session = {
         subjectId:    store.subjectId,
         subjectName:  store.subjectName,
         subjectColor: store.subjectColor,
         startTime:    split.startTime,
         endTime:      split.endTime,
-        duration,  // ✅ actual study time, stop periods excluded
+        duration,         // ✅ pure study time, no paused durations
         date:         split.date,
         notes:        '',
       }
+
       try {
         if (uid) {
           await saveSession(session)
@@ -126,26 +152,21 @@ export function useTimer() {
       }
     }
 
-    // FIX: Group leaderboard update karo — session ke total seconds bhejo
+    // Group leaderboard update
     if (uid && totalSaved > 0) {
       const { groupId } = useUserStore.getState()
       if (groupId) {
-        try {
-          await updateMemberHours(uid, groupId, totalSaved)
-        } catch (e) {
-          console.warn('Group hours update failed (non-critical):', e.message)
-        }
+        try { await updateMemberHours(uid, groupId, totalSaved) }
+        catch (e) { console.warn('Group hours update failed:', e.message) }
       }
     }
 
     store.reset()
+    _saveInProgress = false
     return elapsed
   }, [store, uid])
 
-  // Full stop — saves if >= 10 sec
-  const stop = useCallback(() => _saveAndReset(10), [_saveAndReset])
-
-  // Called when user navigates back — stops + discards if < 10 sec
+  const stop      = useCallback(() => _saveAndReset(10), [_saveAndReset])
   const stopOnBack = useCallback(() => _saveAndReset(10), [_saveAndReset])
 
   return { start, pause, resume, stop, stopOnBack }

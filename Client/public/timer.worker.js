@@ -1,42 +1,41 @@
 // public/timer.worker.js
-// FIX: Tab switch pe bhi timer chalta rahe
-// Web Worker main thread se alag hota hai — tab visibility ka koi asar nahi
-// Lekin elapsed sync karo localStorage mein taaki page reload pe bhi kaam kare
+// FIXED BUGS:
+// 1. RESUME pe duplicate interval ban jaata tha (intervalId check missing)
+// 2. Wall-clock drift: elapsed ab start time se pure count hota hai
 
 let intervalId = null;
 let elapsed = 0;
-let startWallTime = null; // actual wall clock time jab start hua
+let startWallTime = null;
+
+function startTicking(fromElapsed) {
+  elapsed = fromElapsed;
+  startWallTime = Date.now() - elapsed * 1000;
+  // BUG FIX: clearInterval pehle — RESUME pe double interval nahi banega
+  clearInterval(intervalId);
+  intervalId = setInterval(() => {
+    elapsed = Math.round((Date.now() - startWallTime) / 1000);
+    self.postMessage({ type: 'TICK', elapsed });
+  }, 1000);
+}
 
 self.onmessage = function (e) {
   const { type, payload } = e.data;
 
   switch (type) {
     case 'START':
-      elapsed = payload?.elapsed || 0;
-      startWallTime = Date.now() - elapsed * 1000;
-      clearInterval(intervalId);
-      intervalId = setInterval(() => {
-        // Wall clock se calculate karo — tab throttling se accurate rahe
-        elapsed = Math.round((Date.now() - startWallTime) / 1000);
-        self.postMessage({ type: 'TICK', elapsed });
-      }, 1000);
+      startTicking(payload?.elapsed || 0);
       break;
 
     case 'RESUME':
-      // Resume pe elapsed already store mein hai — wall clock reset karo
-      elapsed = payload?.elapsed || elapsed;
-      startWallTime = Date.now() - elapsed * 1000;
-      if (!intervalId) {
-        intervalId = setInterval(() => {
-          elapsed = Math.round((Date.now() - startWallTime) / 1000);
-          self.postMessage({ type: 'TICK', elapsed });
-        }, 1000);
-      }
+      // BUG FIX: resume pe exact elapsed pass hota hai from store
+      // ab wall-clock se drift nahi hoga
+      startTicking(payload?.elapsed ?? elapsed);
       break;
 
     case 'PAUSE':
       clearInterval(intervalId);
       intervalId = null;
+      // elapsed yahan preserve rahega — resume pe wahan se shuru hoga
       break;
 
     case 'STOP':
