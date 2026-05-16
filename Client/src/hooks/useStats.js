@@ -1,58 +1,50 @@
-import { useState, useEffect } from 'react'
-// ✅ FIX: '@/firebase/sessions' → '@/api/sessions'
+import { useState, useEffect, useRef } from 'react'
 import { getSessions } from '@/api/sessions'
 import useUserStore from '@/store/userStore'
 import {
-  aggregateBySubject, aggregateByDay, getCumulative,
+  aggregateBySubject, getCumulative,
   getScatterData, getHeatmapData, calculateStreak,
 } from '@/utils/stats'
-import { getTodayString, getWeekStart, getMonthStart, getDateString } from '@/utils/time'
+import { getTodayString, get4amDayString } from '@/utils/time'
 
-export function useStats(period = 'week', customStart = null, customEnd = null) {
+// period = { period, startDate, endDate }
+export function useStats(period = {}) {
   const { uid, setStreak, setTotalHours } = useUserStore()
-  const [sessions, setSessions]       = useState([])
-  const [loading, setLoading]         = useState(true)
-  const [donutData, setDonutData]     = useState([])
-  const [barData, setBarData]         = useState([])
-  const [stepData, setStepData]       = useState([])
-  const [scatterData, setScatterData] = useState([])
-  const [heatmapData, setHeatmapData] = useState({})
+  const [sessions, setSessions]         = useState([])
+  const [loading, setLoading]           = useState(true)
+  const [donutData, setDonutData]       = useState([])
+  const [stepData, setStepData]         = useState([])
+  const [scatterData, setScatterData]   = useState([])
+  const [heatmapData, setHeatmapData]   = useState({})
   const [totalSeconds, setTotalSeconds] = useState(0)
+
+  const prevKey = useRef(null)
 
   useEffect(() => {
     if (!uid) return
+    const key = JSON.stringify(period)
+    if (key === prevKey.current) return
+    prevKey.current = key
     fetchAndProcess()
-  }, [uid, period, customStart, customEnd])
+  }, [uid, JSON.stringify(period)])
 
   async function fetchAndProcess() {
     setLoading(true)
     try {
-      let startDate, endDate
-      endDate = getTodayString()
+      const { startDate, endDate } = period
+      const start = startDate || get4amDayString()
+      const end   = endDate   || get4amDayString()
 
-      if (period === 'day')         startDate = getTodayString()
-      else if (period === 'week')   startDate = getDateString(getWeekStart())
-      else if (period === 'month')  startDate = getDateString(getMonthStart())
-      else if (period === 'custom' && customStart && customEnd) {
-        startDate = customStart; endDate = customEnd
-      } else {
-        const d = new Date(); d.setFullYear(d.getFullYear() - 1)
-        startDate = getDateString(d)
-      }
-
-      // ✅ FIX: getSessions(uid, startDate, endDate) → getSessions(startDate, endDate)
-      // uid JWT se aata hai — server side handle karta hai
-      const data = await getSessions(startDate, endDate)
+      const data = await getSessions(start, end)
       setSessions(data)
 
       setDonutData(aggregateBySubject(data))
-      setBarData(aggregateByDay(data, period === 'week' ? 7 : period === 'month' ? 30 : 7))
       setStepData(getCumulative(data))
       setScatterData(getScatterData(data))
       setHeatmapData(getHeatmapData(data))
       setTotalSeconds(data.reduce((sum, s) => sum + s.duration, 0))
 
-      // Streak + total hours update karo
+      // Streak + total hours (from all sessions)
       const allSessions = await getSessions('2020-01-01', getTodayString())
       const streak = calculateStreak(allSessions)
       const totalHrs = allSessions.reduce((sum, s) => sum + s.duration, 0) / 3600
@@ -65,6 +57,7 @@ export function useStats(period = 'week', customStart = null, customEnd = null) 
     }
   }
 
-  return { sessions, loading, donutData, barData, stepData, scatterData, heatmapData, totalSeconds, refetch: fetchAndProcess }
+  return { sessions, loading, donutData, stepData, scatterData, heatmapData, totalSeconds, refetch: fetchAndProcess }
 }
+
 export default useStats

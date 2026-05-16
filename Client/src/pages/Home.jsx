@@ -13,6 +13,7 @@ import { getTodos, updateTodo } from '@/api/todos';
 import { getSessions } from '@/api/sessions';
 import ColorPicker from '@/components/ui/ColorPicker';
 import { saveFocusSession } from '@/utils/focusHistory';
+import { useSmartNotifications } from '@/hooks/useSmartNotifications';
 
 // ── Aesthetic background styles for cards ─────────────────────────────────────
 const CARD_BACKGROUNDS = [
@@ -621,10 +622,11 @@ export default function Home() {
   const displayName      = useUserStore((s) => s.displayName);
   const dailyGoalSeconds = useUserStore((s) => s.dailyGoalSeconds);
   const streakDays       = useUserStore((s) => s.streakDays);
-  const { start }        = useTimer();
+  const { start, stop }  = useTimer();
   const navigate         = useNavigate();
 
-  const [modal,    setModal]    = useState(null);
+  const [modal,         setModal]         = useState(null);
+  const [switchWarning, setSwitchWarning] = useState(null);
   const [todayTodos, setTodayTodos] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
   const [notifRead, setNotifRead] = useState(() => {
@@ -640,6 +642,15 @@ export default function Home() {
 
   const todayTotal = subjects.reduce((sum, s) => sum + (s.todaySeconds || 0), 0);
   const goalPct    = dailyGoalSeconds > 0 ? Math.min((todayTotal / dailyGoalSeconds) * 100, 100) : 0;
+
+  // ── Smart push notifications ──────────────────────────────────────────────
+  const pendingTodos = todayTodos.filter((t) => !t.done && !t.completed);
+  useSmartNotifications({
+    todaySeconds: todayTotal,
+    goalSeconds:  dailyGoalSeconds,
+    streakDays:   streakDays,
+    pendingTodos,
+  });
 
   // Load today's todos
   useEffect(() => {
@@ -679,8 +690,27 @@ export default function Home() {
 
   async function handleStart(subject) {
     const isRunning = useTimerStore.getState().isRunning;
+    const isPaused  = useTimerStore.getState().isPaused;
     const activeId  = useTimerStore.getState().subjectId;
-    if (isRunning && activeId === (subject.id || subject._id)) { navigate('/timer'); return; }
+    const sid = subject.id || subject._id;
+
+    // Same subject already running/paused → go to timer
+    if ((isRunning || isPaused) && activeId === sid) { navigate('/timer'); return; }
+
+    // Different subject running/paused → show warning
+    if ((isRunning || isPaused) && activeId && activeId !== sid) {
+      setSwitchWarning(subject);
+      return;
+    }
+
+    await start(subject);
+    navigate('/timer');
+  }
+
+  async function handleConfirmSwitch() {
+    const subject = switchWarning;
+    setSwitchWarning(null);
+    await stop(); // saves current session (elapsed-based, pauses excluded)
     await start(subject);
     navigate('/timer');
   }
@@ -898,6 +928,60 @@ export default function Home() {
           onSave={async () => { await reloadSubjects(); setModal(null); }}
         />
       )}
+
+      {/* Switch Subject Warning */}
+      {switchWarning && (() => {
+        const activeSubject = subjects.find(s => (s.id || s._id) === useTimerStore.getState().subjectId);
+        const isPaused = useTimerStore.getState().isPaused;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSwitchWarning(null)} />
+            <div className="relative bg-[#151f2e] rounded-2xl border border-slate-700 shadow-2xl w-full max-w-sm overflow-hidden">
+              <div className="h-0.5 w-full bg-gradient-to-r from-orange-500 to-red-500" />
+              <div className="p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+                    <i className="ti ti-alert-triangle text-orange-400 text-xl" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-bold">Timer already running!</h3>
+                    <p className="text-slate-400 text-xs mt-0.5">
+                      {isPaused ? 'Timer is paused on' : 'Currently studying'}
+                    </p>
+                  </div>
+                </div>
+
+                {activeSubject && (
+                  <div className="flex items-center gap-2.5 bg-[#0f172a] rounded-xl px-3 py-2.5 mb-4 border border-slate-800">
+                    <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: activeSubject.color || '#f97316' }} />
+                    <span className="text-sm text-slate-200 font-medium">{activeSubject.name}</span>
+                    <span className="text-xs text-slate-500 ml-auto">{isPaused ? 'Paused' : 'Running'}</span>
+                  </div>
+                )}
+
+                <p className="text-slate-400 text-sm mb-5">
+                  Stop current session and switch to{' '}
+                  <span className="text-white font-semibold">{switchWarning.name}</span>?
+                  <br />
+                  <span className="text-xs text-slate-500">Current session will be saved automatically.</span>
+                </p>
+
+                <div className="flex gap-2.5">
+                  <button onClick={() => setSwitchWarning(null)}
+                    className="flex-1 py-2.5 rounded-xl border border-slate-700 text-sm text-slate-300 hover:bg-slate-800 transition-colors">
+                    Keep studying
+                  </button>
+                  <button onClick={handleConfirmSwitch}
+                    className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2">
+                    <i className="ti ti-switch-horizontal text-sm" />
+                    Switch
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

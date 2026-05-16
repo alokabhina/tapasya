@@ -38,9 +38,25 @@ router.post('/', async (req, res) => {
 // PUT /api/todos/:id
 router.put('/:id', async (req, res) => {
   try {
+    const updates = { ...req.body }
+    // Auto-set completedAt when marking done
+    if (updates.done === true && !updates.completedAt) {
+      const now = new Date()
+      const h = now.getHours()
+      // 4am rule: before 4am counts as previous day
+      if (h < 4) now.setDate(now.getDate() - 1)
+      const y = now.getFullYear()
+      const m = String(now.getMonth() + 1).padStart(2, '0')
+      const d = String(now.getDate()).padStart(2, '0')
+      updates.completedAt = `${y}-${m}-${d}`
+    }
+    if (updates.done === false) {
+      updates.completedAt = null
+    }
+
     const todo = await Todo.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.id },
-      req.body,
+      updates,
       { new: true }
     )
     if (!todo) return res.status(404).json({ error: 'Todo not found' })

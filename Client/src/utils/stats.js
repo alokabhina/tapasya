@@ -1,51 +1,83 @@
-import { getDateString, getLastNDays, getTimeOfDay } from './time'
+import { getDateString, getLastNDays, getTimeOfDay, getNDaysFrom, getSundayWeekRange, get4amDayString } from './time'
 
 // Donut chart ke liye — subject wise total seconds
 export function aggregateBySubject(sessions) {
   const map = {}
   sessions.forEach((s) => {
     if (!map[s.subjectId]) {
-      map[s.subjectId] = {
-        name: s.subjectName,
-        color: s.subjectColor,
-        value: 0,
-      }
+      map[s.subjectId] = { name: s.subjectName, color: s.subjectColor, value: 0 }
     }
     map[s.subjectId].value += s.duration
   })
   return Object.values(map)
 }
 
-// Stacked bar chart ke liye — last N days, each day mein subjects ka breakdown
 export function aggregateByDay(sessions, days = 7) {
-  const dateList = getLastNDays(days)
+  return aggregateByDateList(sessions, getLastNDays(days))
+}
 
-  // Saare unique subjects nikalo
+export function aggregateByDateList(sessions, dateList) {
   const subjectMap = {}
   sessions.forEach((s) => {
     if (!subjectMap[s.subjectId]) {
       subjectMap[s.subjectId] = { name: s.subjectName, color: s.subjectColor }
     }
   })
-
-  // Har din ke liye data object banao
   return dateList.map((date) => {
     const daySessions = sessions.filter((s) => s.date === date)
-    const entry = { date: date.slice(5) } // "MM-DD" format for display
-
-    // Har subject ka seconds add karo
+    const entry = { date: date.slice(5) }
     Object.entries(subjectMap).forEach(([id, sub]) => {
-      const total = daySessions
-        .filter((s) => s.subjectId === id)
-        .reduce((sum, s) => sum + s.duration, 0)
+      const total = daySessions.filter((s) => s.subjectId === id).reduce((sum, s) => sum + s.duration, 0)
       entry[sub.name] = parseFloat((total / 3600).toFixed(2))
     })
-
     return entry
   })
 }
 
-// Step chart ke liye — cumulative hours over time
+export function aggregateForDay(sessions, dateStr) {
+  const daySessions = sessions.filter((s) => s.date === dateStr)
+  const subjectMap = {}
+  daySessions.forEach((s) => {
+    if (!subjectMap[s.subjectId]) {
+      subjectMap[s.subjectId] = { name: s.subjectName, color: s.subjectColor, value: 0, sessions: 0 }
+    }
+    subjectMap[s.subjectId].value += s.duration
+    subjectMap[s.subjectId].sessions++
+  })
+  return Object.values(subjectMap)
+}
+
+export function aggregateWeeklySunSat(sessions, refDate = new Date()) {
+  const { start } = getSundayWeekRange(refDate)
+  const startStr = getDateString(start)
+  const dateList = getNDaysFrom(startStr, 7)
+  return { dateList, data: aggregateByDateList(sessions, dateList) }
+}
+
+export function getHourlyMinutes(sessions) {
+  const pattern = new Array(24).fill(0)
+  sessions.forEach((s) => {
+    const start = new Date(s.startTime?.toDate?.()?.toISOString() || s.startTime)
+    if (isNaN(start.getTime())) return
+    let remaining = s.duration
+    const cur = new Date(start)
+    while (remaining > 0) {
+      const h = cur.getHours()
+      const secsThisHour = Math.min(remaining, 3600 - cur.getMinutes() * 60 - cur.getSeconds())
+      pattern[h] += secsThisHour / 60
+      remaining -= secsThisHour
+      cur.setTime(cur.getTime() + secsThisHour * 1000)
+    }
+  })
+  return pattern.map(v => Math.round(v))
+}
+
+export function getHourlyPattern(sessions) {
+  const mins = getHourlyMinutes(sessions)
+  const max = Math.max(...mins, 1)
+  return mins.map(v => parseFloat((v / max).toFixed(3)))
+}
+
 export function getCumulative(sessions) {
   const sorted = [...sessions].sort(
     (a, b) => new Date(a.startTime?.toDate?.() || a.startTime) - new Date(b.startTime?.toDate?.() || b.startTime)
@@ -53,14 +85,10 @@ export function getCumulative(sessions) {
   let cumulative = 0
   return sorted.map((s) => {
     cumulative += s.duration / 3600
-    return {
-      date: s.date,
-      hours: parseFloat(cumulative.toFixed(2)),
-    }
+    return { date: s.date, hours: parseFloat(cumulative.toFixed(2)) }
   })
 }
 
-// Scatter chart ke liye — time of day vs duration
 export function getScatterData(sessions) {
   return sessions.map((s) => ({
     x: getTimeOfDay(s.startTime?.toDate?.()?.toISOString() || s.startTime),
@@ -70,38 +98,34 @@ export function getScatterData(sessions) {
   }))
 }
 
-// Heatmap ke liye — date → total seconds map
 export function getHeatmapData(sessions) {
   const map = {}
   sessions.forEach((s) => {
     if (!map[s.date]) map[s.date] = 0
     map[s.date] += s.duration
   })
-  return map // { "2024-01-15": 7200, ... }
+  return map
 }
 
-// Streak calculate karo
 export function calculateStreak(sessions) {
   if (!sessions.length) return 0
   const uniqueDates = [...new Set(sessions.map((s) => s.date))].sort().reverse()
   let streak = 0
-  let current = new Date()
-  current.setHours(0, 0, 0, 0)
+  const today4am = get4amDayString()
+  let current = today4am
 
   for (const dateStr of uniqueDates) {
-    const d = new Date(dateStr)
-    const diff = Math.round((current - d) / (1000 * 60 * 60 * 24))
-    if (diff === 0 || diff === 1) {
+    if (dateStr === current) {
       streak++
-      current = d
-    } else {
+      const [y, m, d] = current.split('-').map(Number)
+      current = getDateString(new Date(y, m - 1, d - 1))
+    } else if (dateStr < current) {
       break
     }
   }
   return streak
 }
 
-// Unique subjects array nikalo sessions se
 export function getUniqueSubjects(sessions) {
   const map = {}
   sessions.forEach((s) => {

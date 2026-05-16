@@ -1,28 +1,41 @@
 // src/pages/Todo.jsx
-// ✅ Redesigned UI matching reference image
-// ✅ Today / Upcoming / Goals tabs
-// ✅ Priority (High/Medium/Low) + estimated time per task
-// ✅ Today Overview sidebar (tasks completed, time planned, progress%, streak)
-// ✅ History section at bottom with filters
-// ✅ 4am-to-4am day logic
+// ✅ 4am-to-4am daily reset logic
+// ✅ Prev/Next day navigation in history
+// ✅ Todo stats: per-subject counts + repeated task graphs
+// ✅ Full responsive design
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { getTodos, addTodo, updateTodo, deleteTodo } from "../api/todos";
 import { useUserStore } from "../store/userStore";
 import { useSubjectStore } from "../store/subjectStore";
 import { getDateString } from "../utils/time";
-import PhotoUpload from "../components/todo/PhotoUpload";
 import PhotoJournal from "../components/todo/PhotoJournal";
 
-// ── 4am-to-4am day logic ──────────────────────────────────────────────────────
-function get4amDateString() {
-  const now = new Date();
-  if (now.getHours() < 4) {
-    const prev = new Date(now);
-    prev.setDate(prev.getDate() - 1);
-    return getDateString(prev);
-  }
-  return getDateString(now);
+// ── 4am-to-4am logic ─────────────────────────────────────────────────────────
+function get4amDateString(now = new Date()) {
+  const d = new Date(now);
+  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+  return getDateString(d);
+}
+
+function addDays(dateStr, n) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  return getDateString(dt);
+}
+
+function formatDayLabel(dateStr) {
+  const today = get4amDateString();
+  const yesterday = addDays(today, -1);
+  if (dateStr === today) return "Today";
+  if (dateStr === yesterday) return "Yesterday";
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" });
+}
+
+function formatUpcomingDate(dateStr) {
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" });
 }
 
 function getUpcomingDateString(daysAhead) {
@@ -31,34 +44,22 @@ function getUpcomingDateString(daysAhead) {
   return getDateString(d);
 }
 
-function format4amGroupDate(dateStr) {
-  const today  = get4amDateString();
-  const todayD = new Date(today);
-  const taskD  = new Date(dateStr);
-  const diff   = Math.round((todayD - taskD) / 86400000);
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Yesterday";
-  return taskD.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" });
-}
-
-function formatUpcomingDate(dateStr) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" });
-}
-
-// ── Goals localStorage ─────────────────────────────────────────────────────────
+// ── Goals localStorage ────────────────────────────────────────────────────────
 const GOALS_KEY = "tapasya_long_goals";
-function loadGoals()       { try { return JSON.parse(localStorage.getItem(GOALS_KEY) || "[]"); } catch { return []; } }
-function saveGoals(goals)  { localStorage.setItem(GOALS_KEY, JSON.stringify(goals)); }
-function daysLeft(deadline){ return Math.max(0, Math.ceil((new Date(deadline) - new Date()) / 86400000)); }
+function loadGoals() { try { return JSON.parse(localStorage.getItem(GOALS_KEY) || "[]"); } catch { return []; } }
+function saveGoals(goals) { localStorage.setItem(GOALS_KEY, JSON.stringify(goals)); }
+function daysLeft(deadline) { return Math.max(0, Math.ceil((new Date(deadline + "T23:59:59") - new Date()) / 86400000)); }
 
 function groupByDate(tasks) {
   const groups = {};
-  tasks.forEach((t) => { const d = t.date || get4amDateString(); if (!groups[d]) groups[d] = []; groups[d].push(t); });
-  return Object.entries(groups).sort(([a], [b]) => (a > b ? 1 : -1));
+  tasks.forEach((t) => {
+    const d = t.date || get4amDateString();
+    if (!groups[d]) groups[d] = [];
+    groups[d].push(t);
+  });
+  return Object.entries(groups).sort(([a], [b]) => a > b ? 1 : -1);
 }
 
-// ── Priority config ───────────────────────────────────────────────────────────
 const PRIORITY_CONFIG = {
   High:   { dot: "bg-red-500",    badge: "text-red-400",    bgBadge: "bg-red-500/10 border-red-500/20" },
   Medium: { dot: "bg-orange-500", badge: "text-orange-400", bgBadge: "bg-orange-500/10 border-orange-500/20" },
@@ -72,7 +73,6 @@ function formatEstTime(mins) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-// ── Motivational quotes ───────────────────────────────────────────────────────
 const QUOTES = [
   "Discipline is the bridge between goals and accomplishment.",
   "Small steps every day lead to big results.",
@@ -82,16 +82,14 @@ const QUOTES = [
 ];
 const todayQuote = QUOTES[new Date().getDate() % QUOTES.length];
 
-// ── Add Task Modal ─────────────────────────────────────────────────────────────
+// ── Add Task Modal ────────────────────────────────────────────────────────────
 function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
-  const [text,           setText]          = useState("");
-  const [subjectId,      setSubjectId]     = useState("");
-  const [priority,       setPriority]      = useState("Medium");
-  const [estMins,        setEstMins]       = useState("");
-  const [taskDate,       setTaskDate]      = useState(defaultDate || get4amDateString());
-  const [adding,         setAdding]        = useState(false);
-  const [photoUrl,       setPhotoUrl]      = useState("");
-  const [photoUploadedAt, setPhotoUploadedAt] = useState("");
+  const [text, setText] = useState("");
+  const [subjectId, setSubjectId] = useState("");
+  const [priority, setPriority] = useState("Medium");
+  const [estMins, setEstMins] = useState("");
+  const [taskDate, setTaskDate] = useState(defaultDate || get4amDateString());
+  const [adding, setAdding] = useState(false);
   const inputRef = useRef(null);
 
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
@@ -102,15 +100,13 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
     const sub = subjects.find((s) => (s.id || s._id) === subjectId);
     await onAdd({
       text: text.trim(),
-      subjectId:      subjectId || null,
-      subjectName:    sub?.name  || null,
-      subjectColor:   sub?.color || null,
+      subjectId: subjectId || null,
+      subjectName: sub?.name || null,
+      subjectColor: sub?.color || null,
       priority,
-      estMins:        parseInt(estMins) || null,
-      done:           false,
-      date:           taskDate,
-      photoUrl:       photoUrl || null,
-      photoUploadedAt: photoUploadedAt || null,
+      estMins: parseInt(estMins) || null,
+      done: false,
+      date: taskDate,
     });
     setAdding(false);
     setText(""); setEstMins("");
@@ -118,9 +114,9 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg mx-4 mb-4 md:mb-0 bg-[#151f2e] rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-lg mx-0 sm:mx-4 mb-0 sm:mb-0 bg-[#151f2e] rounded-t-2xl sm:rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden">
         <div className="h-0.5 w-full bg-gradient-to-r from-orange-500 via-orange-400 to-orange-600" />
         <div className="p-5">
           <div className="flex items-center justify-between mb-4">
@@ -158,7 +154,7 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
             </div>
             <div>
               <label className="text-[10px] text-slate-500 mb-1 block">Date</label>
-              <input type="date" value={taskDate} min={get4amDateString()} onChange={(e) => setTaskDate(e.target.value)}
+              <input type="date" value={taskDate} onChange={(e) => setTaskDate(e.target.value)}
                 className="w-full bg-[#0f172a] border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-orange-500" />
             </div>
           </div>
@@ -197,14 +193,14 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
   );
 }
 
-// ── Goal Modal ────────────────────────────────────────────────────────────────
+// ── Goal Modal ─────────────────────────────────────────────────────────────────
 function GoalModal({ goal, subjects, onClose, onSave }) {
-  const [title,         setTitle]         = useState(goal?.title || "");
-  const [subjectId,     setSubjectId]     = useState(goal?.subjectId || "");
-  const [deadline,      setDeadline]      = useState(goal?.deadline || "");
+  const [title, setTitle] = useState(goal?.title || "");
+  const [subjectId, setSubjectId] = useState(goal?.subjectId || "");
+  const [deadline, setDeadline] = useState(goal?.deadline || "");
   const [totalChapters, setTotalChapters] = useState(goal?.totalChapters || "");
-  const [doneChapters,  setDoneChapters]  = useState(goal?.doneChapters || 0);
-  const [notes,         setNotes]         = useState(goal?.notes || "");
+  const [doneChapters, setDoneChapters] = useState(goal?.doneChapters || 0);
+  const [notes, setNotes] = useState(goal?.notes || "");
 
   function handleSave() {
     if (!title.trim() || !deadline) return;
@@ -214,8 +210,8 @@ function GoalModal({ goal, subjects, onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-4">
-      <div className="bg-[#151f2e] rounded-2xl w-full max-w-md border border-slate-700 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-[#151f2e] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md border border-slate-700 shadow-2xl overflow-hidden">
         <div className="h-0.5 w-full bg-gradient-to-r from-orange-500 to-orange-400" />
         <div className="flex items-center justify-between p-5 border-b border-slate-800">
           <h3 className="font-semibold text-white">{goal?.id ? "Edit Goal" : "New Long-term Goal"}</h3>
@@ -237,7 +233,7 @@ function GoalModal({ goal, subjects, onClose, onSave }) {
           </div>
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Deadline *</label>
-            <input type="date" value={deadline} min={get4amDateString()} onChange={(e) => setDeadline(e.target.value)}
+            <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)}
               className="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-orange-500" />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -268,17 +264,17 @@ function GoalModal({ goal, subjects, onClose, onSave }) {
   );
 }
 
-// ── Goal Card ─────────────────────────────────────────────────────────────────
+// ── Goal Card ──────────────────────────────────────────────────────────────────
 function GoalCard({ goal, subjects, onEdit, onDelete, onUpdateChapters }) {
-  const subject   = subjects.find((s) => s.id === goal.subjectId || s._id === goal.subjectId);
-  const total     = goal.totalChapters || 0;
-  const done      = Math.min(goal.doneChapters || 0, total);
-  const pct       = total > 0 ? Math.round((done / total) * 100) : 0;
-  const left      = daysLeft(goal.deadline);
+  const subject = subjects.find((s) => s.id === goal.subjectId || s._id === goal.subjectId);
+  const total = goal.totalChapters || 0;
+  const done = Math.min(goal.doneChapters || 0, total);
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const left = daysLeft(goal.deadline);
   const remaining = total - done;
   const isOverdue = left === 0 && pct < 100;
-  const perDay    = left > 0 && remaining > 0 ? Math.ceil(remaining / left) : 0;
-  const color     = subject?.color || "#f97316";
+  const perDay = left > 0 && remaining > 0 ? Math.ceil(remaining / left) : 0;
+  const color = subject?.color || "#f97316";
 
   return (
     <div className="bg-[#141d2e] rounded-2xl border border-slate-800 overflow-hidden">
@@ -324,13 +320,13 @@ function GoalCard({ goal, subjects, onEdit, onDelete, onUpdateChapters }) {
   );
 }
 
-// ── Task Row ──────────────────────────────────────────────────────────────────
+// ── Task Row ───────────────────────────────────────────────────────────────────
 function TaskRow({ task, onToggle, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const p = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG["Medium"];
 
   return (
-    <div className={`flex items-center gap-3 px-4 py-3.5 group border-b border-slate-800/30 last:border-0 hover:bg-slate-800/20 transition-colors`}>
+    <div className="flex items-center gap-3 px-3 sm:px-4 py-3.5 group border-b border-slate-800/30 last:border-0 hover:bg-slate-800/20 transition-colors">
       <button onClick={onToggle}
         className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all
           ${task.done ? "bg-orange-500 border-orange-500" : "border-slate-600 hover:border-orange-400"}`}>
@@ -346,23 +342,16 @@ function TaskRow({ task, onToggle, onDelete }) {
         )}
       </div>
       {task.priority && (
-        <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border flex items-center gap-1 flex-shrink-0 ${p.bgBadge} ${p.badge}`}>
+        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border items-center gap-1 flex-shrink-0 hidden sm:flex ${p.bgBadge} ${p.badge}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${p.dot}`} />
           {task.priority}
         </span>
       )}
+      {task.priority && (
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 sm:hidden ${p.dot}`} />
+      )}
       {task.estMins && (
         <span className="text-xs text-slate-500 flex-shrink-0 font-medium tabular-nums">{formatEstTime(task.estMins)}</span>
-      )}
-      {/* Photo thumbnail */}
-      {task.photoUrl && (
-        <img
-          src={task.photoUrl}
-          alt="Task photo"
-          title={task.photoUploadedAt ? `Uploaded: ${new Date(task.photoUploadedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}` : 'Task photo'}
-          className="w-9 h-9 rounded-lg object-cover flex-shrink-0 border border-slate-700 cursor-pointer hover:border-orange-400 transition-colors"
-          onClick={(e) => { e.stopPropagation(); window.open(task.photoUrl, '_blank'); }}
-        />
       )}
       <div className="relative flex-shrink-0">
         <button onClick={() => setMenuOpen((v) => !v)}
@@ -384,10 +373,10 @@ function TaskRow({ task, onToggle, onDelete }) {
 
 // ── Today Overview Sidebar ────────────────────────────────────────────────────
 function TodayOverview({ todayTasks, streakDays }) {
-  const done        = todayTasks.filter((t) => t.done).length;
-  const total       = todayTasks.length;
+  const done = todayTasks.filter((t) => t.done).length;
+  const total = todayTasks.length;
   const timePlanned = todayTasks.reduce((sum, t) => sum + (t.estMins || 0), 0);
-  const pct         = total > 0 ? Math.round((done / total) * 100) : 0;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   function fmtTime(mins) {
     if (!mins) return "0h 0m";
@@ -430,7 +419,6 @@ function TodayOverview({ todayTasks, streakDays }) {
           <p className="text-slate-500 text-[10px] mt-1">Day Streak</p>
         </div>
       </div>
-
       {total > 0 && (
         <div className="px-4 pb-3">
           <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -440,7 +428,6 @@ function TodayOverview({ todayTasks, streakDays }) {
           <p className="text-right text-[10px] text-slate-600 mt-1">{pct}% complete</p>
         </div>
       )}
-
       <div className="mx-4 mb-4 bg-[#0f172a] rounded-xl p-3 border border-slate-800/60">
         <div className="flex gap-2 items-start">
           <span className="text-orange-400 text-lg font-serif leading-none">"</span>
@@ -452,103 +439,294 @@ function TodayOverview({ todayTasks, streakDays }) {
   );
 }
 
-// ── History Section ───────────────────────────────────────────────────────────
+// ── History Section with Day Navigation ──────────────────────────────────────
 function HistorySection({ tasks }) {
+  const todayStr = get4amDateString();
+  const [viewDate, setViewDate] = useState(todayStr);
   const [filterSubject, setFilterSubject] = useState("all");
-  const [filterDays,    setFilterDays]    = useState(7);
-  const [expanded,      setExpanded]      = useState(false);
 
-  const todayStr  = get4amDateString();
-  const cutoff    = new Date(todayStr);
-  cutoff.setDate(cutoff.getDate() - filterDays + 1);
-  const cutoffStr = getDateString(cutoff);
+  const canGoNext = viewDate < todayStr;
 
-  const doneTasks = tasks
-    .filter((t) => t.done && (t.date || "") <= todayStr && (t.date || "") >= cutoffStr)
-    .filter((t) => filterSubject === "all" || t.subjectName === filterSubject)
-    .sort((a, b) => ((b.updatedAt || b.createdAt) > (a.updatedAt || a.createdAt) ? 1 : -1));
+  const dayTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      const taskDate = t.completedAt || t.date || "";
+      if (taskDate !== viewDate) return false;
+      if (!t.done) return false;
+      if (filterSubject !== "all" && t.subjectName !== filterSubject) return false;
+      return true;
+    });
+  }, [tasks, viewDate, filterSubject]);
 
-  const subjectNames = [...new Set(tasks.filter((t) => t.done && t.subjectName).map((t) => t.subjectName))];
-  const visible      = expanded ? doneTasks : doneTasks.slice(0, 5);
-
-  function formatCompletedDate(t) {
-    const d = new Date(t.updatedAt || t.createdAt || new Date());
-    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) + " " +
-      d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }).toUpperCase();
-  }
+  const subjectNames = useMemo(() =>
+    [...new Set(tasks.filter((t) => t.done && t.subjectName).map((t) => t.subjectName))],
+    [tasks]
+  );
 
   return (
     <div className="bg-[#141d2e] rounded-2xl border border-slate-800 overflow-hidden">
-      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800">
+      <div className="flex items-center justify-between px-4 sm:px-5 pt-4 pb-3 border-b border-slate-800 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <h3 className="text-white font-semibold">History</h3>
-          <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{doneTasks.length} tasks completed</span>
+          <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{dayTasks.length} done</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}
             className="bg-[#1e293b] border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none">
-            <option value="all">All Tasks</option>
+            <option value="all">All</option>
             {subjectNames.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select value={filterDays} onChange={(e) => setFilterDays(Number(e.target.value))}
-            className="bg-[#1e293b] border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none">
-            <option value={7}>Last 7 Days</option>
-            <option value={14}>Last 14 Days</option>
-            <option value={30}>Last 30 Days</option>
-            <option value={90}>Last 3 Months</option>
-          </select>
+          {/* Day navigator */}
+          <div className="flex items-center gap-1 bg-[#0f172a] rounded-lg border border-slate-700/50 px-1 py-0.5">
+            <button onClick={() => setViewDate(d => addDays(d, -1))}
+              className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all">
+              <i className="ti ti-chevron-left text-xs" />
+            </button>
+            <span className="text-xs font-semibold text-slate-300 min-w-[90px] text-center">{formatDayLabel(viewDate)}</span>
+            <button onClick={() => setViewDate(d => addDays(d, 1))} disabled={!canGoNext}
+              className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+              <i className="ti ti-chevron-right text-xs" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {doneTasks.length === 0 ? (
+      {dayTasks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-slate-600">
           <i className="ti ti-history text-2xl mb-2" />
-          <p className="text-sm">No completed tasks in this period</p>
+          <p className="text-sm">No completed tasks {viewDate === todayStr ? "today" : "this day"}</p>
         </div>
       ) : (
-        <>
-          <div className="hidden md:grid grid-cols-12 px-5 py-2.5 text-[10px] text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-800/60">
-            <div className="col-span-5">Task</div>
-            <div className="col-span-2">Subject</div>
-            <div className="col-span-2">Time Spent</div>
-            <div className="col-span-2">Completed On</div>
-            <div className="col-span-1">Status</div>
-          </div>
-          <div className="divide-y divide-slate-800/30">
-            {visible.map((task) => (
-              <div key={task._id || task.id} className="grid grid-cols-1 md:grid-cols-12 px-5 py-3 items-center hover:bg-slate-800/20 transition-colors gap-1 md:gap-0">
-                <div className="col-span-5 flex items-center gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
-                    <i className="ti ti-check text-white text-[9px]" />
-                  </div>
-                  <span className="text-sm text-slate-200 truncate">{task.text}</span>
+        <div className="divide-y divide-slate-800/30">
+          {dayTasks.map((task) => {
+            const p = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG["Medium"];
+            return (
+              <div key={task._id || task.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/20 transition-colors">
+                <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                  <i className="ti ti-check text-white text-[9px]" />
                 </div>
-                <div className="col-span-2 pl-7 md:pl-0">
-                  {task.subjectName ? (
-                    <span className="text-xs flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: task.subjectColor || "#f97316" }} />
-                      <span className="text-slate-400 truncate">{task.subjectName}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-300 line-through truncate">{task.text}</p>
+                  {task.subjectName && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md mt-0.5 inline-block"
+                      style={{ backgroundColor: (task.subjectColor || "#f97316") + "22", color: task.subjectColor || "#fb923c" }}>
+                      {task.subjectName}
                     </span>
-                  ) : <span className="text-slate-600 text-xs">—</span>}
+                  )}
                 </div>
-                <div className="col-span-2 pl-7 md:pl-0 text-xs text-slate-400">{task.estMins ? formatEstTime(task.estMins) : "—"}</div>
-                <div className="col-span-2 pl-7 md:pl-0 text-xs text-slate-500">{formatCompletedDate(task)}</div>
-                <div className="col-span-1 pl-7 md:pl-0">
-                  <span className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">Completed</span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {task.priority && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border hidden sm:inline-flex items-center gap-1 ${p.bgBadge} ${p.badge}`}>
+                      {task.priority}
+                    </span>
+                  )}
+                  {task.estMins && <span className="text-xs text-slate-500">{formatEstTime(task.estMins)}</span>}
+                  <span className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">Done</span>
                 </div>
               </div>
-            ))}
-          </div>
-          {doneTasks.length > 5 && (
-            <div className="flex justify-center py-3 border-t border-slate-800/60">
-              <button onClick={() => setExpanded((v) => !v)}
-                className="flex items-center gap-2 text-xs text-slate-400 hover:text-white transition-colors px-4 py-1.5 rounded-lg hover:bg-slate-800">
-                {expanded ? "Show Less" : `View All History (${doneTasks.length})`}
-                <i className={`ti ti-chevron-${expanded ? "up" : "down"} text-xs`} />
-              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Stats Section ─────────────────────────────────────────────────────────────
+const STAT_COLORS = ["#f97316","#a855f7","#3b82f6","#22c55e","#f59e0b","#ec4899","#06b6d4","#84cc16"];
+
+function TodoStats({ tasks }) {
+  const [days, setDays] = useState(30);
+
+  const todayStr = get4amDateString();
+  const cutoffDate = addDays(todayStr, -(days - 1));
+
+  const periodTasks = useMemo(() =>
+    tasks.filter((t) => {
+      const d = t.completedAt || t.date || "";
+      return t.done && d >= cutoffDate && d <= todayStr;
+    }),
+    [tasks, cutoffDate, todayStr]
+  );
+
+  // Per-subject stats
+  const subjectStats = useMemo(() => {
+    const map = {};
+    periodTasks.forEach((t) => {
+      const key = t.subjectName || "No Subject";
+      const color = t.subjectColor || "#64748b";
+      if (!map[key]) map[key] = { name: key, color, total: 0, done: 0 };
+      map[key].total++;
+      map[key].done++;
+    });
+    // Also count pending tasks in period
+    tasks.filter((t) => !t.done && (t.date || "") >= cutoffDate && (t.date || "") <= todayStr).forEach((t) => {
+      const key = t.subjectName || "No Subject";
+      const color = t.subjectColor || "#64748b";
+      if (!map[key]) map[key] = { name: key, color, total: 0, done: 0 };
+      map[key].total++;
+    });
+    return Object.values(map).sort((a, b) => b.done - a.done);
+  }, [periodTasks, tasks, cutoffDate, todayStr]);
+
+  // Repeated tasks — tasks with same text that appear multiple days
+  const repeatedTasks = useMemo(() => {
+    const textMap = {};
+    periodTasks.forEach((t) => {
+      const key = t.text.trim().toLowerCase();
+      if (!textMap[key]) textMap[key] = { text: t.text, subjectName: t.subjectName, subjectColor: t.subjectColor, count: 0, dates: new Set() };
+      textMap[key].count++;
+      textMap[key].dates.add(t.completedAt || t.date || "");
+    });
+    return Object.values(textMap)
+      .filter((x) => x.dates.size > 1)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [periodTasks]);
+
+  // Daily completion over period (last 14 days for graph)
+  const dailyData = useMemo(() => {
+    const days14 = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = addDays(todayStr, -i);
+      const doneCnt = periodTasks.filter((t) => (t.completedAt || t.date || "") === d).length;
+      days14.push({ date: d, label: d.slice(5), done: doneCnt });
+    }
+    return days14;
+  }, [periodTasks, todayStr]);
+
+  const maxDaily = Math.max(...dailyData.map((d) => d.done), 1);
+  const totalDone = periodTasks.length;
+  const uniqueDays = new Set(periodTasks.map((t) => t.completedAt || t.date || "")).size;
+  const avgPerDay = uniqueDays > 0 ? (totalDone / uniqueDays).toFixed(1) : "0";
+
+  return (
+    <div className="space-y-4">
+      {/* Period selector */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="text-white font-semibold">Todo Analytics</h3>
+        <div className="flex gap-1 p-1 bg-[#0f172a] rounded-xl border border-slate-800">
+          {[7, 14, 30].map((d) => (
+            <button key={d} onClick={() => setDays(d)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${days === d ? "bg-orange-500 text-white" : "text-slate-500 hover:text-slate-300"}`}>
+              {d}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Metric cards */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: "Completed", value: totalDone, icon: "ti-check", color: "text-green-400", bg: "bg-green-500/10" },
+          { label: "Active Days", value: uniqueDays, icon: "ti-calendar", color: "text-blue-400", bg: "bg-blue-500/10" },
+          { label: "Avg/Day", value: avgPerDay, icon: "ti-trending-up", color: "text-orange-400", bg: "bg-orange-500/10" },
+        ].map(({ label, value, icon, color, bg }) => (
+          <div key={label} className="bg-[#141d2e] rounded-2xl border border-slate-800 p-3">
+            <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center mb-2`}>
+              <i className={`ti ${icon} ${color} text-sm`} />
             </div>
-          )}
-        </>
+            <p className={`text-xl font-black font-mono ${color}`}>{value}</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Daily completion bar chart */}
+      <div className="bg-[#141d2e] rounded-2xl border border-slate-800 p-4">
+        <p className="text-xs font-semibold text-slate-400 mb-3 uppercase tracking-wider">Daily Completions (last 14 days)</p>
+        {totalDone === 0 ? (
+          <div className="flex items-center justify-center h-20 text-slate-600 text-sm">No data yet</div>
+        ) : (
+          <div className="flex items-end gap-1 h-20">
+            {dailyData.map((d) => {
+              const pct = d.done / maxDaily;
+              return (
+                <div key={d.date} className="flex-1 flex flex-col items-center gap-1" title={`${d.label}: ${d.done} tasks`}>
+                  <div className="w-full rounded-t-sm transition-all duration-500"
+                    style={{ height: `${Math.max(pct * 72, d.done > 0 ? 6 : 2)}px`, backgroundColor: d.done > 0 ? `rgba(249,115,22,${0.3 + pct * 0.7})` : "#1e293b" }} />
+                  <span className="text-[7px] text-slate-700 font-medium">{d.label.slice(3)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Subject breakdown */}
+      {subjectStats.length > 0 && (
+        <div className="bg-[#141d2e] rounded-2xl border border-slate-800 p-4">
+          <p className="text-xs font-semibold text-slate-400 mb-3 uppercase tracking-wider">By Subject</p>
+          <div className="space-y-2.5">
+            {subjectStats.map((s, i) => {
+              const color = s.color !== "#64748b" ? s.color : STAT_COLORS[i % STAT_COLORS.length];
+              const pct = totalDone > 0 ? Math.round((s.done / totalDone) * 100) : 0;
+              return (
+                <div key={s.name}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                      <span className="text-xs text-slate-300 truncate">{s.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                      <span className="text-xs font-mono text-slate-400">{s.done} done</span>
+                      <span className="text-xs font-bold w-8 text-right" style={{ color }}>{pct}%</span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-slate-800/80 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${pct}%`, backgroundColor: color, boxShadow: `0 0 6px ${color}60` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Repeated tasks */}
+      {repeatedTasks.length > 0 && (
+        <div className="bg-[#141d2e] rounded-2xl border border-slate-800 p-4">
+          <p className="text-xs font-semibold text-slate-400 mb-3 uppercase tracking-wider">
+            <i className="ti ti-repeat text-xs mr-1" />
+            Recurring Tasks
+          </p>
+          <div className="space-y-2">
+            {repeatedTasks.map((t, i) => {
+              const color = t.subjectColor || STAT_COLORS[i % STAT_COLORS.length];
+              const barPct = Math.round((t.count / repeatedTasks[0].count) * 100);
+              return (
+                <div key={t.text} className="bg-[#0f172a] rounded-xl p-3 border border-slate-800/60">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-slate-200 truncate font-medium">{t.text}</p>
+                      {t.subjectName && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md mt-0.5 inline-block"
+                          style={{ backgroundColor: color + "22", color }}>
+                          {t.subjectName}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <p className="text-lg font-black font-mono" style={{ color }}>{t.count}×</p>
+                      <p className="text-[10px] text-slate-600">{t.dates.size} days</p>
+                    </div>
+                  </div>
+                  <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${barPct}%`, backgroundColor: color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {totalDone === 0 && (
+        <div className="flex flex-col items-center justify-center py-10 text-slate-600 bg-[#141d2e] rounded-2xl border border-slate-800">
+          <i className="ti ti-chart-bar text-2xl mb-2 opacity-40" />
+          <p className="text-sm">Complete some tasks to see analytics</p>
+        </div>
       )}
     </div>
   );
@@ -556,22 +734,25 @@ function HistorySection({ tasks }) {
 
 // ── Main Todo Page ─────────────────────────────────────────────────────────────
 export default function Todo() {
-  const uid        = useUserStore((s) => s.uid);
-  const subjects   = useSubjectStore((s) => s.subjects);
+  const uid = useUserStore((s) => s.uid);
+  const subjects = useSubjectStore((s) => s.subjects);
   const streakDays = useUserStore((s) => s.streakDays) || 0;
 
-  const [tab,        setTab]        = useState("today");
-  const [tasks,      setTasks]      = useState([]);
-  const [goals,      setGoals]      = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [showAdd,    setShowAdd]    = useState(false);
+  const [tab, setTab] = useState("today");
+  const [tasks, setTasks] = useState([]);
+  const [goals, setGoals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
   const [addForDate, setAddForDate] = useState(null);
-  const [goalModal,  setGoalModal]  = useState(null);
+  const [goalModal, setGoalModal] = useState(null);
+
+  const todayStr = get4amDateString();
 
   useEffect(() => {
     if (!uid) return;
     setLoading(true);
-    const since = getDateString(new Date(Date.now() - 90 * 86400000));
+    // Fetch 90 days back and 30 days ahead
+    const since = addDays(todayStr, -90);
     const ahead = getUpcomingDateString(30);
     getTodos(since, ahead)
       .then((data) => { data.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); setTasks(data); })
@@ -589,8 +770,18 @@ export default function Todo() {
 
   const handleToggle = async (taskId, done) => {
     try {
-      await updateTodo(taskId, { done: !done });
-      setTasks((prev) => prev.map((t) => (t._id === taskId || t.id === taskId) ? { ...t, done: !done } : t));
+      const newDone = !done;
+      // Compute completedAt locally (4am rule)
+      let completedAt = null;
+      if (newDone) {
+        const now = new Date();
+        if (now.getHours() < 4) now.setDate(now.getDate() - 1);
+        completedAt = getDateString(now);
+      }
+      await updateTodo(taskId, { done: newDone, completedAt });
+      setTasks((prev) => prev.map((t) =>
+        (t._id === taskId || t.id === taskId) ? { ...t, done: newDone, completedAt } : t
+      ));
     } catch (e) { console.error(e); }
   };
 
@@ -612,45 +803,50 @@ export default function Todo() {
     setGoals(updated); saveGoals(updated);
   }
 
-  const todayStr       = get4amDateString();
-  const todayTasks     = tasks.filter((t) => t.date === todayStr);
-  const upcomingTasks  = tasks.filter((t) => t.date > todayStr);
+  const todayTasks = tasks.filter((t) => t.date === todayStr);
+  const upcomingTasks = tasks.filter((t) => t.date > todayStr);
   const upcomingGroups = groupByDate(upcomingTasks);
-  const activeGoals    = goals.filter((g) => (g.doneChapters || 0) < (g.totalChapters || 1) || !g.totalChapters);
+  const activeGoals = goals.filter((g) => (g.doneChapters || 0) < (g.totalChapters || 1) || !g.totalChapters);
   const completedGoals = goals.filter((g) => g.totalChapters > 0 && (g.doneChapters || 0) >= g.totalChapters);
-  const todayDone      = todayTasks.filter((t) => t.done).length;
-  const todayCount     = todayTasks.length;
+  const todayDone = todayTasks.filter((t) => t.done).length;
+  const todayCount = todayTasks.length;
 
   function openAdd(date) { setAddForDate(date); setShowAdd(true); }
+
+  const TABS = [
+    { id: "today",    label: "Today",    icon: "ti-calendar" },
+    { id: "upcoming", label: "Upcoming", icon: "ti-calendar-event" },
+    { id: "stats",    label: "Stats",    icon: "ti-chart-bar" },
+    { id: "goals",    label: "Goals",    icon: "ti-target" },
+    { id: "journal",  label: "Journal",  icon: "ti-polaroid" },
+  ];
 
   return (
     <div className="min-h-full bg-[#0f172a] text-white">
       {/* Header */}
-      <div className="px-5 pt-6 pb-0">
+      <div className="px-4 sm:px-5 pt-5 sm:pt-6 pb-0">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">Todo</h1>
-            <p className="text-slate-500 text-sm mt-0.5">Plan your tasks and track your progress.</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-white">Todo</h1>
+            <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Plan your tasks and track your progress.</p>
           </div>
           <button onClick={() => openAdd(todayStr)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold transition-colors shadow-lg shadow-orange-900/30">
-            <i className="ti ti-plus text-sm" /> Add Task
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-white text-xs sm:text-sm font-semibold transition-colors shadow-lg shadow-orange-900/30">
+            <i className="ti ti-plus text-sm" />
+            <span className="hidden sm:inline">Add Task</span>
+            <span className="sm:hidden">Add</span>
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-0 border-b border-slate-800">
-          {[
-            { id: "today",    label: "Today",    icon: "ti-calendar" },
-            { id: "upcoming", label: "Upcoming", icon: "ti-calendar-event" },
-            { id: "goals",    label: "Goals",    icon: "ti-target" },
-            { id: "journal",  label: "Journal",  icon: "ti-polaroid" },
-          ].map(({ id, label, icon }) => (
+        {/* Tabs — scrollable on mobile */}
+        <div className="flex gap-0 border-b border-slate-800 overflow-x-auto scrollbar-none">
+          {TABS.map(({ id, label, icon }) => (
             <button key={id} onClick={() => setTab(id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all -mb-px
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-all -mb-px whitespace-nowrap
                 ${tab === id ? "border-orange-500 text-orange-400" : "border-transparent text-slate-500 hover:text-slate-300"}`}>
               <i className={`ti ${icon} text-sm`} />
-              {label}
+              <span className="hidden sm:inline">{label}</span>
+              <span className="sm:hidden">{label.slice(0, 4)}</span>
             </button>
           ))}
         </div>
@@ -658,7 +854,7 @@ export default function Todo() {
 
       {/* TODAY TAB */}
       {tab === "today" && (
-        <div className="flex flex-col xl:flex-row gap-4 p-5">
+        <div className="flex flex-col xl:flex-row gap-4 p-4 sm:p-5">
           <div className="flex-1 min-w-0 space-y-4">
             {/* Quick add bar */}
             <div className="flex items-center gap-3 bg-[#141d2e] border border-slate-800 rounded-2xl px-4 py-3">
@@ -670,10 +866,10 @@ export default function Todo() {
 
             {/* Tasks card */}
             <div className="bg-[#141d2e] rounded-2xl border border-slate-800 overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800">
+              <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-slate-800">
                 <div className="flex items-center gap-2">
                   <h3 className="text-white font-semibold">Tasks</h3>
-                  <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{todayCount} tasks</span>
+                  <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{todayCount}</span>
                 </div>
                 {todayCount > 0 && <span className="text-xs text-slate-500">{todayDone}/{todayCount} done</span>}
               </div>
@@ -688,7 +884,7 @@ export default function Todo() {
                     <i className="ti ti-clipboard-list text-xl text-slate-700" />
                   </div>
                   <p className="text-sm font-medium text-slate-500">No tasks for today</p>
-                  <p className="text-xs mt-1 mb-4 text-slate-600">Hit "Add Task" to get started</p>
+                  <p className="text-xs mt-1 mb-4 text-slate-600">Hit "Add" to get started</p>
                   <button onClick={() => openAdd(todayStr)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 text-white text-sm font-medium hover:bg-orange-400 transition-colors">
                     <i className="ti ti-plus" /> Add First Task
                   </button>
@@ -700,9 +896,9 @@ export default function Todo() {
                       onToggle={() => handleToggle(task._id || task.id, task.done)}
                       onDelete={() => handleDelete(task._id || task.id)} />
                   ))}
-                  <div className="px-5 py-2.5">
+                  <div className="px-4 sm:px-5 py-2.5">
                     <button onClick={() => openAdd(todayStr)} className="flex items-center gap-1.5 text-xs text-orange-400 hover:text-orange-300 transition-colors">
-                      <i className="ti ti-plus text-xs" /> Add Subtask
+                      <i className="ti ti-plus text-xs" /> Add another task
                     </button>
                   </div>
                 </div>
@@ -722,7 +918,7 @@ export default function Todo() {
 
       {/* UPCOMING TAB */}
       {tab === "upcoming" && (
-        <div className="p-5 space-y-4">
+        <div className="p-4 sm:p-5 space-y-4">
           <button onClick={() => openAdd(getUpcomingDateString(1))}
             className="flex items-center gap-3 w-full bg-[#141d2e] border border-dashed border-slate-700 rounded-2xl px-4 py-3 text-slate-500 hover:text-slate-300 hover:border-slate-500 transition-all text-sm">
             <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
@@ -764,9 +960,22 @@ export default function Todo() {
         </div>
       )}
 
+      {/* STATS TAB */}
+      {tab === "stats" && (
+        <div className="p-4 sm:p-5">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-8 h-8 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
+            </div>
+          ) : (
+            <TodoStats tasks={tasks} />
+          )}
+        </div>
+      )}
+
       {/* GOALS TAB */}
       {tab === "goals" && (
-        <div className="p-5">
+        <div className="p-4 sm:p-5">
           <div className="flex justify-end mb-4">
             <button onClick={() => setGoalModal("new")}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500/20 border border-orange-500/30 text-orange-400 hover:bg-orange-500/30 text-sm font-medium transition-colors">
@@ -799,7 +1008,7 @@ export default function Todo() {
 
       {/* JOURNAL TAB */}
       {tab === "journal" && (
-        <div className="p-5">
+        <div className="p-4 sm:p-5">
           <PhotoJournal />
         </div>
       )}
@@ -807,7 +1016,7 @@ export default function Todo() {
       {/* Floating + (mobile) */}
       {!showAdd && (
         <button onClick={() => openAdd(todayStr)}
-          className="fixed bottom-20 right-5 md:hidden w-[52px] h-[52px] rounded-full bg-orange-500 hover:bg-orange-400 shadow-xl shadow-orange-900/40 flex items-center justify-center transition-all active:scale-95 z-40">
+          className="fixed bottom-20 right-4 md:hidden w-[52px] h-[52px] rounded-full bg-orange-500 hover:bg-orange-400 shadow-xl shadow-orange-900/40 flex items-center justify-center transition-all active:scale-95 z-40">
           <i className="ti ti-plus text-white text-xl" />
         </button>
       )}

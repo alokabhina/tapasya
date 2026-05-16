@@ -8,6 +8,7 @@ import useUserStore from '@/store/userStore'
 import { saveSession, addPendingSync } from '@/api/sessions'
 import { updateMemberHours } from '@/api/groups'
 import { midnightSplit } from '@/utils/time'
+import { showLiveTimerNotification, clearAllNotifications } from '@/utils/notifications'
 
 let _worker = null
 
@@ -48,6 +49,19 @@ export function useTimer() {
     getWorker().postMessage({ type: 'START', payload: { elapsed: 0 } })
   }, [store])
 
+  // Live timer notification — har 30 second pe update
+  useEffect(() => {
+    if (!store.isRunning || store.isPaused) return
+    const interval = setInterval(() => {
+      const s = useTimerStore.getState()
+      if (s.isRunning && !s.isPaused && s.subjectName) {
+        const goalSec = useUserStore.getState().dailyGoalSeconds || 0
+        showLiveTimerNotification(s.subjectName, s.elapsed, 0, goalSec)
+      }
+    }, 30000) // 30 seconds
+    return () => clearInterval(interval)
+  }, [store.isRunning, store.isPaused])
+
   const pause = useCallback(() => {
     store.pause()
     getWorker().postMessage({ type: 'PAUSE' })
@@ -59,12 +73,14 @@ export function useTimer() {
   }, [store])
 
   // Core save logic
+  // KEY FIX: duration = elapsed (actual study time, stop periods excluded)
+  // startTime/endTime sirf reference ke liye hai — duration hamesha elapsed se aata hai
   const _saveAndReset = useCallback(async (minSeconds = 10) => {
     getWorker().postMessage({ type: 'STOP' })
 
     const endTime   = new Date().toISOString()
     const startTime = store.sessionStartTime
-    const elapsed   = store.elapsed
+    const elapsed   = store.elapsed   // actual on-timer seconds (pauses excluded)
 
     // Discard sessions shorter than minSeconds
     if (!startTime || elapsed < minSeconds) {
@@ -72,18 +88,29 @@ export function useTimer() {
       return 0
     }
 
+    // For date attribution, use start time's date (4am rule applied on server/client)
+    // But duration = elapsed, not (endTime - startTime)
+    // If session crosses midnight, split proportionally but total = elapsed
     const splits = midnightSplit(startTime, endTime)
     let totalSaved = 0
 
+    // Proportion of elapsed per split (based on wall-clock ratio)
+    const wallTotal = Math.round((new Date(endTime) - new Date(startTime)) / 1000) || elapsed
     for (const split of splits) {
-      const duration = Math.round((new Date(split.endTime) - new Date(split.startTime)) / 1000)
+      const wallSplit = Math.round((new Date(split.endTime) - new Date(split.startTime)) / 1000)
+      // Proportional actual study time for this split
+      const duration = splits.length === 1
+        ? elapsed
+        : Math.round((wallSplit / wallTotal) * elapsed)
+
+      if (duration < 1) continue
       const session = {
         subjectId:    store.subjectId,
         subjectName:  store.subjectName,
         subjectColor: store.subjectColor,
         startTime:    split.startTime,
         endTime:      split.endTime,
-        duration,
+        duration,  // ✅ actual study time, stop periods excluded
         date:         split.date,
         notes:        '',
       }
