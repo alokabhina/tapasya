@@ -10,7 +10,6 @@ import useUserStore from '@/store/userStore'
 import { saveSession, addPendingSync } from '@/api/sessions'
 import { updateMemberHours } from '@/api/groups'
 import { midnightSplit } from '@/utils/time'
-import { showLiveTimerNotification } from '@/utils/notifications'
 
 // ── Singleton worker ──────────────────────────────────────────────────────────
 let _worker = null
@@ -54,19 +53,41 @@ export function useTimer() {
     return () => {}
   }, [])
 
-  // Live timer notification — har 30 second pe
+  // Live timer notification — SW ko har second message bhejo
+  // SW same tag use karta hai to notification update in-place hoti hai (no pop/sound)
   useEffect(() => {
     if (!store.isRunning || store.isPaused) {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then((sw) => {
+          sw.active?.postMessage({ type: 'TIMER_STOP' })
+        }).catch(() => {})
+      }
       clearInterval(notifIntervalRef.current)
       return
     }
-    notifIntervalRef.current = setInterval(() => {
-      const s = useTimerStore.getState()
-      if (s.isRunning && !s.isPaused && s.subjectName) {
-        const goalSec = useUserStore.getState().dailyGoalSeconds || 0
-        showLiveTimerNotification(s.subjectName, s.elapsed, 0, goalSec)
-      }
-    }, 30000)
+
+    async function sendTick() {
+      if (!('serviceWorker' in navigator)) return
+      try {
+        const sw = await navigator.serviceWorker.ready
+        if (!sw.active) return
+        const s = useTimerStore.getState()
+        const { dailyGoalSeconds } = useUserStore.getState()
+        const goalPct = dailyGoalSeconds > 0 ? (s.elapsed / dailyGoalSeconds) * 100 : 0
+        sw.active.postMessage({
+          type: 'TIMER_TICK',
+          payload: {
+            subject:   s.subjectName || 'Study',
+            elapsed:   s.elapsed,
+            todayDone: s.elapsed,
+            goalPct,
+          },
+        })
+      } catch (_) {}
+    }
+
+    sendTick()
+    notifIntervalRef.current = setInterval(sendTick, 1000)
     return () => clearInterval(notifIntervalRef.current)
   }, [store.isRunning, store.isPaused])
 

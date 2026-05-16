@@ -96,27 +96,7 @@ self.addEventListener("push", (event) => {
   );
 });
 
-// ── Notification Click ───────────────────────────────────────────────
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-
-  const targetUrl = event.notification.data?.url || "/";
-
-  event.waitUntil(
-    clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clientList) => {
-        for (const client of clientList) {
-          if (client.url === targetUrl && "focus" in client) {
-            return client.focus();
-          }
-        }
-        if (clients.openWindow) {
-          return clients.openWindow(targetUrl);
-        }
-      })
-  );
-});
+// notificationclick — see handler at bottom (includes pause/stop actions)
 
 // ── Install + Activate ───────────────────────────────────────────────
 self.addEventListener("install", (event) => {
@@ -140,3 +120,101 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+// ── Live Timer Notification (persistent, silent update) ──────────────────────
+// App se message aata hai har second — SW notification update karta hai
+// Same tag = notification replace hoti hai, close + reopen nahi hota
+// silent: true = koi sound/vibration nahi
+
+self.addEventListener('message', (event) => {
+  const { type, payload } = event.data || {}
+
+  if (type === 'TIMER_TICK') {
+    const { subject, elapsed, todayDone, goalPct } = payload
+
+    // Format helpers (SW mein external import nahi hota)
+    function fmtElapsed(s) {
+      const h = Math.floor(s / 3600)
+      const m = Math.floor((s % 3600) / 60)
+      const sec = s % 60
+      return [h, m, sec].map((v) => String(v).padStart(2, '0')).join(':')
+    }
+    function fmtHours(s) {
+      const h = Math.floor(s / 3600)
+      const m = Math.floor((s % 3600) / 60)
+      if (h > 0 && m > 0) return `${h}h ${m}m`
+      if (h > 0) return `${h}h`
+      return `${m}m`
+    }
+
+    const pct = Math.min(Math.round(goalPct || 0), 100)
+    const bar = buildBar(pct)
+
+    event.waitUntil(
+      self.registration.showNotification(`📖 ${subject}`, {
+        body: `${fmtElapsed(elapsed)}  •  Today: ${fmtHours(todayDone)}  ${bar}  ${pct}%`,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        tag: 'live-timer',          // same tag = update in place
+        renotify: false,            // koi sound/buzz nahi
+        silent: true,               // bilkul quiet
+        ongoing: true,              // Android pe dismiss nahi hoti jab tak timer chal raha ho
+        data: { url: '/timer' },
+        actions: [
+          { action: 'pause',  title: '⏸ Pause'  },
+          { action: 'stop',   title: '⏹ Stop'   },
+        ],
+      })
+    )
+  }
+
+  if (type === 'TIMER_STOP') {
+    // Timer stop hone par live notification close karo
+    event.waitUntil(
+      self.registration.getNotifications({ tag: 'live-timer' })
+        .then((notifs) => notifs.forEach((n) => n.close()))
+    )
+  }
+})
+
+// ── Notification action buttons (pause/stop) ─────────────────────────────────
+self.addEventListener('notificationclick', (event) => {
+  const action = event.action
+  const notif  = event.notification
+
+  if (action === 'pause' || action === 'stop') {
+    notif.close()
+    // App ko message bhejo — agar open hai
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then((clientList) => {
+          for (const client of clientList) {
+            client.postMessage({ type: action === 'pause' ? 'NOTIF_PAUSE' : 'NOTIF_STOP' })
+          }
+          // Agar koi window open nahi — app open karo
+          if (clientList.length === 0 && clients.openWindow) {
+            return clients.openWindow('/timer')
+          }
+        })
+    )
+    return
+  }
+
+  // Normal click — app focus ya open
+  notif.close()
+  const targetUrl = notif.data?.url || '/'
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if ('focus' in client) return client.focus()
+        }
+        if (clients.openWindow) return clients.openWindow(targetUrl)
+      })
+  )
+})
+
+// Progress bar helper (ASCII, 10 chars)
+function buildBar(pct) {
+  const filled = Math.round(pct / 10)
+  return '▓'.repeat(filled) + '░'.repeat(10 - filled)
+}
