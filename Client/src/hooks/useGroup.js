@@ -36,7 +36,7 @@ export function useGroup() {
       try { const data = await fetchGroupMembers(activeGroupId); if (active) setMembers(data) } catch {}
     }
     pollMembers()
-    pollRef.current = setInterval(pollMembers, 30_000)
+    pollRef.current = setInterval(pollMembers, 8_000) // 8s for live presence
     return () => { active = false; clearInterval(pollRef.current) }
   }, [activeGroupId])
 
@@ -132,6 +132,16 @@ export function useGroup() {
       try { await updateMemberHours(g._id, seconds) } catch (e) { console.error(`Group hours update failed for ${g._id}:`, e) }
     }
   }
+
+  // Listen for session-saved event from useTimer
+  useEffect(() => {
+    function onSessionSaved(e) {
+      const { seconds } = e.detail || {}
+      if (seconds > 0) addSessionHours(seconds)
+    }
+    window.addEventListener('tapasya:session-saved', onSessionSaved)
+    return () => window.removeEventListener('tapasya:session-saved', onSessionSaved)
+  }, [groups]) // groups dependency — addSessionHours uses groups internally
 
   return {
     groups, group, activeGroupId, setActiveGroupId,

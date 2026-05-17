@@ -325,12 +325,18 @@ export default function GroupStatsTab({ group, members: initialMembers }) {
         const data = await fetchGroupMembers(group._id)
         if (active) setMembers(data)
       } catch (_) {}
-    }, 5000)
+    }, 8000)
     return () => { active = false; clearInterval(interval) }
   }, [group?._id])
 
-  // Sync with prop changes
-  useEffect(() => { setMembers(initialMembers || []) }, [initialMembers])
+  // Sync with prop changes (only if polling hasn't started yet)
+  useEffect(() => {
+    setMembers(prev => {
+      // Agar polling se kuch aa chuka hai — use raho
+      if (prev.length > 0 && prev.some(m => m.isStudying !== undefined)) return prev
+      return initialMembers || []
+    })
+  }, [initialMembers])
 
   const studying = members.filter(m => m.isStudying)
   const offline  = members.filter(m => !m.isStudying)

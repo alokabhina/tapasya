@@ -8,7 +8,6 @@ import { useEffect, useRef, useCallback } from 'react'
 import useTimerStore from '@/store/timerStore'
 import useUserStore from '@/store/userStore'
 import { saveSession, addPendingSync } from '@/api/sessions'
-import { updateMemberHours } from '@/api/groups'
 import { midnightSplit } from '@/utils/time'
 import { sendHeartbeat, sendOffline } from '@/api/groups'
 
@@ -204,13 +203,10 @@ export function useTimer() {
       }
     }
 
-    // Group leaderboard update
+    // Group leaderboard update — custom event dispatch karo
+    // useGroup hook ka addSessionHours handle karega (sare groups ke liye)
     if (uid && totalSaved > 0) {
-      const { groupId } = useUserStore.getState()
-      if (groupId) {
-        try { await updateMemberHours(uid, groupId, totalSaved) }
-        catch (e) { console.warn('Group hours update failed:', e.message) }
-      }
+      window.dispatchEvent(new CustomEvent('tapasya:session-saved', { detail: { seconds: totalSaved } }))
     }
 
     store.reset()
