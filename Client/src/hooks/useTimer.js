@@ -54,36 +54,24 @@ export function useTimer() {
     return () => {}
   }, [])
 
-  // Live timer — SW ko sirf events bhejo (TIMER_START/PAUSE/RESUME/STOP)
-  // SW apne andar setInterval chalata hai — no per-second app→SW messages needed
-  useEffect(() => {
-    async function notifySwState() {
-      if (!('serviceWorker' in navigator)) return
-      try {
-        const sw = await navigator.serviceWorker.ready
-        if (!sw.active) return
-        const s = useTimerStore.getState()
-        const { dailyGoalSeconds } = useUserStore.getState()
-        const goalPct = dailyGoalSeconds > 0 ? (s.elapsed / dailyGoalSeconds) * 100 : 0
+  // SW helper — direct message sender
+  async function swPost(msg) {
+    if (!('serviceWorker' in navigator)) return
+    try {
+      const sw = await navigator.serviceWorker.ready
+      sw.active?.postMessage(msg)
+    } catch (_) {}
+  }
 
-        if (!s.isRunning) {
-          sw.active.postMessage({ type: 'TIMER_STOP' })
-        } else if (s.isPaused) {
-          sw.active.postMessage({ type: 'TIMER_PAUSE' })
-        } else {
-          sw.active.postMessage({
-            type: 'TIMER_START',
-            payload: {
-              subject: s.subjectName || 'Study',
-              elapsed: s.elapsed,
-              goalPct,
-            },
-          })
-        }
-      } catch (_) {}
+  // On mount: agar timer already running tha (page reload) — SW ko batao
+  useEffect(() => {
+    const s = useTimerStore.getState()
+    if (s.isRunning && !s.isPaused && s.subjectName) {
+      const { dailyGoalSeconds } = useUserStore.getState()
+      const goalPct = dailyGoalSeconds > 0 ? (s.elapsed / dailyGoalSeconds) * 100 : 0
+      swPost({ type: 'TIMER_START', payload: { subject: s.subjectName, elapsed: s.elapsed, goalPct } })
     }
-    notifySwState()
-  }, [store.isRunning, store.isPaused])
+  }, [])
 
   // ── start ─────────────────────────────────────────────────────────────────
   // ── heartbeat to group (timer chal raha ho tab) ──────────────────────────
@@ -126,33 +114,28 @@ export function useTimer() {
     store.start(subject)
     getWorker().postMessage({ type: 'START', payload: { elapsed: 0 } })
     startHeartbeat()
+    // SW ko directly batao — no useEffect race condition
+    const { dailyGoalSeconds } = useUserStore.getState()
+    const goalPct = dailyGoalSeconds > 0 ? 0 : 0 // fresh start = 0%
+    swPost({
+      type: 'TIMER_START',
+      payload: { subject: subject?.name || subject?.subjectName || 'Study', elapsed: 0, goalPct },
+    })
   }, [store])
 
   // ── pause ─────────────────────────────────────────────────────────────────
-  const pause = useCallback(async () => {
+  const pause = useCallback(() => {
     store.pause()
     getWorker().postMessage({ type: 'PAUSE' })
-    // SW ko bhi batao — woh apna interval rok dega
-    if ('serviceWorker' in navigator) {
-      try {
-        const sw = await navigator.serviceWorker.ready
-        sw.active?.postMessage({ type: 'TIMER_PAUSE' })
-      } catch (_) {}
-    }
+    swPost({ type: 'TIMER_PAUSE' })
   }, [store])
 
   // ── resume ────────────────────────────────────────────────────────────────
-  const resume = useCallback(async () => {
+  const resume = useCallback(() => {
     const current = useTimerStore.getState().elapsed
     store.resume()
     getWorker().postMessage({ type: 'RESUME', payload: { elapsed: current } })
-    // SW ko resume batao with latest elapsed
-    if ('serviceWorker' in navigator) {
-      try {
-        const sw = await navigator.serviceWorker.ready
-        sw.active?.postMessage({ type: 'TIMER_RESUME', payload: { elapsed: current } })
-      } catch (_) {}
-    }
+    swPost({ type: 'TIMER_RESUME', payload: { elapsed: current } })
   }, [store])
 
   // ── core save ─────────────────────────────────────────────────────────────
@@ -164,12 +147,7 @@ export function useTimer() {
     getWorker().postMessage({ type: 'STOP' })
     _workerRunning = false
     stopHeartbeat()
-    // SW live timer band karo
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then((sw) => {
-        sw.active?.postMessage({ type: 'TIMER_STOP' })
-      }).catch(() => {})
-    }
+    swPost({ type: 'TIMER_STOP' })
 
     const endTime   = new Date().toISOString()
     const startTime = store.sessionStartTime

@@ -1,7 +1,3 @@
-// vite.config.js
-// FIX: Firebase ke COOP/COEP headers hataaye — Firebase migration complete hai
-// GSI (Google Identity Services) ko ye headers ki zaroorat nahi
-
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -11,26 +7,17 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // FIX: injectManifest mode — custom sw.js use hoga, workbox apna generate nahi karega
+      strategies: 'injectManifest',
+      srcDir: 'public',
+      filename: 'sw.js',
       registerType: 'autoUpdate',
       includeAssets: ['icons/favicon.ico', 'icons/icon-192.png', 'icons/icon-512.png'],
       manifest: false,
-      workbox: {
+      injectManifest: {
+        swSrc: 'public/sw.js',
+        swDest: 'dist/sw.js',
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/accounts\.google\.com\/gsi\/.*/i,
-            handler: 'NetworkFirst',
-            options: { cacheName: 'gsi-cache' },
-          },
-        ],
       },
     }),
   ],
@@ -39,8 +26,6 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  // FIX: Firebase COOP/COEP headers hataaye
-  // GSI credential flow popup-free hai — ye headers ab zaroorat nahi
   server: {
     port: 5173,
   },
