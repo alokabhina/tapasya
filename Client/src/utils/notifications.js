@@ -1,7 +1,7 @@
 // src/utils/notifications.js
-// Smart push notifications — daily goal tracking, motivation, todo reminders
+// Tone: disciplined, silent grind, aspirant life — non-cringe, emotionally real
 
-// ── Permission ───────────────────────────────────────────────────────────────
+// ── Permission ────────────────────────────────────────────────────────────────
 
 export async function requestPermission() {
   if (!('Notification' in window)) return false
@@ -14,32 +14,27 @@ export function hasPermission() {
   return typeof Notification !== 'undefined' && Notification.permission === 'granted'
 }
 
-// ── Core send helper ─────────────────────────────────────────────────────────
+// ── Core send ─────────────────────────────────────────────────────────────────
 
 async function sendNotification(title, options = {}) {
   if (!hasPermission()) return
-
   const defaults = {
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    vibrate: [100, 50, 100],
+    vibrate: [80, 40, 80],
     data: { url: '/' },
   }
-
   if ('serviceWorker' in navigator) {
     try {
       const sw = await navigator.serviceWorker.ready
       await sw.showNotification(title, { ...defaults, ...options })
       return
-    } catch (_) {
-      // fallback to basic Notification
-    }
+    } catch (_) {}
   }
-
   new Notification(title, { ...defaults, ...options })
 }
 
-// ── Formatting helpers ────────────────────────────────────────────────────────
+// ── Format helpers ─────────────────────────────────────────────────────────────
 
 function fmtHours(seconds) {
   const h = Math.floor(seconds / 3600)
@@ -49,121 +44,172 @@ function fmtHours(seconds) {
   return `${m}m`
 }
 
-function fmtElapsed(seconds) {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  return [h, m, s].map((v) => String(v).padStart(2, '0')).join(':')
+// ── First name extract ────────────────────────────────────────────────────────
+
+function firstName(name) {
+  if (!name || name === 'Aspirant') return null
+  return name.trim().split(/\s+/)[0]
 }
 
-// ── Motivational lines pool ───────────────────────────────────────────────────
+// ── Message pools — 40% calm / 30% discipline / 20% relatable / 10% quote ─────
 
-const MOTIVATION_INCOMPLETE = [
-  'Ek ek step karo — manzil dur nahi! 💪',
-  'Abhi shuru karo, baad mein khushi hogi! 🚀',
-  'Consistency hi success ki chaabi hai. Chalo! 🔑',
-  'Aaj ki mehnat, kal ka fal. Mat ruko! ⚡',
-  'Thoda aur — tum kar sakte ho! 🎯',
-  'Sapne wo nahi jo neend mein aate hain, wo jo neend nahi aane dete! 🌟',
-  'Har minute important hai. Shuru ho jao! ⏰',
+// CALM REMINDERS (40%)
+const CALM = [
+  'Bas ek session start karo.',
+  'Phone khol liya hai to 10 minute padh bhi lo.',
+  'Silent progress bhi progress hoti hai.',
+  'Chota sa step bhi forward direction mein hota hai.',
+  'Aaj ka ek session kal ki tension kam karega.',
+  'Notifications band karo, timer start karo.',
 ]
 
-const MOTIVATION_COMPLETE = [
-  'Kya baat hai! Aaj ka goal complete! 🏆',
-  'Outstanding! Tum champion ho! 🥇',
-  'Full marks aaj ke liye! Kal bhi aisa hi! 🌟',
-  'Daily goal done! Yeh discipline hi tumhe aage le jayegi! 💎',
-  'Zabardast! Aaj ka target hit! 🎯',
+// DISCIPLINE BASED (30%)
+const DISCIPLINE = [
+  'Mood ka wait mat karo.',
+  'Aise din hi future decide karte hain.',
+  'Consistency motivation se zyada important hoti hai.',
+  'Routine boring lagti hai — results nahi.',
+  'Jo aaj nahi padha, woh kal double ho jayega.',
+  'Perfect time kabhi nahi aata. Abhi start karo.',
 ]
 
-const MOTIVATION_HALFWAY = [
-  'Aadha rasta par! Bas thoda aur push karo! 💪',
-  '50% complete — ab momentum mat todno! 🔥',
-  'Halfway there! Tum bilkul sahi track par ho! ⚡',
+// EMOTIONAL / RELATABLE (20%)
+const RELATABLE = [
+  'Problems hain, fir bhi padhna hai.',
+  'Exam preparation dekhega, problems nahi.',
+  'Thak gaye ho, samajh aa raha hai. Phir bhi.',
+  'Mushkil lag raha hai? Sab ko lagta hai. Fir bhi jo padhte hain woh aage jaate hain.',
+  'Motivation nahi hai — discipline se kaam chalao aaj.',
+  'Struggle real hai. Isliye jo padh rahe ho woh important bhi hai.',
 ]
 
-const MOTIVATION_NEAR = [
-  'Almost there! Goal ke kareeb ho — rukna mat! 🏃',
-  'Sirf thoda aur bacha hai! Karo finish! 🎯',
-  '75%+ done! Aaj ka medal pakka! 🥇',
+// QUOTES (10%) — APJ, Bose, Vivekananda only
+const QUOTES = [
+  { text: '"Dream is not what you see in sleep,\ndream is something that does not let you sleep."', author: 'A. P. J. Abdul Kalam' },
+  { text: '"Life loses half its interest if there is no struggle."', author: 'Subhas Chandra Bose' },
+  { text: '"Arise, awake and stop not till the goal is reached."', author: 'Swami Vivekananda' },
+  { text: '"Excellence is not a destination — it is a continuous journey."', author: 'A. P. J. Abdul Kalam' },
 ]
+
+// Weighted random — 40/30/20/10 distribution
+function getMotivation() {
+  const r = Math.random() * 100
+  if (r < 40) return getRandom(CALM)
+  if (r < 70) return getRandom(DISCIPLINE)
+  if (r < 90) return getRandom(RELATABLE)
+  const q = getRandom(QUOTES)
+  return `${q.text}\n— ${q.author}`
+}
 
 function getRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
-// ── 1. Daily goal milestone notification ─────────────────────────────────────
-//    Sent at milestones: 25%, 50%, 75%, 100%
+// ── PERSONAL name-based notifications ────────────────────────────────────────
+// Random pe naam le ke bulate hain — as if someone is watching
+
+const PERSONAL_MESSAGES = [
+  (n) => ({ title: `📖 ${n}, uth ja.`, body: 'Reels baad mein dekh lena.\nAbhi padho.' }),
+  (n) => ({ title: `⏰ ${n}.`, body: 'Kitni baar timer start karne ka socha aaj?\nEk baar actually karo.' }),
+  (n) => ({ title: `${n}, phone rakh.`, body: 'Ye notification dekh raha hai matlab phone haath mein hai.\nTimer start karo.' }),
+  (n) => ({ title: `📖 ${n}, serious ho jao.`, body: 'Social media wale exam nahi denge tumhare liye.' }),
+  (n) => ({ title: `${n} — ek kaam karo.`, body: 'Sirf 25 minute. Timer lagao. Baad mein sab karte rehna.' }),
+  (n) => ({ title: `⏰ ${n}, abhi.`, body: 'Baad mein padhunga — yeh sentence future destroy karta hai.' }),
+  (n) => ({ title: `${n}, kitna bacha hai?`, body: 'Syllabus wait nahi karta.\nAaj ka session start karo.' }),
+  (n) => ({ title: `📖 ${n}.`, body: 'Jo aaj nahi padha, woh kal double ho jayega.\nShuru karo.' }),
+  (n) => ({ title: `${n}, screen time check karo.`, body: 'Aur padhai ka time?\nBalance banao.' }),
+  (n) => ({ title: `⏰ ${n} — focus time.`, body: 'Distractions baad mein. Pehle ek session complete karo.' }),
+]
+
+// Generic (jab naam na ho)
+const GENERIC_PERSONAL = [
+  { title: '📖 Uth ja.', body: 'Reels baad mein dekh lena.\nAbhi padho.' },
+  { title: '⏰ Phone rakh.', body: 'Ye notification dekh raha hai matlab phone haath mein hai.\nTimer start karo.' },
+  { title: '📖 Serious ho jao.', body: 'Social media wale exam nahi denge tumhare liye.' },
+  { title: 'Ek kaam karo.', body: 'Sirf 25 minute. Timer lagao. Baad mein sab karte rehna.' },
+  { title: '⏰ Abhi.', body: 'Baad mein padhunga — yeh sentence future destroy karta hai.' },
+]
+
+export async function sendPersonalNudge(displayName) {
+  if (!hasPermission()) return
+  const fn = firstName(displayName)
+  let msg
+  if (fn) {
+    msg = getRandom(PERSONAL_MESSAGES)(fn)
+  } else {
+    msg = getRandom(GENERIC_PERSONAL)
+  }
+  await sendNotification(msg.title, {
+    body: msg.body,
+    tag: 'personal-nudge',
+    renotify: true,
+    silent: false,
+    data: { url: '/' },
+  })
+}
+
+// ── 1. Goal milestones ────────────────────────────────────────────────────────
 
 const _sentMilestones = new Set()
 
-export async function checkGoalMilestone(todaySeconds, goalSeconds) {
+export async function checkGoalMilestone(todaySeconds, goalSeconds, displayName) {
   if (!hasPermission() || goalSeconds <= 0) return
 
-  const pct = (todaySeconds / goalSeconds) * 100
+  const pct   = (todaySeconds / goalSeconds) * 100
   const today = new Date().toDateString()
-  const key = (milestone) => `${today}_${milestone}`
+  const key   = (m) => `${today}_${m}`
+  const fn    = firstName(displayName)
+  const you   = fn ? `${fn}, ` : ''
 
   if (pct >= 100 && !_sentMilestones.has(key(100))) {
     _sentMilestones.add(key(100))
-    const done = fmtHours(goalSeconds)
-    await sendNotification('🏆 Daily Goal Complete! — Tapasya', {
-      body: `${done} ka target achieve kar liya! ${getRandom(MOTIVATION_COMPLETE)}`,
-      tag: 'goal-100',
-      renotify: true,
-      data: { url: '/' },
+    await sendNotification('✅ Daily Goal Complete.', {
+      body: `${you}${fmtHours(goalSeconds)} ho gaye.\nAise hi ordinary days extraordinary results banate hain.`,
+      tag: 'goal-100', renotify: true, data: { url: '/' },
     })
   } else if (pct >= 75 && !_sentMilestones.has(key(75))) {
     _sentMilestones.add(key(75))
-    const remaining = fmtHours(goalSeconds - todaySeconds)
-    await sendNotification('⚡ 75% Goal Done! — Tapasya', {
-      body: `Sirf ${remaining} aur bacha! ${getRandom(MOTIVATION_NEAR)}`,
-      tag: 'goal-75',
-      renotify: true,
-      data: { url: '/' },
+    const rem = fmtHours(goalSeconds - todaySeconds)
+    await sendNotification('🎯 Almost There.', {
+      body: `${you}sirf ${rem} aur bacha.\nAaj ka future version thanks bolega agar abhi 1 aur session kar liya.`,
+      tag: 'goal-75', renotify: true, data: { url: '/' },
     })
   } else if (pct >= 50 && !_sentMilestones.has(key(50))) {
     _sentMilestones.add(key(50))
-    const remaining = fmtHours(goalSeconds - todaySeconds)
-    await sendNotification('🔥 Halfway Done! — Tapasya', {
-      body: `${fmtHours(todaySeconds)} ho gaye! ${remaining} aur bacha. ${getRandom(MOTIVATION_HALFWAY)}`,
-      tag: 'goal-50',
-      renotify: true,
-      data: { url: '/' },
+    await sendNotification('📊 Halfway Done.', {
+      body: `Ab rukne ka mann karega.\nIsi point ke baad real discipline start hota hai.`,
+      tag: 'goal-50', renotify: true, data: { url: '/' },
     })
   } else if (pct >= 25 && !_sentMilestones.has(key(25))) {
     _sentMilestones.add(key(25))
-    const remaining = fmtHours(goalSeconds - todaySeconds)
-    await sendNotification('✅ 25% Complete! — Tapasya', {
-      body: `Achhi shuruat! ${remaining} aur chahiye aaj ke goal ke liye. Keep going! 🚀`,
-      tag: 'goal-25',
-      renotify: true,
-      data: { url: '/' },
+    await sendNotification('✅ Good Start.', {
+      body: `Sabse mushkil part hota hai shuru karna.\n${you}woh kar chuke ho.`,
+      tag: 'goal-25', renotify: true, data: { url: '/' },
     })
   }
 }
 
-// ── 2. Hourly progress reminder ───────────────────────────────────────────────
-//    Har ghante ek notification — kitna hua, kitna baaki
+// ── 2. Hourly progress ────────────────────────────────────────────────────────
 
-export async function sendHourlyProgress(todaySeconds, goalSeconds, streakDays) {
+export async function sendHourlyProgress(todaySeconds, goalSeconds, streakDays, displayName) {
   if (!hasPermission() || goalSeconds <= 0) return
 
-  const done = fmtHours(todaySeconds)
-  const remaining = goalSeconds > todaySeconds ? fmtHours(goalSeconds - todaySeconds) : null
-  const pct = Math.min(Math.round((todaySeconds / goalSeconds) * 100), 100)
+  const pct  = Math.min(Math.round((todaySeconds / goalSeconds) * 100), 100)
+  const fn   = firstName(displayName)
+  const name = fn ? `${fn} — ` : ''
 
   let title, body
 
   if (pct >= 100) {
-    title = '🏆 Goal Complete! — Tapasya'
-    body = `${done} study ho gayi aaj! ${getRandom(MOTIVATION_COMPLETE)}`
+    title = '✅ Goal Complete.'
+    body  = `${fmtHours(goalSeconds)} ho gaye aaj.\nAise hi boring consistency kaam karti hai.`
   } else if (todaySeconds === 0) {
-    title = '⏰ Abhi shuru karo! — Tapasya'
-    body = `Aaj abhi tak kuch nahi hua. Goal hai: ${fmtHours(goalSeconds)}. ${getRandom(MOTIVATION_INCOMPLETE)}`
+    title = `⏰ ${name}Tapasya Check-in`
+    body  = `Aaj ka target sach mein important hai\nya distractions?`
   } else {
-    title = '📊 Progress Update — Tapasya'
-    body = `✅ ${done} done (${pct}%) | ⏳ ${remaining} baaki${streakDays > 0 ? ` | 🔥 ${streakDays} day streak` : ''}`
+    const rem = fmtHours(goalSeconds - todaySeconds)
+    title = `📊 ${name}Progress Update`
+    body  = `${fmtHours(todaySeconds)} done (${pct}%) · ${rem} baaki${streakDays > 1 ? `\n${streakDays} din se consistent ho. Mat todno.` : ''}`
   }
 
   await sendNotification(title, {
@@ -171,101 +217,147 @@ export async function sendHourlyProgress(todaySeconds, goalSeconds, streakDays) 
     tag: 'hourly-progress',
     renotify: true,
     data: { url: '/' },
-    actions: [{ action: 'open', title: '📖 Study Now' }],
+    actions: [{ action: 'open', title: '📖 Start Session' }],
   })
 }
 
-// ── 3. Incomplete todo reminder ────────────────────────────────────────────────
+// ── 3. Todo reminder ──────────────────────────────────────────────────────────
 
-export async function sendTodoReminder(pendingTodos) {
+export async function sendTodoReminder(pendingTodos, displayName) {
   if (!hasPermission() || pendingTodos.length === 0) return
 
   const count = pendingTodos.length
-  const first = pendingTodos[0]?.text || pendingTodos[0]?.title || 'Pehla task'
+  const first = pendingTodos[0]?.text || 'Pehla task'
+  const fn    = firstName(displayName)
+  const name  = fn ? `${fn}, ` : ''
 
-  await sendNotification(`📋 ${count} Task${count > 1 ? 's' : ''} Pending — Tapasya`, {
-    body: `"${first}"${count > 1 ? ` aur ${count - 1} aur tasks` : ''} complete karna baaki hai! ${getRandom(MOTIVATION_INCOMPLETE)}`,
+  await sendNotification(`📋 ${name}${count} task${count > 1 ? 's' : ''} pending.`, {
+    body: `"${first}"${count > 1 ? ` aur ${count - 1} tasks` : ''} baaki hai.\nTum tired ho sakte ho — lekin future still effort expect karta hai.`,
     tag: 'todo-reminder',
     renotify: true,
     data: { url: '/todo' },
-    actions: [{ action: 'open', title: '✅ Tasks Dekho' }],
+    actions: [{ action: 'open', title: '✅ Dekho' }],
   })
 }
 
-// ── 4. Morning motivation (din ke pehle ghante mein) ─────────────────────────
+// ── 4. Morning ────────────────────────────────────────────────────────────────
 
-export async function sendMorningMotivation(goalSeconds, streakDays) {
+export async function sendMorningMotivation(goalSeconds, streakDays, displayName) {
   if (!hasPermission()) return
 
-  const goal = fmtHours(goalSeconds)
-  const streakText = streakDays > 0 ? ` 🔥 ${streakDays} din ki streak chal rahi hai!` : ''
+  const fn     = firstName(displayName)
+  const name   = fn ? `${fn}. ` : ''
+  const streak = streakDays > 1 ? `\n${streakDays} din se chal raha hai — mat torno.` : ''
 
-  await sendNotification('🌅 Good Morning! — Tapasya', {
-    body: `Aaj ka target: ${goal}.${streakText} ${getRandom(MOTIVATION_INCOMPLETE)}`,
+  const msgs = [
+    {
+      title: `🌙 Good Morning. ${name}`,
+      body:  `Kal jo nahi ho paya, usko lekar guilt mat lo.\nAaj ka din abhi bhi tumhare control mein hai.${streak}`,
+    },
+    {
+      title: '📖 New Day. New Chance.',
+      body:  `Har successful aspirant ka secret:\nboring consistency.${streak}`,
+    },
+    {
+      title: `⏰ ${name}Aaj ka target: ${fmtHours(goalSeconds)}.`,
+      body:  `Perfect mood ka wait mat karo.\nBas timer start karo.${streak}`,
+    },
+  ]
+
+  const msg = getRandom(msgs)
+  await sendNotification(msg.title, {
+    body: msg.body,
     tag: 'morning-motivation',
     renotify: false,
     data: { url: '/' },
   })
 }
 
-// ── 5. Evening reminder (agar goal incomplete ho) ────────────────────────────
+// ── 5. Evening ────────────────────────────────────────────────────────────────
 
-export async function sendEveningReminder(todaySeconds, goalSeconds) {
+export async function sendEveningReminder(todaySeconds, goalSeconds, displayName) {
   if (!hasPermission() || goalSeconds <= 0) return
   if (todaySeconds >= goalSeconds) return
 
+  const fn   = firstName(displayName)
+  const name = fn ? `${fn}, ` : ''
   const done = fmtHours(todaySeconds)
-  const remaining = fmtHours(goalSeconds - todaySeconds)
-  const pct = Math.round((todaySeconds / goalSeconds) * 100)
+  const rem  = fmtHours(goalSeconds - todaySeconds)
+  const pct  = Math.round((todaySeconds / goalSeconds) * 100)
 
-  await sendNotification('🌙 Aaj ka din khatam hone wala hai! — Tapasya', {
-    body: `${done} (${pct}%) hua, ${remaining} aur baaki. ${getRandom(MOTIVATION_INCOMPLETE)}`,
+  const msgs = [
+    {
+      title: '🌙 Din almost khatam.',
+      body:  `${name}${done} hua (${pct}%).\nAaj poora nahi hua to bhi theek hai.\nLekin bina try kiye mat sona.`,
+    },
+    {
+      title: '📖 Final Push.',
+      body:  `${rem} baaki hai.\nKabhi kabhi sirf 30 focused minutes\npoore din ka regret bachaa dete hain.`,
+    },
+    {
+      title: `🌙 ${name}${rem} aur.`,
+      body:  `Sirf itna bacha hai.\nSone se pehle complete kar lo.`,
+    },
+  ]
+
+  const msg = getRandom(msgs)
+  await sendNotification(msg.title, {
+    body: msg.body,
     tag: 'evening-reminder',
     renotify: true,
     data: { url: '/' },
-    actions: [{ action: 'open', title: '📖 Ab Padho' }],
+    actions: [{ action: 'open', title: '📖 Start' }],
   })
 }
 
-// ── 6. Live timer notification (timer chal raha ho tab) ──────────────────────
-
-export async function showLiveTimerNotification(subjectName, elapsed, todaySeconds, goalSeconds) {
-  if (!hasPermission()) return
-
-  const pct = goalSeconds > 0 ? Math.min(Math.round((todaySeconds / goalSeconds) * 100), 100) : 0
-
-  if ('serviceWorker' in navigator) {
-    try {
-      const sw = await navigator.serviceWorker.ready
-      await sw.showNotification(`📖 ${subjectName} — Tapasya`, {
-        body: `⏱ ${fmtElapsed(elapsed)} | Aaj: ${fmtHours(todaySeconds)} done (${pct}%)`,
-        icon: '/icons/icon-192.png',
-        badge: '/icons/icon-192.png',
-        tag: 'live-timer',
-        renotify: true,
-        silent: true,
-        data: { url: '/' },
-        actions: [{ action: 'stop', title: '⏹ Stop' }],
-      })
-      return
-    } catch (_) {}
-  }
-}
-
-// ── 7. Break reminder ─────────────────────────────────────────────────────────
+// ── 6. Break reminder ─────────────────────────────────────────────────────────
 
 export function scheduleBreakReminder(afterMinutes = 60) {
   if (!hasPermission()) return
   setTimeout(async () => {
-    await sendNotification('🧘 Break le lo! — Tapasya', {
-      body: `${afterMinutes} minute ho gaye! Thodi der aankhen band karo, paani piyo. 💧`,
+    await sendNotification('🧘 Break Time.', {
+      body: 'Paani piyo. Stretch karo.\nMachine nahi ho — sustainable rehna bhi important hai.',
       tag: 'break-reminder',
       data: { url: '/' },
     })
   }, afterMinutes * 60 * 1000)
 }
 
-// ── 8. Clear all notifications ────────────────────────────────────────────────
+// ── 7. Random personal nudge scheduler ───────────────────────────────────────
+// Din mein 2–4 baar random time pe naam le ke bulata hai
+
+let _nudgeTimers = []
+
+export function schedulePersonalNudges(displayName) {
+  if (!hasPermission()) return
+  _nudgeTimers.forEach(clearTimeout)
+  _nudgeTimers = []
+
+  // Random times between 9am–10pm today
+  const now = new Date()
+  const nudgeTimes = generateNudgeTimes(now, 3) // 3 nudges per day
+
+  nudgeTimes.forEach((ms) => {
+    if (ms > 0) {
+      _nudgeTimers.push(setTimeout(() => sendPersonalNudge(displayName), ms))
+    }
+  })
+}
+
+function generateNudgeTimes(now, count) {
+  const times = []
+  // Spread across 10am, 2pm, 6pm ± 30min random offset
+  const slots = [10, 14, 18, 20].slice(0, count)
+  for (const hour of slots) {
+    const target = new Date(now)
+    target.setHours(hour, Math.floor(Math.random() * 60), 0, 0)
+    const ms = target.getTime() - now.getTime()
+    if (ms > 2 * 60 * 1000) times.push(ms) // sirf future times
+  }
+  return times
+}
+
+// ── 8. Clear + Reset ──────────────────────────────────────────────────────────
 
 export async function clearAllNotifications() {
   if (!('serviceWorker' in navigator)) return
@@ -276,13 +368,10 @@ export async function clearAllNotifications() {
   } catch (_) {}
 }
 
-// ── Reset milestones (naya din aaya) ─────────────────────────────────────────
-
 export function resetMilestones() {
   _sentMilestones.clear()
 }
 
-// Legacy export (backward compat)
-export function showTimerNotification(subjectName, elapsed) {
-  showLiveTimerNotification(subjectName, elapsed, 0, 0)
-}
+// Legacy compat
+export function showTimerNotification() {}
+export function showLiveTimerNotification() {}

@@ -200,6 +200,72 @@ router.put('/:id/hours', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+
+// ── LIVE PRESENCE ─────────────────────────────────────────────────────────────
+
+// PUT /api/groups/:id/heartbeat — timer chal raha hai to har 10s call karo
+router.put('/:id/heartbeat', async (req, res) => {
+  try {
+    const { isStudying, subjectName, subjectColor, elapsed } = req.body
+    const group = await Group.findById(req.params.id)
+    if (!group) return res.status(404).json({ error: 'Group not found' })
+    const member = group.members.find(m => m.userId.toString() === req.user.id)
+    if (member) {
+      member.isStudying      = Boolean(isStudying)
+      member.studyingSubject = subjectName || null
+      member.studyingColor   = subjectColor || null
+      member.liveElapsed     = elapsed || 0
+      member.lastHeartbeat   = new Date()
+      await group.save()
+    }
+    // Auto-expire: members jo 30s se zyada silent hain unhe offline mark karo
+    const cutoff = new Date(Date.now() - 30 * 1000)
+    let changed = false
+    group.members.forEach(m => {
+      if (m.userId.toString() !== req.user.id && m.isStudying && m.lastHeartbeat && m.lastHeartbeat < cutoff) {
+        m.isStudying = false; m.liveElapsed = 0; changed = true
+      }
+    })
+    if (changed) await group.save()
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// PUT /api/groups/:id/offline — timer stop hone par call karo
+router.put('/:id/offline', async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id)
+    if (!group) return res.status(404).json({ error: 'Group not found' })
+    const member = group.members.find(m => m.userId.toString() === req.user.id)
+    if (member) {
+      member.isStudying = false; member.liveElapsed = 0
+      member.studyingSubject = null; member.studyingColor = null
+      await group.save()
+    }
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// GET /api/groups/:id/members/:userId/todos — member ke todos fetch
+router.get('/:id/members/:userId/todos', async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id)
+    if (!group) return res.status(404).json({ error: 'Group not found' })
+    if (!group.members.some(m => m.userId.toString() === req.user.id))
+      return res.status(403).json({ error: 'Not a member' })
+    // Import Todo model dynamically
+    const Todo = (await import('../models/Todo.js')).default
+    const today = new Date().toISOString().slice(0, 10)
+    const todos = await Todo.find({ userId: req.params.userId, date: today }).sort({ createdAt: 1 }).lean()
+    // Only return non-sensitive fields
+    res.json(todos.map(t => ({
+      _id: t._id, text: t.text, done: t.done,
+      priority: t.priority, subjectName: t.subjectName,
+      subjectColor: t.subjectColor, date: t.date,
+    })))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── CHAT ──────────────────────────────────────────────────────────────────────
 
 // GET /api/groups/:id/messages

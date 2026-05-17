@@ -196,7 +196,7 @@ export default function GroupTimerOverlay({ onClose }) {
     clearInterval(pollRef.current);
     if (!activeGroup?._id) return;
     pollMembers();
-    pollRef.current = setInterval(pollMembers, 5000);
+    pollRef.current = setInterval(pollMembers, 8000);
     return () => clearInterval(pollRef.current);
   }, [activeGroup]);
 

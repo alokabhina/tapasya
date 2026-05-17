@@ -1,8 +1,7 @@
 // src/hooks/useSmartNotifications.js
-// Smart notification scheduler — hourly reminders, goal milestones, todo alerts
-// App mein sirf ek baar use karo (App.jsx ya Home.jsx mein)
 
 import { useEffect, useRef } from 'react'
+import useUserStore from '@/store/userStore'
 import {
   requestPermission,
   hasPermission,
@@ -11,17 +10,12 @@ import {
   sendTodoReminder,
   sendMorningMotivation,
   sendEveningReminder,
+  schedulePersonalNudges,
   resetMilestones,
 } from '@/utils/notifications'
 
-// Kitne minute pe ek baar hourly check chalega (default: 60 min)
-const HOURLY_INTERVAL_MS = 60 * 60 * 1000
-
-// Todo reminder interval (default: 2 hours)
-const TODO_INTERVAL_MS = 2 * 60 * 60 * 1000
-
-// Morning window: 6am–9am
-// Evening window: 8pm–11pm
+const HOURLY_MS  = 60 * 60 * 1000
+const TODO_MS    = 2  * 60 * 60 * 1000
 
 function isInWindow(startH, endH) {
   const h = new Date().getHours()
@@ -29,106 +23,105 @@ function isInWindow(startH, endH) {
 }
 
 export function useSmartNotifications({ todaySeconds = 0, goalSeconds = 0, streakDays = 0, pendingTodos = [] }) {
-  const lastDayRef        = useRef(null)
-  const hourlyTimerRef    = useRef(null)
-  const todoTimerRef      = useRef(null)
-  const morningDoneRef    = useRef(false)
-  const eveningDoneRef    = useRef(false)
-  const prevGoalPctRef    = useRef(0)
+  const displayName = useUserStore((s) => s.displayName)
 
-  // 1. Permission request on mount (ek hi baar)
-  useEffect(() => {
-    requestPermission()
-  }, [])
+  const lastDayRef     = useRef(null)
+  const hourlyRef      = useRef(null)
+  const todoRef        = useRef(null)
+  const morningDoneRef = useRef(false)
+  const eveningDoneRef = useRef(false)
+  const nudgeSetupRef  = useRef(false)
 
-  // 2. Naya din detect karo — milestones reset
+  // Refs for latest values inside timers
+  const todayRef   = useRef(todaySeconds)
+  const goalRef    = useRef(goalSeconds)
+  const streakRef  = useRef(streakDays)
+  const pendingRef = useRef(pendingTodos)
+  const nameRef    = useRef(displayName)
+  useEffect(() => { todayRef.current   = todaySeconds }, [todaySeconds])
+  useEffect(() => { goalRef.current    = goalSeconds  }, [goalSeconds])
+  useEffect(() => { streakRef.current  = streakDays   }, [streakDays])
+  useEffect(() => { pendingRef.current = pendingTodos }, [pendingTodos])
+  useEffect(() => { nameRef.current    = displayName  }, [displayName])
+
+  // 1. Permission
+  useEffect(() => { requestPermission() }, [])
+
+  // 2. Day reset
   useEffect(() => {
     const today = new Date().toDateString()
     if (lastDayRef.current !== today) {
-      lastDayRef.current  = today
-      morningDoneRef.current  = false
-      eveningDoneRef.current  = false
+      lastDayRef.current   = today
+      morningDoneRef.current = false
+      eveningDoneRef.current = false
+      nudgeSetupRef.current  = false
       resetMilestones()
     }
   }, [todaySeconds])
 
-  // 3. Goal milestone check — jab bhi todaySeconds badhe
+  // 3. Goal milestones
   useEffect(() => {
     if (!hasPermission() || goalSeconds <= 0) return
-    checkGoalMilestone(todaySeconds, goalSeconds)
-    prevGoalPctRef.current = (todaySeconds / goalSeconds) * 100
-  }, [todaySeconds, goalSeconds])
+    checkGoalMilestone(todaySeconds, goalSeconds, displayName)
+  }, [todaySeconds, goalSeconds, displayName])
 
-  // 4. Morning motivation — 6am–9am, sirf ek baar
+  // 4. Morning — 6am–9am
   useEffect(() => {
     if (!hasPermission() || morningDoneRef.current) return
     if (isInWindow(6, 9)) {
       morningDoneRef.current = true
-      sendMorningMotivation(goalSeconds, streakDays)
+      sendMorningMotivation(goalSeconds, streakDays, displayName)
     }
-  }, [goalSeconds, streakDays])
+  }, [goalSeconds, streakDays, displayName])
 
-  // 5. Evening reminder — 8pm–11pm, sirf ek baar, agar goal incomplete
+  // 5. Evening — 8pm–11pm
   useEffect(() => {
     if (!hasPermission() || eveningDoneRef.current) return
     if (isInWindow(20, 23) && todaySeconds < goalSeconds) {
       eveningDoneRef.current = true
-      sendEveningReminder(todaySeconds, goalSeconds)
+      sendEveningReminder(todaySeconds, goalSeconds, displayName)
     }
-  }, [todaySeconds, goalSeconds])
+  }, [todaySeconds, goalSeconds, displayName])
 
-  // 6. Hourly progress ping — har 60 minute pe automatically
+  // 6. Hourly progress — har 60 min, fresh values via ref
   useEffect(() => {
     if (!hasPermission()) return
-
-    function scheduleNext() {
-      hourlyTimerRef.current = setTimeout(async () => {
-        await sendHourlyProgress(todaySeconds, goalSeconds, streakDays)
-        scheduleNext()
-      }, HOURLY_INTERVAL_MS)
+    function tick() {
+      hourlyRef.current = setTimeout(async () => {
+        await sendHourlyProgress(todayRef.current, goalRef.current, streakRef.current, nameRef.current)
+        tick()
+      }, HOURLY_MS)
     }
+    tick()
+    return () => clearTimeout(hourlyRef.current)
+  }, [])
 
-    scheduleNext()
-    return () => clearTimeout(hourlyTimerRef.current)
-  }, []) // mount pe sirf ek baar setup
-
-  // 7. Hourly timer ke andar fresh values chahiye — ref use karo
-  const todaySecondsRef = useRef(todaySeconds)
-  const goalSecondsRef  = useRef(goalSeconds)
-  const streakRef       = useRef(streakDays)
-  useEffect(() => { todaySecondsRef.current = todaySeconds }, [todaySeconds])
-  useEffect(() => { goalSecondsRef.current  = goalSeconds  }, [goalSeconds])
-  useEffect(() => { streakRef.current       = streakDays   }, [streakDays])
-
-  // 8. Todo reminder — har 2 ghante pe agar pending tasks hain
-  const pendingRef = useRef(pendingTodos)
-  useEffect(() => { pendingRef.current = pendingTodos }, [pendingTodos])
-
+  // 7. Todo reminder — 30min baad pehla, phir har 2hr
   useEffect(() => {
     if (!hasPermission()) return
-
     function scheduleTodo() {
-      todoTimerRef.current = setTimeout(async () => {
+      todoRef.current = setTimeout(async () => {
         if (pendingRef.current.length > 0) {
-          await sendTodoReminder(pendingRef.current)
+          await sendTodoReminder(pendingRef.current, nameRef.current)
         }
         scheduleTodo()
-      }, TODO_INTERVAL_MS)
+      }, TODO_MS)
     }
-
-    // Pehla todo reminder 30 min baad
-    const firstTodo = setTimeout(async () => {
+    const first = setTimeout(async () => {
       if (pendingRef.current.length > 0) {
-        await sendTodoReminder(pendingRef.current)
+        await sendTodoReminder(pendingRef.current, nameRef.current)
       }
       scheduleTodo()
     }, 30 * 60 * 1000)
-
-    return () => {
-      clearTimeout(firstTodo)
-      clearTimeout(todoTimerRef.current)
-    }
+    return () => { clearTimeout(first); clearTimeout(todoRef.current) }
   }, [])
+
+  // 8. Personal name-based nudges — din mein 3 baar random time pe
+  useEffect(() => {
+    if (!hasPermission() || nudgeSetupRef.current) return
+    nudgeSetupRef.current = true
+    schedulePersonalNudges(displayName)
+  }, [displayName])
 }
 
 export default useSmartNotifications

@@ -7,13 +7,15 @@ import GroupChat from './GroupChat';
 import InviteCode from './InviteCode';
 import Avatar from '../ui/Avatar';
 import { formatHours } from '../../utils/time';
+import GroupStatsTab from './GroupStatsTab';
 import useUserStore from '../../store/userStore';
 
 const TABS = [
-  { key: 'leaderboard', icon: 'ti-trophy', label: 'Rankings' },
-  { key: 'chat',        icon: 'ti-message-circle', label: 'Chat' },
-  { key: 'members',     icon: 'ti-users', label: 'Members' },
-  { key: 'invite',      icon: 'ti-user-plus', label: 'Invite' },
+  { key: 'leaderboard', icon: 'ti-trophy',          label: 'Rankings' },
+  { key: 'stats',       icon: 'ti-chart-bar',        label: 'Stats'    },
+  { key: 'chat',        icon: 'ti-message-circle',   label: 'Chat'     },
+  { key: 'members',     icon: 'ti-users',            label: 'Members'  },
+  { key: 'invite',      icon: 'ti-user-plus',        label: 'Invite'   },
 ];
 
 export default function GroupDetailView({ group, members, onLeave, onDelete, onKick, onBack }) {
@@ -155,7 +157,13 @@ export default function GroupDetailView({ group, members, onLeave, onDelete, onK
           </div>
         )}
 
-        {tab === 'invite' && (
+        {tab === 'stats' && (
+          <div className="overflow-y-auto h-full">
+            <GroupStatsTab group={group} members={enrichedMembers} />
+          </div>
+        )}
+
+      {tab === 'invite' && (
           <div className="px-4 py-4 overflow-y-auto">
             <InviteCode code={group.inviteCode} isOwner={isAdmin} />
           </div>

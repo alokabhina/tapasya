@@ -10,6 +10,7 @@ import useUserStore from '@/store/userStore'
 import { saveSession, addPendingSync } from '@/api/sessions'
 import { updateMemberHours } from '@/api/groups'
 import { midnightSplit } from '@/utils/time'
+import { sendHeartbeat, sendOffline } from '@/api/groups'
 
 // ── Singleton worker ──────────────────────────────────────────────────────────
 let _worker = null
@@ -53,20 +54,10 @@ export function useTimer() {
     return () => {}
   }, [])
 
-  // Live timer notification — SW ko har second message bhejo
-  // SW same tag use karta hai to notification update in-place hoti hai (no pop/sound)
+  // Live timer — SW ko sirf events bhejo (TIMER_START/PAUSE/RESUME/STOP)
+  // SW apne andar setInterval chalata hai — no per-second app→SW messages needed
   useEffect(() => {
-    if (!store.isRunning || store.isPaused) {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then((sw) => {
-          sw.active?.postMessage({ type: 'TIMER_STOP' })
-        }).catch(() => {})
-      }
-      clearInterval(notifIntervalRef.current)
-      return
-    }
-
-    async function sendTick() {
+    async function notifySwState() {
       if (!('serviceWorker' in navigator)) return
       try {
         const sw = await navigator.serviceWorker.ready
@@ -74,44 +65,94 @@ export function useTimer() {
         const s = useTimerStore.getState()
         const { dailyGoalSeconds } = useUserStore.getState()
         const goalPct = dailyGoalSeconds > 0 ? (s.elapsed / dailyGoalSeconds) * 100 : 0
-        sw.active.postMessage({
-          type: 'TIMER_TICK',
-          payload: {
-            subject:   s.subjectName || 'Study',
-            elapsed:   s.elapsed,
-            todayDone: s.elapsed,
-            goalPct,
-          },
-        })
+
+        if (!s.isRunning) {
+          sw.active.postMessage({ type: 'TIMER_STOP' })
+        } else if (s.isPaused) {
+          sw.active.postMessage({ type: 'TIMER_PAUSE' })
+        } else {
+          sw.active.postMessage({
+            type: 'TIMER_START',
+            payload: {
+              subject: s.subjectName || 'Study',
+              elapsed: s.elapsed,
+              goalPct,
+            },
+          })
+        }
       } catch (_) {}
     }
-
-    sendTick()
-    notifIntervalRef.current = setInterval(sendTick, 1000)
-    return () => clearInterval(notifIntervalRef.current)
+    notifySwState()
   }, [store.isRunning, store.isPaused])
 
   // ── start ─────────────────────────────────────────────────────────────────
+  // ── heartbeat to group (timer chal raha ho tab) ──────────────────────────
+  const heartbeatRef = useRef(null)
+
+  function startHeartbeat() {
+    clearInterval(heartbeatRef.current)
+    heartbeatRef.current = setInterval(async () => {
+      const s = useTimerStore.getState()
+      if (!s.isRunning) return
+      try {
+        // Sare groups ko heartbeat bhejo
+        const { fetchMyGroups } = await import('@/api/groups')
+        const groups = await fetchMyGroups()
+        for (const g of groups) {
+          sendHeartbeat(g._id, {
+            isStudying:   true,
+            subjectName:  s.subjectName,
+            subjectColor: s.subjectColor,
+            elapsed:      s.elapsed,
+          }).catch(() => {})
+        }
+      } catch (_) {}
+    }, 10_000) // har 10 second
+  }
+
+  function stopHeartbeat() {
+    clearInterval(heartbeatRef.current)
+    // Sare groups ko offline mark karo
+    import('@/api/groups').then(({ fetchMyGroups, sendOffline: offlineApi }) => {
+      fetchMyGroups().then(groups => {
+        groups.forEach(g => offlineApi(g._id).catch(() => {}))
+      }).catch(() => {})
+    }).catch(() => {})
+  }
+
   const start = useCallback((subject) => {
     _workerRunning = true
     _saveInProgress = false
     store.start(subject)
     getWorker().postMessage({ type: 'START', payload: { elapsed: 0 } })
+    startHeartbeat()
   }, [store])
 
   // ── pause ─────────────────────────────────────────────────────────────────
-  const pause = useCallback(() => {
+  const pause = useCallback(async () => {
     store.pause()
     getWorker().postMessage({ type: 'PAUSE' })
+    // SW ko bhi batao — woh apna interval rok dega
+    if ('serviceWorker' in navigator) {
+      try {
+        const sw = await navigator.serviceWorker.ready
+        sw.active?.postMessage({ type: 'TIMER_PAUSE' })
+      } catch (_) {}
+    }
   }, [store])
 
   // ── resume ────────────────────────────────────────────────────────────────
-  const resume = useCallback(() => {
-    // BUG FIX: pass current elapsed to worker so it continues from exact same value
-    // Previously elapsed could drift if worker was re-created
+  const resume = useCallback(async () => {
     const current = useTimerStore.getState().elapsed
     store.resume()
     getWorker().postMessage({ type: 'RESUME', payload: { elapsed: current } })
+    // SW ko resume batao with latest elapsed
+    if ('serviceWorker' in navigator) {
+      try {
+        const sw = await navigator.serviceWorker.ready
+        sw.active?.postMessage({ type: 'TIMER_RESUME', payload: { elapsed: current } })
+      } catch (_) {}
+    }
   }, [store])
 
   // ── core save ─────────────────────────────────────────────────────────────
@@ -122,6 +163,13 @@ export function useTimer() {
 
     getWorker().postMessage({ type: 'STOP' })
     _workerRunning = false
+    stopHeartbeat()
+    // SW live timer band karo
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((sw) => {
+        sw.active?.postMessage({ type: 'TIMER_STOP' })
+      }).catch(() => {})
+    }
 
     const endTime   = new Date().toISOString()
     const startTime = store.sessionStartTime
@@ -189,6 +237,23 @@ export function useTimer() {
 
   const stop      = useCallback(() => _saveAndReset(10), [_saveAndReset])
   const stopOnBack = useCallback(() => _saveAndReset(10), [_saveAndReset])
+
+  // Listen for messages FROM SW (notification action buttons)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    function onSwMessage(event) {
+      const { type } = event.data || {}
+      if (type === 'NOTIF_PAUSE') {
+        const s = useTimerStore.getState()
+        if (s.isRunning && !s.isPaused) pause()
+      }
+      if (type === 'NOTIF_STOP') {
+        stop()
+      }
+    }
+    navigator.serviceWorker.addEventListener('message', onSwMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onSwMessage)
+  }, [pause, stop])
 
   return { start, pause, resume, stop, stopOnBack }
 }

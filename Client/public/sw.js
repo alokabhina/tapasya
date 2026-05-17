@@ -120,60 +120,104 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
-// ── Live Timer Notification (persistent, silent update) ──────────────────────
-// App se message aata hai har second — SW notification update karta hai
-// Same tag = notification replace hoti hai, close + reopen nahi hota
-// silent: true = koi sound/vibration nahi
+// ── Live Timer Notification — SW-side continuous ticker ──────────────────────
+// App se sirf TIMER_START / TIMER_STOP message aata hai.
+// SW apne andar setInterval chalata hai — har second notification update hoti hai.
+// Koi fetch nahi, koi app-side interval nahi — SW khud time track karta hai.
+
+let _timerInterval  = null  // SW-side interval
+let _timerStartedAt = 0     // wall-clock ms jab timer start hua SW mein
+let _timerBaseElapsed = 0   // elapsed jo app ne diya tha start pe (pause resume support)
+let _timerSubject   = ''
+let _timerGoalPct   = 0
+
+function fmtElapsed(s) {
+  const h   = Math.floor(s / 3600)
+  const m   = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  return [h, m, sec].map((v) => String(v).padStart(2, '0')).join(':')
+}
+function fmtHours(s) {
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  if (h > 0 && m > 0) return `${h}h ${m}m`
+  if (h > 0) return `${h}h`
+  return `${m}m`
+}
+function buildBar(pct) {
+  const f = Math.round(pct / 10)
+  return '▓'.repeat(f) + '░'.repeat(10 - f)
+}
+
+function showLiveNotif(elapsed) {
+  const pct = Math.min(Math.round(_timerGoalPct + (elapsed - _timerBaseElapsed) / 36), 100)
+  self.registration.showNotification(`🎯 ${_timerSubject || 'Focus Mode Active'}`, {
+    body: `${fmtElapsed(elapsed)}  ·  ${buildBar(Math.round(_timerGoalPct))}`,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: 'live-timer',
+    renotify: false,
+    silent: true,
+    ongoing: true,
+    data: { url: '/timer' },
+    actions: [
+      { action: 'pause', title: '⏸ Pause' },
+      { action: 'stop',  title: '⏹ Stop'  },
+    ],
+  }).catch(() => {})
+}
 
 self.addEventListener('message', (event) => {
   const { type, payload } = event.data || {}
 
-  if (type === 'TIMER_TICK') {
-    const { subject, elapsed, todayDone, goalPct } = payload
+  if (type === 'TIMER_START') {
+    // App timer start hua — SW apna ticker shuru kare
+    clearInterval(_timerInterval)
+    _timerSubject     = payload?.subject || 'Study'
+    _timerGoalPct     = payload?.goalPct || 0
+    _timerBaseElapsed = payload?.elapsed || 0
+    _timerStartedAt   = Date.now()
 
-    // Format helpers (SW mein external import nahi hota)
-    function fmtElapsed(s) {
-      const h = Math.floor(s / 3600)
-      const m = Math.floor((s % 3600) / 60)
-      const sec = s % 60
-      return [h, m, sec].map((v) => String(v).padStart(2, '0')).join(':')
-    }
-    function fmtHours(s) {
-      const h = Math.floor(s / 3600)
-      const m = Math.floor((s % 3600) / 60)
-      if (h > 0 && m > 0) return `${h}h ${m}m`
-      if (h > 0) return `${h}h`
-      return `${m}m`
-    }
+    _timerInterval = setInterval(() => {
+      const elapsed = _timerBaseElapsed + Math.floor((Date.now() - _timerStartedAt) / 1000)
+      showLiveNotif(elapsed)
+    }, 1000)
 
-    const pct = Math.min(Math.round(goalPct || 0), 100)
-    const bar = buildBar(pct)
+    // Pehla tick turant
+    showLiveNotif(_timerBaseElapsed)
+  }
 
-    event.waitUntil(
-      self.registration.showNotification(`📖 ${subject}`, {
-        body: `${fmtElapsed(elapsed)}  •  Today: ${fmtHours(todayDone)}  ${bar}  ${pct}%`,
-        icon: '/icons/icon-192.png',
-        badge: '/icons/icon-192.png',
-        tag: 'live-timer',          // same tag = update in place
-        renotify: false,            // koi sound/buzz nahi
-        silent: true,               // bilkul quiet
-        ongoing: true,              // Android pe dismiss nahi hoti jab tak timer chal raha ho
-        data: { url: '/timer' },
-        actions: [
-          { action: 'pause',  title: '⏸ Pause'  },
-          { action: 'stop',   title: '⏹ Stop'   },
-        ],
-      })
-    )
+  if (type === 'TIMER_PAUSE') {
+    clearInterval(_timerInterval)
+    _timerInterval = null
+    // Notification close karo jab paused
+    self.registration.getNotifications({ tag: 'live-timer' })
+      .then((notifs) => notifs.forEach((n) => n.close()))
+      .catch(() => {})
+  }
+
+  if (type === 'TIMER_RESUME') {
+    // Resume pe updated elapsed aata hai app se
+    clearInterval(_timerInterval)
+    _timerBaseElapsed = payload?.elapsed || _timerBaseElapsed
+    _timerStartedAt   = Date.now()
+
+    _timerInterval = setInterval(() => {
+      const elapsed = _timerBaseElapsed + Math.floor((Date.now() - _timerStartedAt) / 1000)
+      showLiveNotif(elapsed)
+    }, 1000)
+    showLiveNotif(_timerBaseElapsed)
   }
 
   if (type === 'TIMER_STOP') {
-    // Timer stop hone par live notification close karo
-    event.waitUntil(
-      self.registration.getNotifications({ tag: 'live-timer' })
-        .then((notifs) => notifs.forEach((n) => n.close()))
-    )
+    clearInterval(_timerInterval)
+    _timerInterval = null
+    self.registration.getNotifications({ tag: 'live-timer' })
+      .then((notifs) => notifs.forEach((n) => n.close()))
+      .catch(() => {})
   }
+
+  // Legacy TIMER_TICK — ignore (SW ab khud track karta hai)
 })
 
 // ── Notification action buttons (pause/stop) ─────────────────────────────────
