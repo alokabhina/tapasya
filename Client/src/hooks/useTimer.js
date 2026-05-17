@@ -54,13 +54,18 @@ export function useTimer() {
     return () => {}
   }, [])
 
-  // SW helper — direct message sender
-  async function swPost(msg) {
+  // SW helper — send message to active SW
+  function swPost(msg) {
     if (!('serviceWorker' in navigator)) return
-    try {
-      const sw = await navigator.serviceWorker.ready
-      sw.active?.postMessage(msg)
-    } catch (_) {}
+    // controller = already active SW (fastest path)
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage(msg)
+      return
+    }
+    // Fallback: wait for SW to be ready
+    navigator.serviceWorker.ready.then((reg) => {
+      if (reg.active) reg.active.postMessage(msg)
+    }).catch(() => {})
   }
 
   // On mount: agar timer already running tha (page reload) — SW ko batao

@@ -1,63 +1,73 @@
-// public/sw.js — Custom Service Worker
-// VitePWA injectManifest mode mein use hota hai
+// public/sw.js — Tapasya Service Worker
+// Direct file, no bundler, no imports — pure browser SW
 
-// ── Precache (injected by vite-plugin-pwa) ───────────────────────────────────
-self.__WB_MANIFEST; // placeholder — vite-plugin-pwa yahan inject karta hai
+const CACHE = 'tapasya-v1'
 
-// ── Install + Activate ───────────────────────────────────────────────────────
-self.addEventListener('install', () => self.skipWaiting())
-self.addEventListener('activate', (e) => e.waitUntil(clients.claim()))
+// ── Install ───────────────────────────────────────────────────────────────────
+self.addEventListener('install', (e) => {
+  self.skipWaiting()
+})
 
-// ── Fetch — SPA fallback ─────────────────────────────────────────────────────
+// ── Activate ──────────────────────────────────────────────────────────────────
+self.addEventListener('activate', (e) => {
+  e.waitUntil(clients.claim())
+})
+
+// ── Fetch — SPA fallback ──────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
-  if (event.request.mode === 'navigate' && !event.request.url.includes('/api/')) {
+  if (
+    event.request.mode === 'navigate' &&
+    !event.request.url.includes('/api/')
+  ) {
     event.respondWith(
       fetch(event.request).catch(() => caches.match('/index.html'))
     )
   }
 })
 
-// ── Push (server-side push notifications) ────────────────────────────────────
+// ── Push (server-side push) ───────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
   if (!event.data) return
-  let data = {}
-  try { data = event.data.json() } catch { data = { title: 'Tapasya', body: event.data.text() } }
+  let d = {}
+  try { d = event.data.json() } catch { d = { title: 'Tapasya', body: event.data.text() } }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Tapasya', {
-      body: data.body || '',
+    self.registration.showNotification(d.title || 'Tapasya', {
+      body: d.body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
-      tag: data.tag || 'tapasya',
+      tag: d.tag || 'tapasya',
       vibrate: [80, 40, 80],
-      data: { url: data.url || '/' },
-      actions: data.actions || [],
+      data: { url: d.url || '/' },
     })
   )
 })
 
-// ── Live Timer — SW-side continuous ticker ────────────────────────────────────
-// App se sirf TIMER_START / TIMER_PAUSE / TIMER_RESUME / TIMER_STOP aata hai
-// SW khud setInterval chalata hai — har second notification silently update hoti hai
+// ── Live Timer — SW-side ticker ───────────────────────────────────────────────
+// App sirf START/PAUSE/RESUME/STOP bhejta hai
+// SW apna setInterval chalata hai — har second notification update hoti hai silently
 
-let _interval     = null
-let _startedAt    = 0
-let _baseElapsed  = 0
-let _subject      = 'Study'
-let _goalPct      = 0
+var _iv      = null
+var _at      = 0      // Date.now() jab interval shuru hua
+var _base    = 0      // elapsed seconds at start
+var _subject = 'Study'
+var _gpct    = 0      // goal percent at start
 
-function fmt(s) {
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
-  return [h, m, sec].map(v => String(v).padStart(2, '0')).join(':')
-}
-function bar(pct) {
-  const f = Math.max(0, Math.min(10, Math.round(pct / 10)))
-  return '▓'.repeat(f) + '░'.repeat(10 - f)
+function _fmt(s) {
+  var h = Math.floor(s / 3600)
+  var m = Math.floor((s % 3600) / 60)
+  var sec = s % 60
+  return [h, m, sec].map(function(v){ return String(v).padStart(2,'0') }).join(':')
 }
 
-function tick() {
-  const elapsed = _baseElapsed + Math.floor((Date.now() - _startedAt) / 1000)
-  self.registration.showNotification(`🎯 ${_subject}`, {
-    body: `${fmt(elapsed)}  ·  ${bar(_goalPct)}`,
+function _bar(p) {
+  var f = Math.max(0, Math.min(10, Math.round(p / 10)))
+  return '\u2593'.repeat(f) + '\u2591'.repeat(10 - f)
+}
+
+function _tick() {
+  var elapsed = _base + Math.floor((Date.now() - _at) / 1000)
+  self.registration.showNotification('\uD83C\uDFAF ' + _subject, {
+    body: _fmt(elapsed) + '  \u00B7  ' + _bar(_gpct),
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     tag: 'live-timer',
@@ -65,72 +75,90 @@ function tick() {
     silent: true,
     data: { url: '/timer' },
     actions: [
-      { action: 'pause', title: '⏸ Pause' },
-      { action: 'stop',  title: '⏹ Stop' },
+      { action: 'pause', title: '\u23F8 Pause' },
+      { action: 'stop',  title: '\u23F9 Stop' },
     ],
-  }).catch(() => {})
+  }).catch(function(){})
 }
 
-function clearLiveTimer() {
-  clearInterval(_interval)
-  _interval = null
+function _clearTimer() {
+  clearInterval(_iv)
+  _iv = null
   self.registration.getNotifications({ tag: 'live-timer' })
-    .then(ns => ns.forEach(n => n.close())).catch(() => {})
+    .then(function(ns){ ns.forEach(function(n){ n.close() }) })
+    .catch(function(){})
 }
 
-self.addEventListener('message', (event) => {
-  const { type, payload } = event.data || {}
+// ── Message handler ───────────────────────────────────────────────────────────
+self.addEventListener('message', function(event) {
+  var type    = (event.data || {}).type
+  var payload = (event.data || {}).payload || {}
 
   if (type === 'TIMER_START') {
-    clearInterval(_interval)
-    _subject     = payload?.subject || 'Study'
-    _goalPct     = Math.min(payload?.goalPct || 0, 100)
-    _baseElapsed = payload?.elapsed || 0
-    _startedAt   = Date.now()
-    tick() // turant pehla tick
-    _interval = setInterval(tick, 1000)
+    clearInterval(_iv)
+    _subject = payload.subject || 'Study'
+    _gpct    = Math.min(payload.goalPct || 0, 100)
+    _base    = payload.elapsed || 0
+    _at      = Date.now()
+    _tick()                             // turant pehla tick
+    _iv = setInterval(_tick, 1000)
+    return
   }
 
   if (type === 'TIMER_PAUSE') {
-    clearInterval(_interval)
-    _interval = null
+    clearInterval(_iv)
+    _iv = null
     self.registration.getNotifications({ tag: 'live-timer' })
-      .then(ns => ns.forEach(n => n.close())).catch(() => {})
+      .then(function(ns){ ns.forEach(function(n){ n.close() }) })
+      .catch(function(){})
+    return
   }
 
   if (type === 'TIMER_RESUME') {
-    clearInterval(_interval)
-    _baseElapsed = payload?.elapsed ?? _baseElapsed
-    _startedAt   = Date.now()
-    tick()
-    _interval = setInterval(tick, 1000)
+    clearInterval(_iv)
+    _base = (payload.elapsed !== undefined) ? payload.elapsed : _base
+    _at   = Date.now()
+    _tick()
+    _iv = setInterval(_tick, 1000)
+    return
   }
 
   if (type === 'TIMER_STOP') {
-    clearLiveTimer()
+    _clearTimer()
+    return
+  }
+
+  // PING — SW active hai ya nahi check karne ke liye
+  if (type === 'PING') {
+    event.source && event.source.postMessage({ type: 'PONG' })
+    return
   }
 })
 
-// ── Notification click — pause/stop buttons ───────────────────────────────────
-self.addEventListener('notificationclick', (event) => {
-  const { action, notification: notif } = event
+// ── Notification click ────────────────────────────────────────────────────────
+self.addEventListener('notificationclick', function(event) {
+  var action = event.action
+  var notif  = event.notification
   notif.close()
 
   if (action === 'pause' || action === 'stop') {
     event.waitUntil(
-      clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-        list.forEach(c => c.postMessage({ type: action === 'pause' ? 'NOTIF_PAUSE' : 'NOTIF_STOP' }))
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(list) {
+        list.forEach(function(c) {
+          c.postMessage({ type: action === 'pause' ? 'NOTIF_PAUSE' : 'NOTIF_STOP' })
+        })
         if (!list.length && clients.openWindow) return clients.openWindow('/timer')
       })
     )
     return
   }
 
-  // Normal click — app open/focus
-  const url = notif.data?.url || '/'
+  var url = (notif.data && notif.data.url) || '/'
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      for (const c of list) if ('focus' in c) return c.focus()
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(list) {
+      for (var i = 0; i < list.length; i++) {
+        if ('focus' in list[i]) return list[i].focus()
+      }
       if (clients.openWindow) return clients.openWindow(url)
     })
   )
