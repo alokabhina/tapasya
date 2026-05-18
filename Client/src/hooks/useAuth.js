@@ -1,10 +1,19 @@
 // src/hooks/useAuth.js
 // FIX: user object mein displayName expose karo (Settings mein "Guest" aa raha tha)
 // FIX: register/login pe naam liya jaata hai — ab setUser mein displayName save hota hai
+// FIX: offline mein /auth/me fail hone par logout mat karo — persisted uid use karo
 
 import { useState, useEffect, useCallback } from 'react'
 import api from '@/api/client'
 import useUserStore from '@/store/userStore'
+
+// localStorage se persisted uid padhna — userStore rehydrate hone se pehle bhi kaam karta hai
+function getPersistedUid() {
+  try {
+    const raw = localStorage.getItem('tapasya_user')
+    return raw ? JSON.parse(raw)?.state?.uid : null
+  } catch { return null }
+}
 
 export function useAuth() {
   const { uid, displayName, setUser, clearUser } = useUserStore()
@@ -13,6 +22,7 @@ export function useAuth() {
   useEffect(() => {
     const token = localStorage.getItem('tapasya_token')
     if (!token) { setLoading(false); return }
+
     api.get('/auth/me')
       .then(r => {
         setUser({
@@ -25,9 +35,19 @@ export function useAuth() {
         setLoading(false)
       })
       .catch(() => {
-        localStorage.removeItem('tapasya_token')
-        clearUser()
-        setLoading(false)
+        // Offline ya server temporarily down ho sakta hai.
+        // Agar offline hai aur persisted uid hai to user ko logged-in rakho.
+        // Zustand persist middleware uid/displayName already store mein load kar chuka hoga.
+        // Sirf online mein /auth/me fail aaye tab token hatao.
+        if (!navigator.onLine && getPersistedUid()) {
+          // Offline mode — cached state se kaam chalao
+          setLoading(false)
+        } else {
+          // Online pe /auth/me fail = token expired/invalid -> force logout
+          localStorage.removeItem('tapasya_token')
+          clearUser()
+          setLoading(false)
+        }
       })
   }, [])
 
@@ -82,7 +102,6 @@ export function useAuth() {
   }
 
   return {
-    // FIX: user object mein displayName expose karo — Settings/Sidebar use karte hain
     user: uid ? { uid, displayName, email: useUserStore.getState().email } : null,
     loading,
     handleGoogleCredential,

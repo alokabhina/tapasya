@@ -4,6 +4,7 @@ import useAuth from "../hooks/useAuth";
 import useUserStore from "../store/userStore";
 import useSubjectStore from "../store/subjectStore";
 import { getSubjects, addSubject, updateSubject, deleteSubject } from "../api/subjects";
+import { getSubjectsOffline } from "../utils/offlineDB";
 import ColorPicker from "../components/ui/ColorPicker";
 import BackgroundImage from "../components/ui/BackgroundImage";
 
@@ -90,8 +91,14 @@ export default function Settings() {
   const [notifEnabled, setNotifEnabled] = useState(notificationsEnabled ?? false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // Load from offline cache immediately, then refresh from network
   useEffect(() => {
-    getSubjects().then((data) => setSubjects(data)).catch(console.error);
+    getSubjectsOffline()
+      .then((cached) => { if (cached.length > 0) setSubjects(cached); })
+      .catch(() => {});
+    getSubjects()
+      .then((data) => setSubjects(data))
+      .catch(() => {}); // already loaded from cache above
   }, []);
 
   const reloadSubjects = async () => {

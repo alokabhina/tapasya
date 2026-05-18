@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getSessions, deleteSession } from '../api/sessions';
+import { getSessionsOffline } from '../utils/offlineDB';
 import { useUserStore } from '../store/userStore';
 import HistoryFilters from '../components/history/HistoryFilters';
 import SessionCard from '../components/history/SessionCard';
@@ -57,12 +58,28 @@ export default function History() {
     if (!uid) return;
     setLoading(true);
     try {
-      const data = await getSessions();
+      // Load all history: pass a wide date range so offline cache isn't filtered
+      // getSessionsOffline without dates returns everything — getSessions mirrors this
+      let data;
+      if (navigator.onLine) {
+        data = await getSessions('2020-01-01', new Date().toISOString().slice(0, 10));
+      } else {
+        // Offline: getSessionsOffline() with no params returns all cached sessions
+        data = await getSessionsOffline();
+      }
       data.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
       setAllSessions(data);
       setFiltered(data);
     } catch (e) {
-      console.error('History fetch error:', e);
+      // Final fallback: read directly from IndexedDB
+      try {
+        const cached = await getSessionsOffline();
+        cached.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+        setAllSessions(cached);
+        setFiltered(cached);
+      } catch (_) {
+        console.error('History fetch error:', e);
+      }
     } finally {
       setLoading(false);
     }

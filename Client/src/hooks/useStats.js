@@ -38,22 +38,30 @@ export function useStats(period = {}) {
       const data = await getSessions(start, end)
       setSessions(data)
 
+      // Always update derived state — even if data is empty array
       setDonutData(aggregateBySubject(data))
       setStepData(getCumulative(data))
       setScatterData(getScatterData(data))
       setHeatmapData(getHeatmapData(data))
-      setTotalSeconds(data.reduce((sum, s) => sum + s.duration, 0))
+      setTotalSeconds(data.reduce((sum, s) => sum + (s.duration || 0), 0))
 
       // Streak + total hours (from all sessions)
       const allSessions = await getSessions('2020-01-01', getTodayString())
       const streak = calculateStreak(allSessions)
-      const totalHrs = allSessions.reduce((sum, s) => sum + s.duration, 0) / 3600
+      const totalHrs = allSessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 3600
       setStreak(streak)
       setTotalHours(totalHrs)
     } catch (err) {
       console.error('Stats fetch error:', err)
+      // On error, clear data so UI shows empty state instead of infinite spinner
+      setSessions([])
+      setDonutData([])
+      setStepData([])
+      setScatterData([])
+      setHeatmapData({})
+      setTotalSeconds(0)
     } finally {
-      setLoading(false)
+      setLoading(false)  // always resolves — no infinite spinner
     }
   }
 

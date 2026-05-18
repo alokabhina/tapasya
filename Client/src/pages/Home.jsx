@@ -670,6 +670,8 @@ export default function Home() {
   async function reloadSubjects() {
     try {
       setRefreshing(true);
+      // getSubjects() and getSessions() are already offline-first —
+      // they hit IndexedDB automatically when network is unavailable.
       const [rawSubjects, todaySessions] = await Promise.all([
         getSubjects(),
         getSessions(getTodayString(), getTodayString()),
@@ -679,13 +681,29 @@ export default function Home() {
         const sid = String(sess.subjectId || sess.subject);
         todayMap[sid] = (todayMap[sid] || 0) + (sess.duration || 0);
       });
-      const subjects = rawSubjects.map((s) => {
+      const enriched = rawSubjects.map((s) => {
         const sid = String(s._id || s.id);
         return { ...s, id: sid, todaySeconds: todayMap[sid] || 0 };
       });
-      setSubjects(subjects);
-    } catch (e) { console.error('Reload failed:', e); }
-    finally { setRefreshing(false); }
+      setSubjects(enriched);
+    } catch (e) {
+      // Last resort: load raw subjects from offline store
+      try {
+        const { getSubjectsOffline, getSessionsOffline } = await import('@/utils/offlineDB');
+        const [cachedSubjects, cachedSessions] = await Promise.all([
+          getSubjectsOffline(),
+          getSessionsOffline(getTodayString(), getTodayString()),
+        ]);
+        const todayMap = {};
+        cachedSessions.forEach((s) => {
+          const sid = String(s.subjectId || s.subject);
+          todayMap[sid] = (todayMap[sid] || 0) + (s.duration || 0);
+        });
+        setSubjects(cachedSubjects.map((s) => ({
+          ...s, id: String(s.id), todaySeconds: todayMap[String(s.id)] || s.todaySeconds || 0,
+        })));
+      } catch (_) { console.error('Reload failed (online + offline):', e); }
+    } finally { setRefreshing(false); }
   }
 
   async function handleStart(subject) {

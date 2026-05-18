@@ -59,6 +59,9 @@ const useUserStore = create(
     {
       name: 'tapasya_user',
       partialize: (state) => ({
+        uid: state.uid,                        // offline reload ke liye — uid persist karo
+        email: state.email,
+        isGuest: state.isGuest,
         theme: state.theme,
         bgImageUrl: state.bgImageUrl,
         dailyGoalSeconds: state.dailyGoalSeconds,

@@ -1,5 +1,11 @@
 // src/hooks/useBootstrap.js
 // Offline-first: IndexedDB se load, server se update, cache save
+//
+// Boot sequence:
+//   0. INSTANT  — subjectStore mein already localStorage persisted data hai (Zustand)
+//                 App open hote hi subjects dikhte hain — koi wait nahi
+//   1. IndexedDB — todaySeconds calculate karke subjectStore update karo (fast, ~5ms)
+//   2. Network  — online hai to server se fresh data lo, cache update karo
 
 import { useEffect } from 'react'
 import useUserStore from '@/store/userStore'
@@ -21,15 +27,20 @@ const DEFAULT_SUBJECTS = [
 
 export function useBootstrap() {
   const { uid } = useUserStore()
-  const { setSubjects } = useSubjectStore()
+  const { subjects: storedSubjects, setSubjects } = useSubjectStore()
+
+  // ── Phase 0 happens automatically ──────────────────────────────────────────
+  // Zustand persist middleware ne already localStorage se subjects load kar diye.
+  // Component render hote hi storedSubjects mein data hoga (agar pehle login hua tha).
+  // Hum kuch nahi karte yahan — bass IndexedDB + network se update karte hain.
 
   useEffect(() => {
-    if (!uid) return
-
     async function bootstrap() {
       const today = getTodayString()
 
-      // ── Step 1: Load from IndexedDB immediately (instant UI) ──────────────
+      // ── Phase 1: IndexedDB — todaySeconds calculate karke update karo ──────
+      // Yeh ~5ms mein hota hai, aur subjects ke naam/colors already store mein hain.
+      // Bas aaj ki study time update karna hai.
       try {
         const [cachedSubjects, cachedSessions] = await Promise.all([
           getSubjectsOffline(),
@@ -46,12 +57,16 @@ export function useBootstrap() {
             ...s,
             todaySeconds: todayMap[String(s.id)] || s.todaySeconds || 0,
           }))
-          setSubjects(subjects) // instant render — offline data
+          setSubjects(subjects)
+        } else if (storedSubjects.length > 0) {
+          // IndexedDB empty hai lekin localStorage mein subjects hain
+          // (rare: IndexedDB cleared, localStorage nahi) — localStorage data use karo
+          // todaySeconds 0 honge, lekin subjects dikhenge
         }
       } catch (_) {}
 
-      // ── Step 2: Fetch from server (update cache) ──────────────────────────
-      if (!navigator.onLine) return // offline — use cached data as-is
+      // ── Phase 2: Network — sirf online mein ────────────────────────────────
+      if (!uid || !navigator.onLine) return
 
       try {
         let [rawSubjects, todaySessions] = await Promise.all([
@@ -78,7 +93,7 @@ export function useBootstrap() {
 
         setSubjects(subjects)
 
-        // Save to IndexedDB for next offline use
+        // IndexedDB update — next offline open ke liye
         await saveSubjectsOffline(subjects)
         await saveSessionsOffline(todaySessions.map(s => ({
           ...s, id: String(s._id || s.id)
@@ -89,6 +104,8 @@ export function useBootstrap() {
     }
 
     bootstrap()
+    // uid change pe re-run karo (login/logout)
+    // offline mein bhi run karo — Phase 1 kaam karega
   }, [uid])
 }
 

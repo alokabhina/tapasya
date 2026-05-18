@@ -749,9 +749,9 @@ export default function Todo() {
   const todayStr = get4amDateString();
 
   useEffect(() => {
-    if (!uid) return;
+    // Allow both logged-in users and guests (uid may be null for anonymous/guest)
+    // getTodos() is offline-first — works without uid for locally created todos
     setLoading(true);
-    // Fetch 90 days back and 30 days ahead
     const since = addDays(todayStr, -90);
     const ahead = getUpcomingDateString(30);
     getTodos(since, ahead)
@@ -763,7 +763,7 @@ export default function Todo() {
   useEffect(() => { setGoals(loadGoals()); }, []);
 
   const handleAdd = async (taskData) => {
-    if (!uid) return;
+    // Works for both logged-in users and guests — offline-first addTodo handles both
     try { const saved = await addTodo(taskData); setTasks((prev) => [...prev, saved]); }
     catch (e) { console.error("Add todo error:", e); }
   };

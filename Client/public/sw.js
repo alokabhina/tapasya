@@ -1,15 +1,15 @@
 // public/sw.js — Tapasya Service Worker
 // Direct file, no bundler, no imports — pure browser SW
 
-const CACHE = 'tapasya-v2'
-const ASSETS = ['/', '/index.html']
+const CACHE = 'tapasya-v3'
+const STATIC_ASSETS = ['/', '/index.html', '/icons/icon-192.png', '/icons/icon-512.png', '/manifest.json']
 
 // ── Install ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', (e) => {
   self.skipWaiting()
   e.waitUntil(
     caches.open(CACHE).then(cache =>
-      cache.addAll(['/', '/index.html', '/icons/icon-192.png']).catch(() => {})
+      cache.addAll(STATIC_ASSETS).catch(() => {})
     )
   )
 })
@@ -26,21 +26,23 @@ self.addEventListener('activate', (e) => {
   )
 })
 
-// ── Activate ──────────────────────────────────────────────────────────────────
-
-
 // ── Fetch strategy ───────────────────────────────────────────────────────────
-// API calls: network-first, no cache
-// HTML/JS/CSS/icons: cache-first with network fallback
-// Navigate: network-first, fallback to cached index.html
+// API calls: network-only (never cache)
+// HTML navigation: network-first, fallback to cached index.html (SPA)
+// JS/CSS/assets (hashed bundles): cache-first — once cached offline forever
+// Other static (icons, fonts): cache-first with network fallback
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
-  // Skip non-GET and API calls
-  if (event.request.method !== 'GET' || url.pathname.startsWith('/api/')) return
+  // Skip non-GET and cross-origin requests
+  if (event.request.method !== 'GET') return
+  if (url.origin !== self.location.origin) return
 
-  // Navigate (SPA) — network first, cached fallback
+  // API calls — network only, never cache
+  if (url.pathname.startsWith('/api/')) return
+
+  // SPA navigation — network first, cached index.html fallback
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -56,7 +58,26 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Static assets — cache-first
+  // Hashed JS/CSS bundles (e.g. /assets/index-Bx3kL9mP.js) — cache-first
+  // Once fetched online they stay cached, so offline works perfectly
+  const isHashedAsset = url.pathname.startsWith('/assets/')
+  if (isHashedAsset) {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached
+        return fetch(event.request).then(res => {
+          if (res.ok) {
+            const clone = res.clone()
+            caches.open(CACHE).then(c => c.put(event.request, clone))
+          }
+          return res
+        })
+      })
+    )
+    return
+  }
+
+  // Other static assets (icons, manifest, worker files) — cache-first, network fallback
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached
