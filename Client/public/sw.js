@@ -1,28 +1,74 @@
 // public/sw.js — Tapasya Service Worker
 // Direct file, no bundler, no imports — pure browser SW
 
-const CACHE = 'tapasya-v1'
+const CACHE = 'tapasya-v2'
+const ASSETS = ['/', '/index.html']
 
 // ── Install ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', (e) => {
   self.skipWaiting()
+  e.waitUntil(
+    caches.open(CACHE).then(cache =>
+      cache.addAll(['/', '/index.html', '/icons/icon-192.png']).catch(() => {})
+    )
+  )
+})
+
+// Cleanup old caches on activate
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    Promise.all([
+      clients.claim(),
+      caches.keys().then(keys =>
+        Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+      ),
+    ])
+  )
 })
 
 // ── Activate ──────────────────────────────────────────────────────────────────
-self.addEventListener('activate', (e) => {
-  e.waitUntil(clients.claim())
-})
 
-// ── Fetch — SPA fallback ──────────────────────────────────────────────────────
+
+// ── Fetch strategy ───────────────────────────────────────────────────────────
+// API calls: network-first, no cache
+// HTML/JS/CSS/icons: cache-first with network fallback
+// Navigate: network-first, fallback to cached index.html
+
 self.addEventListener('fetch', (event) => {
-  if (
-    event.request.mode === 'navigate' &&
-    !event.request.url.includes('/api/')
-  ) {
+  const url = new URL(event.request.url)
+
+  // Skip non-GET and API calls
+  if (event.request.method !== 'GET' || url.pathname.startsWith('/api/')) return
+
+  // Navigate (SPA) — network first, cached fallback
+  if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match('/index.html'))
+      fetch(event.request)
+        .then(res => {
+          if (res.ok) {
+            const clone = res.clone()
+            caches.open(CACHE).then(c => c.put('/index.html', clone))
+          }
+          return res
+        })
+        .catch(() => caches.match('/index.html').then(r => r || new Response('Offline', { status: 503 })))
     )
+    return
   }
+
+  // Static assets — cache-first
+  event.respondWith(
+    caches.match(event.request).then(cached => {
+      if (cached) return cached
+      return fetch(event.request).then(res => {
+        if (res.ok) {
+          const clone = res.clone()
+          caches.open(CACHE).then(c => c.put(event.request, clone))
+        }
+        return res
+      }).catch(() => new Response('', { status: 503 }))
+    })
+  )
 })
 
 // ── Push (server-side push) ───────────────────────────────────────────────────

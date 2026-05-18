@@ -5,6 +5,7 @@
 import { NavLink } from 'react-router-dom';
 import { useState } from 'react';
 import MobileDrawer from './MobileDrawer';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 const MAIN_NAV = [
   { to: '/',        icon: 'ti-home',      label: 'Home'    },
@@ -16,6 +17,7 @@ const MAIN_NAV = [
 
 export default function BottomNav() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { isOnline, pending, syncing } = useOnlineStatus();
 
   return (
     <>
@@ -25,6 +27,32 @@ export default function BottomNav() {
       >
         {/* top glow line */}
         <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
+
+        {/* Offline/sync indicator */}
+        {(!isOnline || syncing || pending > 0) && (
+          <div className={`flex items-center justify-center gap-1.5 py-0.5 text-[10px] font-medium
+            ${!isOnline ? 'bg-slate-800/80 text-slate-400' : 'bg-orange-500/10 text-orange-400'}`}>
+            {!isOnline && (
+              <>
+                <i className="ti ti-wifi-off text-[10px]" />
+                Offline mode
+                {pending > 0 && <span className="text-slate-500">· {pending} pending</span>}
+              </>
+            )}
+            {isOnline && syncing && (
+              <>
+                <div className="w-2 h-2 rounded-full border border-orange-400 border-t-transparent animate-spin" />
+                Syncing...
+              </>
+            )}
+            {isOnline && !syncing && pending > 0 && (
+              <>
+                <i className="ti ti-clock text-[10px]" />
+                {pending} ops synced
+              </>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center justify-around px-2 py-1">
           {MAIN_NAV.map(({ to, icon, label }) => (

@@ -130,8 +130,10 @@ function LeaderboardRow({ member, rank, isCurrentUser, currentElapsed }) {
   const rankColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
   const rankColor  = rank <= 3 ? rankColors[rank - 1] : '#475569';
   const name       = isCurrentUser ? 'You' : (member.displayName?.split(' ')[0] || 'Member');
-  const seconds    = isCurrentUser ? currentElapsed : (member.liveElapsed || 0);
-  const isStudying = isCurrentUser || member.isStudying;
+  // Leaderboard: weeklySeconds for ranking, liveElapsed as live bonus display
+  const weekSec    = isCurrentUser ? (member.weeklySeconds || 0) : (member.weeklySeconds || 0);
+  const seconds    = weekSec; // rank by weekly hours
+  const isStudying = isCurrentUser || Boolean(member.isStudying);
   const maxSec     = 8 * 3600; // bar relative to 8h
   const barPct     = Math.min((seconds / maxSec) * 100, 100);
 
@@ -214,11 +216,12 @@ export default function GroupTimerOverlay({ onClose }) {
     if (!activeGroup?._id) return;
     try {
       const data = await fetchGroupMembers(activeGroup._id);
-      const now  = Date.now();
       const enriched = data.map((m) => ({
         ...m,
-        isStudying: m.isStudying || (m.lastActiveAt && (now - new Date(m.lastActiveAt).getTime()) < 10 * 60 * 1000),
-        liveElapsed: m.liveElapsed || m.todaySeconds || 0,
+        // Server heartbeat handles isStudying — no fallback needed
+        isStudying:  Boolean(m.isStudying),
+        // liveElapsed = current session seconds from server heartbeat
+        liveElapsed: m.liveElapsed || 0,
       }));
       setMembers(enriched);
     } catch (e) { console.error(e); }

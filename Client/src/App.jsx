@@ -15,6 +15,7 @@ import MiniPlayer from './components/layout/MiniPlayer';
 
 // Pages (lazy imports for code-splitting)
 import { lazy, Suspense } from 'react';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 const Login        = lazy(() => import('./pages/Login'));
 const Home         = lazy(() => import('./pages/Home'));
@@ -56,6 +57,8 @@ function AppShell({ children }) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
+  // Global online status — auto-flushes sync queue when back online
+  useOnlineStatus();
   const theme = useUserStore((s) => s.theme);
   useBootstrap(); // FIX: login ke baad subjects fetch + todaySeconds calculate
 

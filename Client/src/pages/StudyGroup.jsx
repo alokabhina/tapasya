@@ -185,12 +185,9 @@ export default function StudyGroup() {
             </div>
             <div className="bg-[#111827] border border-[#1e2d42] rounded-xl p-3 text-center">
               <div className="text-lg font-bold text-emerald-400">
-                {groups.filter(g => g.ownerUserId).length > 0 ? groups.filter(g => {
-                  // We don't have uid here easily without importing, so show admin count
-                  return true;
-                }).length : 0}
+                {members.filter(m => m.isStudying).length}
               </div>
-              <div className="text-[10px] text-slate-600 mt-0.5">Active</div>
+              <div className="text-[10px] text-slate-600 mt-0.5">Studying Now</div>
             </div>
           </div>
 
