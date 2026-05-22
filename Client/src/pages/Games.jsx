@@ -181,7 +181,7 @@ export default function Games() {
                 {isOpen && (
                   <>
                     <div className="mx-5 h-px bg-white/[0.05]" />
-                    <div className="p-4" style={{ animation: 'slideDown 0.2s ease both' }}>
+                    <div className="p-4" style={{ animation: 'slideDown 0.3s ease both' }}>
                       {cat.games.length === 0 ? (
                         <div className="flex items-center justify-center gap-3 py-8 text-slate-600">
                           <span className="text-2xl">🔒</span>
