@@ -12,6 +12,7 @@ import Avatar from '../ui/Avatar';
 
 const NAV_ITEMS = [
   { to: '/',             icon: 'ti-layout-dashboard', label: 'Overview' },
+  { to: '/games',        icon: 'ti-sword',            label: 'Practice Arena' },  // NEW
   { to: '/stats',        icon: 'ti-chart-bar',        label: 'Stats' },
   { to: '/calendar',     icon: 'ti-calendar',         label: 'Calendar' },
   { to: '/todo',         icon: 'ti-checkbox',         label: 'Todo' },

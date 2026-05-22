@@ -30,6 +30,15 @@ const Wellbeing    = lazy(() => import('./pages/Wellbeing'));
 const Profile      = lazy(() => import('./pages/Profile'));
 const Settings     = lazy(() => import('./pages/Settings'));
 
+// ── Games (Practice Arena) ───────────────────────────────────────────────────
+const Games         = lazy(() => import('./pages/Games'));
+const GameStats     = lazy(() => import('./pages/GameStats'));
+const CalcClimb     = lazy(() => import('./pages/games/CalculationClimb'));
+const SeriesRush    = lazy(() => import('./pages/games/NumberSeriesRush'));
+const VocabBlitz    = lazy(() => import('./pages/games/VocabBlitz'));
+const SyllogismStr  = lazy(() => import('./pages/games/SyllogismStrike'));
+const SurvivalArena = lazy(() => import('./pages/games/SurvivalArena'));
+
 // ── Private Route Guard ──────────────────────────────────────────────────────
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -90,15 +99,23 @@ export default function App() {
             }
           />
           {[
-            ['/stats',        <Stats />],
-            ['/calendar',     <Calendar />],
-            ['/history',      <History />],
-            ['/todo',         <Todo />],
-            ['/achievements', <Achievements />],
-            ['/group',        <StudyGroup />],
-            ['/wellbeing',    <Wellbeing />],
-            ['/profile',      <Profile />],
-            ['/settings',     <Settings />],
+            ['/stats',              <Stats />],
+            ['/calendar',           <Calendar />],
+            ['/history',            <History />],
+            ['/todo',               <Todo />],
+            ['/achievements',       <Achievements />],
+            ['/group',              <StudyGroup />],
+            ['/wellbeing',          <Wellbeing />],
+            ['/profile',            <Profile />],
+            ['/settings',           <Settings />],
+            // ── Practice Arena routes ─────────────────────────────────────
+            ['/games',              <Games />],
+            ['/games/stats',        <GameStats />],
+            ['/games/calculation',  <CalcClimb />],
+            ['/games/series',       <SeriesRush />],
+            ['/games/vocab',        <VocabBlitz />],
+            ['/games/syllogism',    <SyllogismStr />],
+            ['/games/survival',     <SurvivalArena />],
           ].map(([path, page]) => (
             <Route
               key={path}

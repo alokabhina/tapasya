@@ -1,7 +1,7 @@
 // public/sw.js — Tapasya Service Worker
 // Direct file, no bundler, no imports — pure browser SW
 
-const CACHE = 'tapasya-v3'
+const CACHE = 'tapasya-v4'
 const STATIC_ASSETS = ['/', '/index.html', '/icons/icon-192.png', '/icons/icon-512.png', '/manifest.json']
 
 // ── Install ───────────────────────────────────────────────────────────────────
@@ -41,6 +41,15 @@ self.addEventListener('fetch', (event) => {
 
   // API calls — network only, never cache
   if (url.pathname.startsWith('/api/')) return
+
+  // Vite dev server internals — NEVER cache (causes stale chunk bugs in dev)
+  if (
+    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.startsWith('/@vite/') ||
+    url.pathname.startsWith('/@fs/') ||
+    url.pathname.startsWith('/__vite') ||
+    url.search.includes('v=')           // hashed vite dev chunks like ?v=dc7ca4f2
+  ) return
 
   // SPA navigation — network first, cached index.html fallback
   if (event.request.mode === 'navigate') {

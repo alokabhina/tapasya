@@ -3,7 +3,7 @@ import authMiddleware from '../middleware/auth.js'
 import Todo from '../models/Todo.js'
 
 const router = express.Router()
-router.use(authMiddleware)
+router.use(authMiddleware) // global middleware to protect all routes
 
 // GET /api/todos?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
 router.get('/', async (req, res) => {

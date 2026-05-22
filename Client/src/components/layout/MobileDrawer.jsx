@@ -1,6 +1,6 @@
 // MobileDrawer.jsx
 // Slide-up bottom sheet for secondary navigation on mobile
-// Contains: Calendar, History, Wellbeing, Achievements, Settings
+// Contains: Stats, Calendar, History, Wellbeing, Achievements, Settings
 
 import { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
@@ -9,11 +9,12 @@ import { useUserStore } from '../../store/userStore';
 import Avatar from '../ui/Avatar';
 
 const SECONDARY_NAV = [
-  { to: '/calendar',     icon: 'ti-calendar', label: 'Calendar',     desc: 'Study heatmap & schedule'    },
-  { to: '/history',      icon: 'ti-history',  label: 'History',      desc: 'Past sessions & records'     },
-  { to: '/wellbeing',    icon: 'ti-heart',    label: 'Digital Wellbeing', desc: 'Screen time & habits'   },
-  { to: '/achievements', icon: 'ti-trophy',   label: 'Achievements', desc: 'Badges & milestones'         },
-  { to: '/settings',     icon: 'ti-settings', label: 'Settings',     desc: 'App preferences & account'  },
+  { to: '/stats',        icon: 'ti-chart-bar', label: 'Stats',            desc: 'Study time analytics'        },  // moved from main nav
+  { to: '/calendar',     icon: 'ti-calendar',  label: 'Calendar',         desc: 'Study heatmap & schedule'    },
+  { to: '/history',      icon: 'ti-history',   label: 'History',          desc: 'Past sessions & records'     },
+  { to: '/wellbeing',    icon: 'ti-heart',     label: 'Digital Wellbeing', desc: 'Screen time & habits'       },
+  { to: '/achievements', icon: 'ti-trophy',    label: 'Achievements',     desc: 'Badges & milestones'         },
+  { to: '/settings',     icon: 'ti-settings',  label: 'Settings',         desc: 'App preferences & account'  },
 ];
 
 export default function MobileDrawer({ open, onClose }) {

@@ -9,7 +9,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 const MAIN_NAV = [
   { to: '/',        icon: 'ti-home',      label: 'Home'    },
-  { to: '/stats',   icon: 'ti-chart-bar', label: 'Stats'   },
+  { to: '/games',   icon: 'ti-sword',     label: 'Games'   },  // Stats moved to drawer
   { to: '/todo',    icon: 'ti-checkbox',  label: 'Todo'    },
   { to: '/group',   icon: 'ti-users',     label: 'Group'   },
   { to: '/profile', icon: 'ti-user',      label: 'Profile' },

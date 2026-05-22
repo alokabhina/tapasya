@@ -16,7 +16,7 @@ function getPersistedUid() {
 }
 
 export function useAuth() {
-  const { uid, displayName, setUser, clearUser } = useUserStore()
+  const { uid, displayName, email, setUser, clearUser } = useUserStore()
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export function useAuth() {
   }
 
   return {
-    user: uid ? { uid, displayName, email: useUserStore.getState().email } : null,
+    user: uid ? { uid, displayName, email } : null,
     loading,
     handleGoogleCredential,
     signInWithEmail,

@@ -9,6 +9,8 @@ import todoRoutes    from './routes/todos.js'
 import badgeRoutes   from './routes/badges.js'
 import groupRoutes   from './routes/groups.js'
 import uploadRoutes  from './routes/upload.js'
+import gameRoutes    from './routes/games.js'
+import { checkAndFetchVocab } from './utils/opentdbFetcher.js'
 
 dotenv.config()
 const app = express()
@@ -17,7 +19,11 @@ app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }))
 app.use(express.json())
 
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB connected'))
+  .then(() => {
+    console.log('✅ MongoDB connected')
+    // Auto-supplement vocab questions if count is low (non-blocking)
+    checkAndFetchVocab()
+  })
   .catch((e) => { console.error('❌ MongoDB error:', e.message); process.exit(1) })
 
 app.use('/api/auth',     authRoutes)
@@ -27,6 +33,7 @@ app.use('/api/todos',    todoRoutes)
 app.use('/api/badges',   badgeRoutes)
 app.use('/api/groups',   groupRoutes)
 app.use('/api/upload',   uploadRoutes)
+app.use('/api/games',    gameRoutes)
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ ok: true }))
