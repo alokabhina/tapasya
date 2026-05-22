@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchQuestions } from '@/api/games'
-import useGameStore from '@/store/gameStore'
+import useGameStore from '@/store/gamesStore'
 import { useGameSession } from '@/hooks/useGameSession'
 import TimerBar from '@/components/games/TimerBar'
 import ComboDisplay from '@/components/games/ComboDisplay'
