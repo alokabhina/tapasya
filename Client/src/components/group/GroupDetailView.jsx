@@ -113,7 +113,7 @@ export default function GroupDetailView({ group, members, onLeave, onDelete, onK
       <div className="flex-1 overflow-hidden">
         {tab === 'leaderboard' && (
           <div className="px-4 py-4 overflow-y-auto h-full">
-            <GroupLeaderboard members={enrichedMembers} currentUserId={uid} />
+            <GroupLeaderboard members={enrichedMembers} currentUserId={uid} groupId={group._id} />
           </div>
         )}
 

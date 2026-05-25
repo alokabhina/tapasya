@@ -18,6 +18,7 @@ const FILES = [
   'questions_series.json',
   'questions_vocab.json',
   'questions_syllogism.json',
+  'questions_grammar.json',
 ]
 
 async function seed() {

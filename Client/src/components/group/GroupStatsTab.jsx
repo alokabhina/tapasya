@@ -2,10 +2,11 @@
 // Group Stats Tab — member stats + shared todos + live studying status
 
 import { useState, useEffect, useCallback } from 'react'
-import { fetchMemberStats, fetchMemberTodos, fetchGroupMembers } from '../../api/groups'
+import { fetchMemberStats, fetchMemberTodos, fetchGroupMembers, fetchGroupDailySummary } from '../../api/groups'
 import Avatar from '../ui/Avatar'
-import { formatHours } from '../../utils/time'
+import { formatHours, formatDuration } from '../../utils/time'
 import useUserStore from '../../store/userStore'
+import useTimerStore from '../../store/timerStore'
 
 // ── Heatmap ──────────────────────────────────────────────────────────────────
 function pad(n) { return String(n).padStart(2, '0') }
@@ -308,12 +309,176 @@ function MemberDetail({ groupId, member, isMe, onClose }) {
   )
 }
 
+// ── Daily Summary ─────────────────────────────────────────────────────────────
+function DailySummary({ groupId, currentUserId }) {
+  const [data, setData]       = useState([])
+  const [loading, setLoading] = useState(true)
+
+  // Live timer for current user
+  const timerElapsed = useTimerStore((s) => s.elapsed)
+  const timerRunning = useTimerStore((s) => s.isRunning && !s.isPaused)
+  const timerSubject = useTimerStore((s) => s.subjectName)
+  const timerColor   = useTimerStore((s) => s.subjectColor)
+
+  useEffect(() => {
+    if (!groupId) return
+    let active = true
+    async function load() {
+      try {
+        const res = await fetchGroupDailySummary(groupId)
+        if (active) setData(res)
+      } catch (_) {}
+      finally { if (active) setLoading(false) }
+    }
+    load()
+    const iv = setInterval(load, 30_000) // refresh every 30s
+    return () => { active = false; clearInterval(iv) }
+  }, [groupId])
+
+  if (loading) return (
+    <div className="flex justify-center py-6">
+      <div className="w-5 h-5 rounded-full border-2 border-orange-500 border-t-transparent animate-spin"/>
+    </div>
+  )
+
+  // Sort: currently studying first, then by todaySeconds desc
+  const sorted = [...data].sort((a, b) => {
+    if (a.isStudying !== b.isStudying) return a.isStudying ? -1 : 1
+    return (b.todaySeconds || 0) - (a.todaySeconds || 0)
+  })
+
+  const todayTotal = sorted.reduce((sum, m) => sum + (m.todaySeconds || 0), 0)
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          Aaj ka Study — {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+        </p>
+        {todayTotal > 0 && (
+          <span className="text-xs text-orange-400 font-mono font-semibold">
+            Total {formatHours(todayTotal)}
+          </span>
+        )}
+      </div>
+
+      {sorted.length === 0 ? (
+        <div className="text-center py-6 text-slate-600 text-xs">
+          <i className="ti ti-calendar-off text-2xl block mb-1 opacity-30"/>
+          Aaj koi data nahi
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sorted.map(member => {
+            const isMe    = member.userId?.toString() === currentUserId?.toString()
+            // For current user: use live timer elapsed + saved today
+            const liveAdd = isMe && timerRunning ? timerElapsed : 0
+            const todaySec = (member.todaySeconds || 0) + liveAdd
+
+            // Build subject list: saved subjects + live subject if running
+            let subjects = [...(member.todaySubjects || [])]
+            if (isMe && timerRunning && timerSubject) {
+              const existing = subjects.find(s => s.name === timerSubject)
+              if (existing) {
+                subjects = subjects.map(s => s.name === timerSubject
+                  ? { ...s, seconds: s.seconds + timerElapsed }
+                  : s
+                )
+              } else {
+                subjects = [{ name: timerSubject, color: timerColor || '#f97316', seconds: timerElapsed }, ...subjects]
+              }
+            }
+            const subjectTotal = subjects.reduce((s, x) => s + x.seconds, 0)
+
+            return (
+              <div key={member.userId}
+                className={`bg-[#141d2e] rounded-2xl border overflow-hidden
+                  ${member.isStudying ? 'border-green-500/25' : 'border-slate-800/60'}`}>
+                {/* Green top line if studying */}
+                {member.isStudying && <div className="h-0.5 w-full bg-gradient-to-r from-green-500/80 to-green-400/40"/>}
+
+                <div className="p-3">
+                  {/* Header */}
+                  <div className="flex items-center gap-2.5 mb-2.5">
+                    <div className="relative flex-shrink-0">
+                      <Avatar photoURL={member.photoURL} name={member.displayName} size="sm"/>
+                      <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-[#141d2e]
+                        ${member.isStudying ? 'bg-green-400 animate-pulse' : 'bg-slate-700'}`}/>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-white truncate">
+                          {member.displayName}
+                        </span>
+                        {isMe && <span className="text-[9px] text-orange-400 font-bold">(You)</span>}
+                      </div>
+                      {member.isStudying && (
+                        <p className="text-[10px] text-green-400 flex items-center gap-1">
+                          <span className="w-1 h-1 rounded-full bg-green-400 inline-block"/>
+                          {member.studyingSubject || 'Studying'}
+                          {liveAdd > 0 && <span className="font-mono">{formatDuration(liveAdd)}</span>}
+                        </p>
+                      )}
+                    </div>
+                    {/* Today total */}
+                    <div className="text-right flex-shrink-0">
+                      {todaySec > 0 ? (
+                        <p className="text-sm font-bold font-mono text-orange-400">{formatHours(todaySec)}</p>
+                      ) : (
+                        <p className="text-xs text-slate-600">—</p>
+                      )}
+                      <p className="text-[9px] text-slate-600">aaj</p>
+                    </div>
+                  </div>
+
+                  {/* Subject breakdown */}
+                  {subjects.length > 0 && (
+                    <div className="space-y-1.5">
+                      {/* Color bar */}
+                      <div className="flex h-1.5 rounded-full overflow-hidden gap-0.5">
+                        {subjects.map((s, i) => (
+                          <div key={i}
+                            style={{ width: `${(s.seconds / subjectTotal) * 100}%`, backgroundColor: s.color || '#f97316' }}
+                            className="rounded-full"
+                            title={`${s.name}: ${formatHours(s.seconds)}`}
+                          />
+                        ))}
+                      </div>
+                      {/* Subject labels */}
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {subjects.slice(0, 4).map((s, i) => (
+                          <span key={i} className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md"
+                            style={{ backgroundColor: (s.color || '#f97316') + '22', color: s.color || '#fb923c' }}>
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color || '#f97316' }}/>
+                            {s.name}
+                            <span className="font-mono opacity-80">{formatHours(s.seconds)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Empty state for member */}
+                  {todaySec === 0 && subjects.length === 0 && !member.isStudying && (
+                    <p className="text-[10px] text-slate-700 text-center py-1">Aaj kuch nahi pada abhi</p>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main GroupStatsTab ────────────────────────────────────────────────────────
 export default function GroupStatsTab({ group, members: initialMembers }) {
   const { uid } = useUserStore()
   const [members, setMembers]       = useState(initialMembers || [])
   const [selected, setSelected]     = useState(null)
   const [filter, setFilter]         = useState('all') // 'all' | 'online'
+  const [mainTab, setMainTab]       = useState('members') // 'members' | 'daily'
 
   // Poll members every 5s for live presence
   useEffect(() => {
@@ -362,6 +527,28 @@ export default function GroupStatsTab({ group, members: initialMembers }) {
         </div>
       )}
 
+      {/* Main tab switcher: Members vs Daily Summary */}
+      <div className="flex gap-1 p-1 bg-[#0f172a] rounded-xl border border-slate-800">
+        {[
+          { id: 'members', label: 'Members', icon: 'ti-users' },
+          { id: 'daily',   label: 'Aaj ka Study', icon: 'ti-calendar-stats' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setMainTab(t.id)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-[10px] text-xs font-semibold transition-all
+              ${mainTab === t.id ? 'bg-orange-500 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+            <i className={`ti ${t.icon}`}/>{t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Daily Summary tab */}
+      {mainTab === 'daily' && (
+        <DailySummary groupId={group?._id} currentUserId={uid} />
+      )}
+
+      {/* Members tab */}
+      {mainTab === 'members' && (
+        <>
       {/* Filter */}
       <div className="flex gap-1 p-1 bg-[#0f172a] rounded-xl border border-slate-800">
         {[{id:'all',label:`All (${members.length})`},{id:'online',label:`Online (${studying.length})`}].map(f=>(
@@ -450,6 +637,8 @@ export default function GroupStatsTab({ group, members: initialMembers }) {
           <i className="ti ti-users text-3xl mb-2 opacity-30"/>
           <p className="text-sm">{filter==='online' ? 'Koi bhi study nahi kar raha abhi' : 'Koi member nahi'}</p>
         </div>
+      )}
+        </>
       )}
 
       {/* Member detail modal */}

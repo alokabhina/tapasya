@@ -1,11 +1,9 @@
 // src/components/group/MemberRow.jsx
 // Rank + avatar + name + weekly hours + subject color bar
-// rank 1-3 = gold/silver/bronze, "You" tag
-// props: member, rank, isCurrentUser
-// import Avatar
+// rank 1-3 = gold/silver/bronze, "You" tag, live studying indicator
 
 import Avatar from '../ui/Avatar';
-import { formatHours } from '../../utils/time';
+import { formatHours, formatDuration } from '../../utils/time';
 
 const RANK_STYLES = {
   1: { bg: 'bg-yellow-950/50', border: 'border-yellow-800/40', color: 'text-yellow-400', medal: '🥇' },
@@ -33,9 +31,12 @@ function SubjectBar({ subjects = [] }) {
   );
 }
 
-export default function MemberRow({ member, rank, isCurrentUser, onClick }) {
-  const rankStyle = RANK_STYLES[rank];
+export default function MemberRow({ member, rank, isCurrentUser, onClick, liveElapsed }) {
+  const rankStyle    = RANK_STYLES[rank];
   const weeklySeconds = member.weeklySeconds || 0;
+  const isStudying   = member.isStudying || false;
+  // liveElapsed prop (from timerStore for current user) takes priority over member.liveElapsed
+  const elapsed      = liveElapsed ?? member.liveElapsed ?? 0;
 
   return (
     <div
@@ -59,8 +60,13 @@ export default function MemberRow({ member, rank, isCurrentUser, onClick }) {
         )}
       </div>
 
-      {/* Avatar */}
-      <Avatar photoURL={member.photoURL} name={member.displayName} size="sm" />
+      {/* Avatar with live dot */}
+      <div className="relative flex-shrink-0">
+        <Avatar photoURL={member.photoURL} name={member.displayName} size="sm" />
+        {isStudying && (
+          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[#0a1628] animate-pulse" />
+        )}
+      </div>
 
       {/* Name + subject bar */}
       <div className="flex-1 min-w-0">
@@ -75,7 +81,16 @@ export default function MemberRow({ member, rank, isCurrentUser, onClick }) {
             </span>
           )}
         </div>
-        <SubjectBar subjects={member.subjectBreakdown || []} />
+        {/* Live subject + elapsed when studying */}
+        {isStudying && (member.studyingSubject || elapsed > 0) ? (
+          <p className="text-[10px] text-green-400 flex items-center gap-1 mt-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block flex-shrink-0" />
+            {member.studyingSubject || 'Studying'}
+            {elapsed > 0 && <span className="font-mono ml-0.5">{formatDuration(elapsed)}</span>}
+          </p>
+        ) : (
+          <SubjectBar subjects={member.subjectBreakdown || []} />
+        )}
       </div>
 
       {/* Weekly hours */}

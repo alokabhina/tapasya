@@ -266,6 +266,54 @@ router.get('/:id/members/:userId/todos', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// GET /api/groups/:id/daily-summary — aaj ke saare members ke hours + subjects
+router.get('/:id/daily-summary', async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id)
+    if (!group) return res.status(404).json({ error: 'Group not found' })
+    if (!group.members.some(m => m.userId.toString() === req.user.id))
+      return res.status(403).json({ error: 'Not a member' })
+
+    const Session = (await import('../models/Session.js')).default
+    const pad = n => String(n).padStart(2, '0')
+    const today = new Date()
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`
+
+    const memberIds = group.members.map(m => m.userId.toString())
+    const sessions = await Session.find({ userId: { $in: memberIds }, date: todayStr }).lean()
+
+    // Group sessions by userId
+    const byUser = {}
+    sessions.forEach(s => {
+      const uid = s.userId.toString()
+      if (!byUser[uid]) byUser[uid] = { totalSeconds: 0, subjects: {} }
+      byUser[uid].totalSeconds += s.duration || 0
+      if (s.subjectName) {
+        if (!byUser[uid].subjects[s.subjectName])
+          byUser[uid].subjects[s.subjectName] = { name: s.subjectName, color: s.subjectColor || '#f97316', seconds: 0 }
+        byUser[uid].subjects[s.subjectName].seconds += s.duration || 0
+      }
+    })
+
+    const result = group.members.map(m => {
+      const uid = m.userId.toString()
+      return {
+        userId:          uid,
+        displayName:     m.displayName,
+        photoURL:        m.photoURL,
+        isStudying:      m.isStudying || false,
+        liveElapsed:     m.liveElapsed || 0,
+        studyingSubject: m.studyingSubject || null,
+        studyingColor:   m.studyingColor || null,
+        todaySeconds:    byUser[uid]?.totalSeconds || 0,
+        todaySubjects:   Object.values(byUser[uid]?.subjects || {}).sort((a, b) => b.seconds - a.seconds),
+      }
+    })
+
+    res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── CHAT ──────────────────────────────────────────────────────────────────────
 
 // GET /api/groups/:id/messages

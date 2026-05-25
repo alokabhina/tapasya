@@ -8,7 +8,7 @@ import { fetchGameProfile, fetchGameHistory } from '@/api/games'
 import GameHubCard from '@/components/games/GameHubCard'
 import { LEVEL_LABELS } from '@/hooks/gameScoreHelper'
 
-const GAME_TYPES = ['calculation', 'series', 'vocab', 'syllogism', 'survival']
+const GAME_TYPES = ['calculation', 'series', 'vocab', 'syllogism', 'survival', 'grammar']
 
 const LEVEL_XP = {
   aspirant:  { min: 0,     max: 499  },
@@ -122,7 +122,7 @@ export default function Games() {
   )
 }
 
-const GAME_ICON = { calculation:'⚡', series:'📈', vocab:'📖', syllogism:'🧠', survival:'💀' }
+const GAME_ICON = { calculation:'⚡', series:'📈', vocab:'📖', syllogism:'🧠', survival:'💀', grammar:'✍️' }
 
 function HistoryRow({ session }) {
   return (

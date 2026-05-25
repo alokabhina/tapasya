@@ -47,4 +47,5 @@ export const GAME_META = {
   vocab:       { icon: '📖', title: 'Vocab Blitz',        color: 'from-purple-500 to-pink-500', desc: 'Synonym · Antonym · One-word' },
   syllogism:   { icon: '🧠', title: 'Syllogism Strike',   color: 'from-green-500 to-teal-500',  desc: 'Logic rapid fire — True or False' },
   survival:    { icon: '💀', title: 'Survival Arena',     color: 'from-red-500 to-rose-500',    desc: '3 lives · Mixed · How far can you go?' },
+  grammar:     { icon: '✍️', title: 'Grammar Gladiator',  color: 'from-indigo-500 to-violet-500', desc: 'Articles · Tenses · Error Spotting · More' },
 }

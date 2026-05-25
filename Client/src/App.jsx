@@ -36,8 +36,9 @@ const GameStats     = lazy(() => import('./pages/GameStats'));
 const CalcClimb     = lazy(() => import('./pages/games/CalculationClimb'));
 const SeriesRush    = lazy(() => import('./pages/games/NumberSeriesRush'));
 const VocabBlitz    = lazy(() => import('./pages/games/VocabBlitz'));
-const SyllogismStr  = lazy(() => import('./pages/games/SyllogismStrike'));
-const SurvivalArena = lazy(() => import('./pages/games/SurvivalArena'));
+const SyllogismStr     = lazy(() => import('./pages/games/SyllogismStrike'));
+const SurvivalArena    = lazy(() => import('./pages/games/SurvivalArena'));
+const GrammarGladiator = lazy(() => import('./pages/games/GrammarGladiator'));
 
 // ── Private Route Guard ──────────────────────────────────────────────────────
 function PrivateRoute({ children }) {
@@ -116,6 +117,7 @@ export default function App() {
             ['/games/vocab',        <VocabBlitz />],
             ['/games/syllogism',    <SyllogismStr />],
             ['/games/survival',     <SurvivalArena />],
+            ['/games/grammar',      <GrammarGladiator />],
           ].map(([path, page]) => (
             <Route
               key={path}

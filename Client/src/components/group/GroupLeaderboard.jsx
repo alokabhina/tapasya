@@ -1,23 +1,64 @@
 // src/components/group/GroupLeaderboard.jsx
-import { useState } from 'react';
+// Live-polling leaderboard: polls every 8s for fresh members + liveElapsed
+// Current user's elapsed comes from timerStore (instant, no polling delay)
+
+import { useState, useEffect, useRef } from 'react';
 import MemberRow from './MemberRow';
 import useUserStore from '../../store/userStore';
+import useTimerStore from '../../store/timerStore';
+import { fetchGroupMembers } from '../../api/groups';
 
-export default function GroupLeaderboard({ members = [], currentUserId }) {
+export default function GroupLeaderboard({ members: initialMembers = [], currentUserId, groupId }) {
   const [tab, setTab] = useState('week');
+  const [members, setMembers] = useState(initialMembers);
+  const pollRef = useRef(null);
 
-  // Always read latest name/photo from local store for the current user
+  // Live timer elapsed for current user (instant, no delay)
+  const timerElapsed  = useTimerStore((s) => s.elapsed);
+  const timerRunning  = useTimerStore((s) => s.isRunning && !s.isPaused);
+  const timerSubject  = useTimerStore((s) => s.subjectName);
+  const timerColor    = useTimerStore((s) => s.subjectColor);
+
+  // Always read latest name/photo from local store
   const liveDisplayName = useUserStore((s) => s.displayName);
   const livePhotoURL    = useUserStore((s) => s.photoURL);
 
-  // Inject live values for the "You" row so it updates instantly without waiting for server poll
-  const enrichedMembers = members.map((m) =>
-    m.userId?.toString() === currentUserId?.toString()
-      ? { ...m, displayName: liveDisplayName || m.displayName, photoURL: livePhotoURL !== undefined ? livePhotoURL : m.photoURL }
-      : m
-  );
+  // Poll members every 8s if we have a groupId
+  useEffect(() => {
+    if (!groupId) return;
+    let active = true;
 
-  const sorted = [...enrichedMembers]
+    async function poll() {
+      try {
+        const data = await fetchGroupMembers(groupId);
+        if (active) setMembers(data);
+      } catch (_) {}
+    }
+
+    poll(); // immediate first load
+    pollRef.current = setInterval(poll, 8000);
+    return () => { active = false; clearInterval(pollRef.current); };
+  }, [groupId]);
+
+  // Sync initial props when no groupId (static mode)
+  useEffect(() => {
+    if (!groupId) setMembers(initialMembers);
+  }, [initialMembers, groupId]);
+
+  // Enrich current user with live name/photo + live studying data
+  const enriched = members.map((m) => {
+    if (m.userId?.toString() !== currentUserId?.toString()) return m;
+    return {
+      ...m,
+      displayName:     liveDisplayName || m.displayName,
+      photoURL:        livePhotoURL !== undefined ? livePhotoURL : m.photoURL,
+      isStudying:      timerRunning ? true : m.isStudying,
+      studyingSubject: timerRunning ? timerSubject : m.studyingSubject,
+      studyingColor:   timerRunning ? timerColor   : m.studyingColor,
+    };
+  });
+
+  const sorted = [...enriched]
     .sort((a, b) => tab === 'week'
       ? (b.weeklySeconds || 0) - (a.weeklySeconds || 0)
       : (b.totalSeconds  || 0) - (a.totalSeconds  || 0)
@@ -39,6 +80,7 @@ export default function GroupLeaderboard({ members = [], currentUserId }) {
           </button>
         ))}
       </div>
+
       {sorted.length === 0 ? (
         <div className="text-center py-12 text-slate-500 text-sm">
           <i className="ti ti-users text-3xl block mb-2 opacity-30" />
@@ -46,15 +88,20 @@ export default function GroupLeaderboard({ members = [], currentUserId }) {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {sorted.map((member, index) => (
-            <MemberRow
-              key={member.userId || index}
-              member={member}
-              rank={index + 1}
-              tab={tab}
-              isCurrentUser={member.userId?.toString() === currentUserId?.toString()}
-            />
-          ))}
+          {sorted.map((member, index) => {
+            const isMe = member.userId?.toString() === currentUserId?.toString();
+            return (
+              <MemberRow
+                key={member.userId || index}
+                member={member}
+                rank={index + 1}
+                tab={tab}
+                isCurrentUser={isMe}
+                // Pass live elapsed directly for current user — no server poll delay
+                liveElapsed={isMe && timerRunning ? timerElapsed : undefined}
+              />
+            );
+          })}
         </div>
       )}
     </div>

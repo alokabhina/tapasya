@@ -1,0 +1,1367 @@
+
+[
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "She is _____ honest woman who deserves respect.",
+    "options": ["a", "an", "the", "no article"],
+    "answer": "an",
+    "explanation": "RULE: Use 'an' before words that begin with a vowel SOUND. 'Honest' starts with a silent 'h', so the vowel sound 'o' requires 'an'.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "He wants to become _____ engineer after graduation.",
+    "options": ["a", "an", "the", "no article"],
+    "answer": "an",
+    "explanation": "RULE: Use 'an' before vowel sounds. 'Engineer' begins with vowel sound 'e', so 'an' is correct.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "_____ Ganges is one of the holiest rivers in India.",
+    "options": ["A", "An", "The", "No article"],
+    "answer": "The",
+    "explanation": "RULE: Use 'The' with names of rivers, seas, oceans, and mountain ranges (e.g., The Ganges, The Pacific, The Himalayas).",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "I have _____ unique idea for the project.",
+    "options": ["a", "an", "the", "no article"],
+    "answer": "a",
+    "explanation": "RULE: Use 'a' before words beginning with a consonant SOUND. 'Unique' sounds like 'you-neek', starting with consonant sound 'y', so 'a' is correct.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "He is _____ M.A. in English literature.",
+    "options": ["a", "an", "the", "no article"],
+    "answer": "an",
+    "explanation": "RULE: Use 'an' before abbreviations/acronyms that start with a vowel SOUND when pronounced. 'M.A.' is pronounced 'em-ay', starting with vowel 'e'.",
+    "difficulty": "hard", "timeLimit": 18, "level": 3, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "_____ sun rises in the east.",
+    "options": ["A", "An", "The", "No article"],
+    "answer": "The",
+    "explanation": "RULE: Use 'The' with unique objects in nature — there is only one sun, one moon, one earth, one sky.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "Gold is _____ precious metal.",
+    "options": ["a", "an", "the", "no article"],
+    "answer": "a",
+    "explanation": "RULE: When making a general statement about a category (not a specific thing), use 'a/an' with a singular countable noun. Gold → a precious metal (one of many).",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "She plays _____ piano beautifully.",
+    "options": ["a", "an", "the", "no article"],
+    "answer": "the",
+    "explanation": "RULE: Use 'The' with musical instruments when talking about playing them (e.g., play the guitar, play the piano, play the violin).",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "Neither the manager nor the employees _____ responsible for the error.",
+    "options": ["is", "are", "was", "were"],
+    "answer": "are",
+    "explanation": "RULE: With 'Neither...nor' / 'Either...or', the verb agrees with the subject CLOSEST to it. 'Employees' (plural) is closest, so use 'are'.",
+    "difficulty": "hard", "timeLimit": 20, "level": 3, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "The news _____ very disturbing today.",
+    "options": ["is", "are", "were", "have been"],
+    "answer": "is",
+    "explanation": "RULE: Certain nouns appear plural but are SINGULAR in meaning and take singular verbs: news, politics, mathematics, economics, physics, mumps, measles.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "Each of the students _____ given a separate assignment.",
+    "options": ["is", "are", "were", "have been"],
+    "answer": "is",
+    "explanation": "RULE: 'Each', 'every', 'either', 'neither' — when used as subjects or before 'of + plural noun', they always take SINGULAR verbs.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "The committee _____ divided in its opinion.",
+    "options": ["is", "are", "were", "have been"],
+    "answer": "is",
+    "explanation": "RULE: Collective nouns (committee, jury, team, class) take a SINGULAR verb when acting as one unit. Use plural only when members act individually.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "A number of students _____ absent today.",
+    "options": ["is", "are", "was", "has been"],
+    "answer": "are",
+    "explanation": "RULE: 'A number of' = many, takes PLURAL verb. 'The number of' = the count, takes SINGULAR verb. 'A number of students are...' vs 'The number of students is...'",
+    "difficulty": "hard", "timeLimit": 20, "level": 3, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "Bread and butter _____ his only meal.",
+    "options": ["is", "are", "were", "have been"],
+    "answer": "is",
+    "explanation": "RULE: Two nouns joined by 'and' that refer to a SINGLE concept or are always used together take a singular verb (bread and butter, rice and curry, law and order).",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "Twenty kilometres _____ a long distance to walk.",
+    "options": ["is", "are", "were", "have been"],
+    "answer": "is",
+    "explanation": "RULE: Distances, amounts, periods of time, and weights — even if grammatically plural — take a SINGULAR verb when thought of as a unit.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "One of the boys _____ lost his wallet.",
+    "options": ["has", "have", "had", "having"],
+    "answer": "has",
+    "explanation": "RULE: 'One of the + plural noun' — the subject is 'One' (singular), so the verb must be singular. Don't be misled by the plural noun after 'of'.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "By the time she arrived, the meeting _____ already _____.",
+    "options": ["had already ended", "already ended", "has already ended", "already ends"],
+    "answer": "had already ended",
+    "explanation": "RULE: Past Perfect (had + V3) is used for an action COMPLETED before another past action. 'By the time she arrived' shows the past reference point.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "I _____ in this company for ten years next month.",
+    "options": ["will have been working", "will be working", "have been working", "will work"],
+    "answer": "will have been working",
+    "explanation": "RULE: Future Perfect Continuous (will have been + V-ing) is used for an action that will be IN PROGRESS for a period UP TO a future point.",
+    "difficulty": "hard", "timeLimit": 20, "level": 3, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "She _____ the piano since she was five years old.",
+    "options": ["has been playing", "is playing", "was playing", "had been playing"],
+    "answer": "has been playing",
+    "explanation": "RULE: Present Perfect Continuous (has/have been + V-ing) is used for an action that STARTED in the past and CONTINUES to the present. 'Since' is the key indicator.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "If I had studied harder, I _____ the exam.",
+    "options": ["would have passed", "would pass", "will pass", "had passed"],
+    "answer": "would have passed",
+    "explanation": "RULE: Third Conditional (impossible/unreal past). Pattern: If + had + V3 → would have + V3. Used for past situations that did NOT happen.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","tenses","conditionals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "He _____ his homework when his mother called him.",
+    "options": ["was doing", "is doing", "did", "has done"],
+    "answer": "was doing",
+    "explanation": "RULE: Past Continuous (was/were + V-ing) is used for an action IN PROGRESS at a specific past time or when INTERRUPTED by another action.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "Water _____ at 100 degrees Celsius.",
+    "options": ["boils", "is boiling", "boiled", "has boiled"],
+    "answer": "boils",
+    "explanation": "RULE: Simple Present is used for UNIVERSAL TRUTHS, scientific facts, and habits. These are permanent realities that are always true.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "The train _____ before we reached the station.",
+    "options": ["had left", "has left", "left", "was leaving"],
+    "answer": "had left",
+    "explanation": "RULE: Past Perfect (had + V3) is used for the EARLIER of two past actions. The train leaving happened BEFORE we reached the station.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "I _____ him three times but he doesn't respond.",
+    "options": ["have called", "called", "had called", "am calling"],
+    "answer": "have called",
+    "explanation": "RULE: Present Perfect (have/has + V3) is used for past actions with PRESENT RELEVANCE. The calling happened in the recent past and is relevant now (he still hasn't responded).",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "She _____ in Mumbai. She was born there.",
+    "options": ["lives", "is living", "lived", "has lived"],
+    "answer": "lives",
+    "explanation": "RULE: Simple Present is used for PERMANENT STATES or situations unlikely to change soon. Living in a city one was born in is considered a permanent state.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "She has been suffering _____ fever since yesterday.",
+    "options": ["from", "with", "of", "by"],
+    "answer": "from",
+    "explanation": "RULE: 'Suffer from' is the correct collocation for illness or disease. Remember: suffer from a disease/illness/pain.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "He is good _____ mathematics but weak _____ English.",
+    "options": ["at, in", "in, at", "at, at", "in, in"],
+    "answer": "at, in",
+    "explanation": "RULE: 'Good at' is used for skills and activities (good at swimming, good at maths). 'Weak in' is used for subjects or areas (weak in science, weak in English).",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "The thief was accused _____ stealing money from the bank.",
+    "options": ["of", "for", "with", "by"],
+    "answer": "of",
+    "explanation": "RULE: 'Accused of' is the correct collocation. Remember important preposition pairs: accused of, guilty of, convicted of, suspected of.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "I will meet you _____ Monday _____ 5 PM.",
+    "options": ["on, at", "in, at", "at, on", "on, in"],
+    "answer": "on, at",
+    "explanation": "RULE: AT for specific times (at 5 PM, at noon), ON for days and dates (on Monday, on 15th August), IN for months/years/seasons (in January, in 2023).",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "She is married _____ a doctor.",
+    "options": ["to", "with", "by", "for"],
+    "answer": "to",
+    "explanation": "RULE: 'Married to' is always correct, never 'married with'. Similarly: engaged to, betrothed to, devoted to.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "He died _____ cholera last year.",
+    "options": ["of", "from", "by", "with"],
+    "answer": "of",
+    "explanation": "RULE: 'Die of' is used for disease/illness. 'Die from' is used for injuries or accidents. He died of cancer (disease); He died from injuries (accident).",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "The project should be completed _____ next Monday.",
+    "options": ["by", "till", "until", "before"],
+    "answer": "by",
+    "explanation": "RULE: 'By' means no later than a deadline (deadline is the end point). 'Till/Until' means up to a point in time (continuous duration). Completed BY next Monday = deadline.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Conjunctions",
+    "questionText": "He worked hard _____ he could not pass the exam.",
+    "options": ["yet", "but", "still", "though"],
+    "answer": "yet",
+    "explanation": "RULE: 'Yet' (as a conjunction) shows a surprising contrast — the expected result did NOT happen despite the effort. It connects two independent clauses showing unexpected contrast.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","conjunctions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Conjunctions",
+    "questionText": "_____ she is poor, she is always cheerful.",
+    "options": ["Although", "Despite", "In spite of", "Because"],
+    "answer": "Although",
+    "explanation": "RULE: 'Although/Though/Even though' are CONJUNCTIONS used before a Subject + Verb clause. 'Despite/In spite of' are PREPOSITIONS used before a noun/gerund — NOT before a clause.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","conjunctions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Conjunctions",
+    "questionText": "Neither he _____ his brother attended the function.",
+    "options": ["nor", "or", "and", "but"],
+    "answer": "nor",
+    "explanation": "RULE: Correlative conjunctions must be used in pairs: Either...or, Neither...nor, Both...and, Not only...but also, Whether...or. 'Neither' must always be followed by 'nor'.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","conjunctions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Conjunctions",
+    "questionText": "She not only sings _____ also dances beautifully.",
+    "options": ["but", "and", "yet", "nor"],
+    "answer": "but",
+    "explanation": "RULE: 'Not only...but also' is a fixed correlative conjunction pair. It adds emphasis to the second item. 'Not only A but also B' means both A and B, with B being surprising.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","conjunctions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'He is one of the student who has won the prize.'",
+    "options": ["He is one of", "the student", "who has", "won the prize"],
+    "answer": "the student",
+    "explanation": "RULE: 'One of the' must be followed by a PLURAL noun. 'One of the students' is correct, not 'one of the student'. The noun after 'one of the' is always plural.",
+    "difficulty": "medium", "timeLimit": 22, "level": 2, "tags": ["bank-exam","error-spotting"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'She told me that she will come tomorrow.'",
+    "options": ["She told me", "that she", "will come", "tomorrow"],
+    "answer": "will come",
+    "explanation": "RULE: SEQUENCE OF TENSES — when the main verb is in past tense ('told'), the subordinate clause must also shift to past: 'will' becomes 'would'. Correct: 'she WOULD come'.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'I have seen him yesterday at the market.'",
+    "options": ["I have seen", "him yesterday", "at the market", "No error"],
+    "answer": "I have seen",
+    "explanation": "RULE: Present Perfect CANNOT be used with specific past time words like yesterday, ago, last week, in 2020. These require Simple Past: 'I SAW him yesterday'.",
+    "difficulty": "medium", "timeLimit": 22, "level": 2, "tags": ["bank-exam","error-spotting","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'He is too weak that he cannot walk.'",
+    "options": ["He is", "too weak", "that he cannot", "walk"],
+    "answer": "that he cannot",
+    "explanation": "RULE: 'Too...to' structure — 'too + adjective + to + infinitive'. Do NOT use 'that'. Correct: 'He is too weak TO walk'. The 'to' infinitive already carries the negative meaning.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'The police has arrested the thief.'",
+    "options": ["The police", "has arrested", "the thief", "No error"],
+    "answer": "has arrested",
+    "explanation": "RULE: 'Police' is always treated as a PLURAL noun in English and takes a plural verb. 'The police HAVE arrested' is correct. Similarly: cattle, people, gentry.",
+    "difficulty": "medium", "timeLimit": 22, "level": 2, "tags": ["bank-exam","error-spotting","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'Despite of his illness, he attended the meeting.'",
+    "options": ["Despite of", "his illness", "he attended", "the meeting"],
+    "answer": "Despite of",
+    "explanation": "RULE: 'Despite' is NEVER followed by 'of'. Correct usage: 'Despite his illness' OR 'In spite of his illness'. 'Despite of' is always wrong — avoid it.",
+    "difficulty": "easy", "timeLimit": 20, "level": 1, "tags": ["bank-exam","error-spotting","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'She is more smarter than her sister.'",
+    "options": ["She is", "more smarter", "than her", "sister"],
+    "answer": "more smarter",
+    "explanation": "RULE: DOUBLE COMPARATIVES are wrong. Never use 'more' with -er comparatives. Either 'smarter' OR 'more smart' — not both together. 'More' + '-er form' is always incorrect.",
+    "difficulty": "easy", "timeLimit": 20, "level": 1, "tags": ["bank-exam","error-spotting","adjectives"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'He has been living in Delhi since five years.'",
+    "options": ["He has been", "living in Delhi", "since five years", "No error"],
+    "answer": "since five years",
+    "explanation": "RULE: 'Since' is used with a POINT IN TIME (since 2020, since Monday, since morning). 'For' is used with a PERIOD OF TIME (for five years, for two hours). Use 'FOR five years'.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","error-spotting","prepositions","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'My cousin is elder than me.'",
+    "options": ["My cousin", "is elder", "than me", "No error"],
+    "answer": "is elder",
+    "explanation": "RULE: 'Elder/eldest' are used ONLY for family members and NOT followed by 'than'. Use 'older than' for comparison. 'My cousin is OLDER than me'. Elder = informal family reference.",
+    "difficulty": "medium", "timeLimit": 22, "level": 2, "tags": ["bank-exam","error-spotting","adjectives"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'He could not help but laughing at the situation.'",
+    "options": ["He could", "not help but", "laughing at", "the situation"],
+    "answer": "laughing at",
+    "explanation": "RULE: 'Cannot/could not help but' must be followed by the BASE FORM (bare infinitive), not a gerund (-ing form). Correct: 'could not help but LAUGH' OR 'could not help LAUGHING' (no 'but').",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'The number of students who passed have increased.'",
+    "options": ["The number", "of students who passed", "have increased", "No error"],
+    "answer": "have increased",
+    "explanation": "RULE: 'The number of' takes a SINGULAR verb. The subject is 'The number' (singular), not 'students'. 'The number HAS increased'. Remember: 'The number of' = singular, 'A number of' = plural.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "She suggested me to take rest.",
+      "She suggested that I should take rest.",
+      "She suggested me taking rest.",
+      "She suggested me to taking rest."
+    ],
+    "answer": "She suggested that I should take rest.",
+    "explanation": "RULE: 'Suggest' is NEVER followed by an infinitive (to + verb). Correct patterns: 1) suggest + that + clause: 'suggest that he should go', 2) suggest + gerund: 'suggest going'.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","sentence-correction"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "It is I who is responsible.",
+      "It is me who am responsible.",
+      "It is I who am responsible.",
+      "It is me who is responsible."
+    ],
+    "answer": "It is I who am responsible.",
+    "explanation": "RULE: In 'It is I/you/he...' constructions, the pronoun is the subject. 'It is I' (subject form). The relative clause verb agrees with the pronoun: I → am, you → are, he → is.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","sentence-correction"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "No sooner he had entered than it started raining.",
+      "No sooner did he enter than it started raining.",
+      "No sooner he entered than it started raining.",
+      "No sooner had he entered when it started raining."
+    ],
+    "answer": "No sooner did he enter than it started raining.",
+    "explanation": "RULE: 'No sooner...than' — when 'No sooner' starts a sentence, INVERSION happens (auxiliary before subject). Pattern: 'No sooner + did/had + subject + V1 + THAN'. Always 'than', never 'when'.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","sentence-correction","inversion"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "I prefer tea than coffee.",
+      "I prefer tea over coffee.",
+      "I prefer tea to coffee.",
+      "I prefer tea from coffee."
+    ],
+    "answer": "I prefer tea to coffee.",
+    "explanation": "RULE: 'Prefer' is ALWAYS followed by 'to', never 'than'. 'I prefer A to B'. This is a fixed collocation. Never say 'prefer...than'.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","sentence-correction","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "He insisted to go to the party.",
+      "He insisted on to go the party.",
+      "He insisted on going to the party.",
+      "He insisted for going to the party."
+    ],
+    "answer": "He insisted on going to the party.",
+    "explanation": "RULE: 'Insist' must be followed by 'on + gerund (V-ing)' or 'that + clause'. 'Insist on doing something' is the correct pattern. 'Insist to' is always wrong.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","sentence-correction"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "The teacher along with students are going on a trip.",
+      "The teacher along with students is going on a trip.",
+      "The teacher along with students were going on a trip.",
+      "The teacher along with students have gone on a trip."
+    ],
+    "answer": "The teacher along with students is going on a trip.",
+    "explanation": "RULE: When two subjects are joined by 'along with', 'together with', 'as well as', 'in addition to' — the verb agrees with the FIRST subject only. 'The teacher' (singular) → 'is'.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","sentence-correction","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Active/Passive Voice",
+    "questionText": "Change to Passive Voice: 'She is writing a letter.'",
+    "options": [
+      "A letter is being written by her.",
+      "A letter was being written by her.",
+      "A letter has been written by her.",
+      "A letter is written by her."
+    ],
+    "answer": "A letter is being written by her.",
+    "explanation": "RULE: Active Present Continuous → Passive: Object + is/am/are + being + V3 + by + Subject. 'She is writing a letter' → 'A letter is being written by her'.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","active-passive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Active/Passive Voice",
+    "questionText": "Change to Passive Voice: 'The government has announced a new policy.'",
+    "options": [
+      "A new policy is announced by the government.",
+      "A new policy has been announced by the government.",
+      "A new policy was announced by the government.",
+      "A new policy had been announced by the government."
+    ],
+    "answer": "A new policy has been announced by the government.",
+    "explanation": "RULE: Active Present Perfect → Passive: Object + has/have + been + V3 + by + Subject. 'has announced' → 'has been announced'.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","active-passive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Active/Passive Voice",
+    "questionText": "Change to Active Voice: 'The cake was baked by my mother.'",
+    "options": [
+      "My mother baked the cake.",
+      "My mother was baking the cake.",
+      "My mother has baked the cake.",
+      "My mother is baking the cake."
+    ],
+    "answer": "My mother baked the cake.",
+    "explanation": "RULE: To change from Passive to Active: Subject of passive (after 'by') becomes the active subject. 'was baked' (Past Simple Passive) → 'baked' (Past Simple Active).",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","active-passive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Active/Passive Voice",
+    "questionText": "Identify the CORRECT passive form of: 'Open the door.'",
+    "options": [
+      "The door should be opened.",
+      "Let the door be opened.",
+      "The door must opened.",
+      "The door was opened."
+    ],
+    "answer": "Let the door be opened.",
+    "explanation": "RULE: Imperative Sentence Passive: 'Let + object + be + V3'. 'Open the door' → 'Let the door be opened'. The imperative passive always starts with 'Let'.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","active-passive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Active/Passive Voice",
+    "questionText": "Change to Passive: 'They will complete the project by Friday.'",
+    "options": [
+      "The project will complete by Friday.",
+      "The project will be completed by Friday.",
+      "The project will have been completed by Friday.",
+      "The project is completed by Friday."
+    ],
+    "answer": "The project will be completed by Friday.",
+    "explanation": "RULE: Future Simple Passive: Subject + will be + V3 + by + Agent. 'will complete' (active) → 'will be completed' (passive).",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","active-passive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Direct/Indirect Speech",
+    "questionText": "Change to Indirect: He said, 'I am feeling very tired.'",
+    "options": [
+      "He said that he was feeling very tired.",
+      "He said that he is feeling very tired.",
+      "He told that he was feeling very tired.",
+      "He said that I was feeling very tired."
+    ],
+    "answer": "He said that he was feeling very tired.",
+    "explanation": "RULE: Reporting Verb in Past → Tense Shift: 'am/is/are' → 'was/were'. 'I' (first person) changes to match the subject 'he'. 'Said' (no object) → 'said that'. 'Said to' → 'told'.",
+    "difficulty": "medium", "timeLimit": 22, "level": 2, "tags": ["bank-exam","narration"]
+  },
+  {
+    "gameType": "grammar", "topic": "Direct/Indirect Speech",
+    "questionText": "Change to Indirect: She said to me, 'Will you help me?'",
+    "options": [
+      "She asked me if I will help her.",
+      "She asked me whether I would help her.",
+      "She said me if I would help her.",
+      "She asked me that would I help her."
+    ],
+    "answer": "She asked me whether I would help her.",
+    "explanation": "RULE: For questions in indirect speech: use 'asked' (not 'said'). Yes/No questions → 'if/whether'. Question word order becomes normal (not inverted). 'will' → 'would'.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","narration"]
+  },
+  {
+    "gameType": "grammar", "topic": "Direct/Indirect Speech",
+    "questionText": "Change to Indirect: He said, 'I went to Delhi yesterday.'",
+    "options": [
+      "He said that he had gone to Delhi the previous day.",
+      "He said that he went to Delhi yesterday.",
+      "He said that he has gone to Delhi the previous day.",
+      "He said that he would go to Delhi the previous day."
+    ],
+    "answer": "He said that he had gone to Delhi the previous day.",
+    "explanation": "RULE: Past Simple → Past Perfect in indirect speech. 'went' → 'had gone'. Time adverbs also change: 'yesterday' → 'the previous day / the day before'.",
+    "difficulty": "medium", "timeLimit": 22, "level": 2, "tags": ["bank-exam","narration"]
+  },
+  {
+    "gameType": "grammar", "topic": "Direct/Indirect Speech",
+    "questionText": "Change to Indirect: The teacher said, 'The Earth revolves around the Sun.'",
+    "options": [
+      "The teacher said that the Earth revolved around the Sun.",
+      "The teacher said that the Earth revolves around the Sun.",
+      "The teacher said that the Earth had revolved around the Sun.",
+      "The teacher said that the Earth would revolve around the Sun."
+    ],
+    "answer": "The teacher said that the Earth revolves around the Sun.",
+    "explanation": "RULE: EXCEPTION — Universal/Scientific truths, proverbs, and habitual facts do NOT change tense in indirect speech. Always remain in Simple Present regardless of the reporting verb tense.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","narration"]
+  },
+  {
+    "gameType": "grammar", "topic": "Modals",
+    "questionText": "You _____ speak loudly in the library. It is prohibited.",
+    "options": ["mustn't", "needn't", "shouldn't", "couldn't"],
+    "answer": "mustn't",
+    "explanation": "RULE: 'Must not/Mustn't' = strong PROHIBITION (not allowed). 'Need not' = not necessary (optional). 'Should not' = mild advice. When something is strictly forbidden, use 'must not'.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","modals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Modals",
+    "questionText": "She _____ speak five languages fluently. She's an expert.",
+    "options": ["can", "could", "may", "might"],
+    "answer": "can",
+    "explanation": "RULE: 'Can' = present ability. 'Could' = past ability OR polite request. For CURRENT demonstrated ability, use 'can'. 'Could' for ability refers to the past (when I was young, I could run fast).",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","modals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Modals",
+    "questionText": "He _____ be at home now — his car is in the driveway.",
+    "options": ["must", "should", "would", "shall"],
+    "answer": "must",
+    "explanation": "RULE: 'Must' for LOGICAL DEDUCTION/strong certainty about present: 'must be' = I'm almost certain. 'Should' for expectation. 'Must' shows the speaker is drawing a logical conclusion from evidence.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","modals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Modals",
+    "questionText": "You _____ have informed me earlier. I could have helped.",
+    "options": ["should", "would", "could", "might"],
+    "answer": "should",
+    "explanation": "RULE: 'Should have + V3' = past OBLIGATION not fulfilled (you didn't do it but you were supposed to). It expresses criticism or regret about a past action that didn't happen.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","modals","perfect-modals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Gerund/Infinitive",
+    "questionText": "She enjoys _____ in the park every morning.",
+    "options": ["to walk", "walking", "walk", "walked"],
+    "answer": "walking",
+    "explanation": "RULE: Verbs followed by GERUND (-ing): enjoy, avoid, finish, suggest, consider, mind, keep, admit, deny, risk, practice, miss. 'Enjoy' is always followed by gerund.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","gerund-infinitive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Gerund/Infinitive",
+    "questionText": "He stopped _____ and started eating healthy food.",
+    "options": ["to smoke", "smoking", "smoke", "for smoking"],
+    "answer": "smoking",
+    "explanation": "RULE: 'Stop + gerund' = cease an activity permanently (he quit smoking). 'Stop + infinitive' = stop in order to do something else (he stopped to smoke = he paused to have a cigarette). Different meanings!",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","gerund-infinitive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Gerund/Infinitive",
+    "questionText": "I remember _____ the keys on the table this morning.",
+    "options": ["keeping", "to keep", "keep", "kept"],
+    "answer": "keeping",
+    "explanation": "RULE: 'Remember + gerund' = remember a past action (you did it and recall it). 'Remember + infinitive' = remember to do a future task (don't forget to do it). Here, the action already happened.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","gerund-infinitive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Gerund/Infinitive",
+    "questionText": "He decided _____ a new business after losing his job.",
+    "options": ["starting", "to start", "start", "started"],
+    "answer": "to start",
+    "explanation": "RULE: Verbs followed by INFINITIVE (to + V1): decide, want, wish, hope, plan, agree, refuse, promise, afford, manage, fail, tend, expect, need, appear, seem.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","gerund-infinitive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Gerund/Infinitive",
+    "questionText": "Would you mind _____ the window, please?",
+    "options": ["to open", "opening", "open", "opened"],
+    "answer": "opening",
+    "explanation": "RULE: 'Mind' is always followed by GERUND (-ing), never infinitive. 'Would you mind opening...' = polite request. 'I don't mind waiting' = I'm okay with waiting.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","gerund-infinitive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Reported Speech",
+    "questionText": "He said, 'I will come tomorrow.' In indirect speech, which change is INCORRECT?",
+    "options": ["'I' changes to 'he'", "'will' changes to 'would'", "'tomorrow' changes to 'the next day'", "'come' changes to 'came'"],
+    "answer": "'come' changes to 'came'",
+    "explanation": "RULE: In indirect speech, only the AUXILIARY (will → would) changes, not the main verb. The main verb stays in its base form after the auxiliary. 'I will come' → 'he would come' (not 'came').",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","narration"]
+  },
+  {
+    "gameType": "grammar", "topic": "Comparatives/Superlatives",
+    "questionText": "She is the _____ of the two sisters.",
+    "options": ["tallest", "taller", "most tall", "more tall"],
+    "answer": "taller",
+    "explanation": "RULE: When comparing EXACTLY TWO things, use COMPARATIVE (taller, better, smarter). Use SUPERLATIVE only for three or more. 'The taller of the two' vs 'the tallest of all three'.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","comparatives"]
+  },
+  {
+    "gameType": "grammar", "topic": "Comparatives/Superlatives",
+    "questionText": "This is _____ book I have ever read.",
+    "options": ["the most interesting", "more interesting", "most interesting", "the more interesting"],
+    "answer": "the most interesting",
+    "explanation": "RULE: Superlative adjectives ALWAYS need 'the'. Long adjectives (2+ syllables) form superlative with 'the most' (the most interesting, the most beautiful). Short ones: the tallest, the best.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","comparatives"]
+  },
+  {
+    "gameType": "grammar", "topic": "Parts of Speech",
+    "questionText": "In 'The child smiled happily', what part of speech is 'happily'?",
+    "options": ["Adjective", "Adverb", "Noun", "Preposition"],
+    "answer": "Adverb",
+    "explanation": "RULE: ADVERBS modify verbs, adjectives, or other adverbs. They often end in '-ly'. 'Happily' modifies the verb 'smiled' (how did the child smile? — happily). Adjectives modify nouns.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","parts-of-speech"]
+  },
+  {
+    "gameType": "grammar", "topic": "Parts of Speech",
+    "questionText": "Which word is an ABSTRACT NOUN in: 'Her kindness touched everyone's heart.'",
+    "options": ["Her", "kindness", "touched", "heart"],
+    "answer": "kindness",
+    "explanation": "RULE: ABSTRACT NOUNS refer to qualities, states, or concepts that cannot be physically perceived (seen/touched). Examples: kindness, love, happiness, freedom, courage, justice, wisdom.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","parts-of-speech","nouns"]
+  },
+  {
+    "gameType": "grammar", "topic": "Parts of Speech",
+    "questionText": "Identify the TRANSITIVE VERB: 'She bought a new dress.'",
+    "options": ["She", "bought", "new", "dress"],
+    "answer": "bought",
+    "explanation": "RULE: A TRANSITIVE VERB requires a DIRECT OBJECT to complete its meaning (what/whom). 'Bought what?' → 'a dress'. Intransitive verbs don't need objects (She slept / He arrived).",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","parts-of-speech","verbs"]
+  },
+  {
+    "gameType": "grammar", "topic": "Conditionals",
+    "questionText": "If it rains tomorrow, we _____ the match.",
+    "options": ["cancel", "will cancel", "would cancel", "would have cancelled"],
+    "answer": "will cancel",
+    "explanation": "RULE: FIRST CONDITIONAL (real/possible future): If + Simple Present → will + V1. Used for likely future situations. 'If it rains' (possible), 'we will cancel' (future result).",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","conditionals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Conditionals",
+    "questionText": "If she _____ earlier, she would have caught the train.",
+    "options": ["started", "starts", "had started", "would start"],
+    "answer": "had started",
+    "explanation": "RULE: THIRD CONDITIONAL (impossible past): If + Past Perfect (had + V3) → would have + V3. Used for past situations that didn't happen — expressing regret or different outcomes.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","conditionals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Conditionals",
+    "questionText": "If I were a bird, I _____ fly to you.",
+    "options": ["will", "would", "can", "should"],
+    "answer": "would",
+    "explanation": "RULE: SECOND CONDITIONAL (unreal/imaginary present): If + Past Simple (were/V2) → would + V1. Used for imaginary, hypothetical, or impossible present situations. 'If I were' not 'if I was'.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","conditionals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "It is high time you start studying.",
+      "It is high time you started studying.",
+      "It is high time you have started studying.",
+      "It is high time you should start studying."
+    ],
+    "answer": "It is high time you started studying.",
+    "explanation": "RULE: 'It is high time / It is time' is ALWAYS followed by SIMPLE PAST in the subordinate clause, even though the meaning is present. 'It is high time you STARTED' (not start/have started).",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","sentence-correction"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "I wish I was taller.",
+      "I wish I were taller.",
+      "I wish I am taller.",
+      "I wish I would be taller."
+    ],
+    "answer": "I wish I were taller.",
+    "explanation": "RULE: After 'wish' for present unreal situations, always use WERE (not was) for all persons — I/he/she/it. 'I wish I were', 'She wishes she were'. This is the subjunctive mood.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","sentence-correction","subjunctive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'He spoke to me in a very rude and impolitely manner.'",
+    "options": ["He spoke to me", "in a very", "rude and impolitely", "manner"],
+    "answer": "rude and impolitely",
+    "explanation": "RULE: PARALLELISM — when two or more elements are joined by 'and', they must be the same grammatical form. Both should be adjectives: 'rude and impolite' or both adverbs: 'rudely and impolitely'.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting","parallelism"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'Scarcely he had entered the room when the bell rang.'",
+    "options": ["Scarcely he had entered", "the room when", "the bell rang", "No error"],
+    "answer": "Scarcely he had entered",
+    "explanation": "RULE: Negative adverbs at the start (Scarcely, Hardly, Barely, Never, No sooner) trigger SUBJECT-AUXILIARY INVERSION. 'Scarcely HAD HE entered' (inverted). Also use 'when', not 'than' with scarcely/hardly.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting","inversion"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'Each of the boy should submit their assignment.'",
+    "options": ["Each of the boy", "should submit", "their assignment", "No error"],
+    "answer": "Each of the boy",
+    "explanation": "RULE: 'Each of the' MUST be followed by a PLURAL NOUN. Correct: 'Each of the boys'. Also note: 'Each' (singular subject) → singular pronoun 'his/her', not 'their'. Though 'their' is now accepted informally.",
+    "difficulty": "medium", "timeLimit": 22, "level": 2, "tags": ["bank-exam","error-spotting"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "Mathematics _____ my favourite subject in school.",
+    "options": ["is", "are", "were", "have been"],
+    "answer": "is",
+    "explanation": "RULE: Academic/Discipline names ending in -ics are SINGULAR: Mathematics, Physics, Economics, Ethics, Athletics, Politics, Civics, Statistics. They take singular verbs.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "Two miles _____ not a long distance for a trained athlete.",
+    "options": ["is", "are", "were", "have been"],
+    "answer": "is",
+    "explanation": "RULE: Quantities of time, distance, money, and weight are treated as SINGLE UNITS and take singular verbs. 'Two miles is' (one distance unit), 'Five hours is' (one period).",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "By next year, he _____ in this city for a decade.",
+    "options": ["will live", "will be living", "will have lived", "lives"],
+    "answer": "will have lived",
+    "explanation": "RULE: FUTURE PERFECT (will have + V3) is used for actions that will be COMPLETED before a specific future time. 'By next year' is the future reference point indicating completion.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "She _____ her homework before her mother came home.",
+    "options": ["has finished", "had finished", "finished", "was finishing"],
+    "answer": "had finished",
+    "explanation": "RULE: When TWO actions happened in the past, the EARLIER action uses Past Perfect (had + V3). Finishing homework happened BEFORE mother came home — so 'had finished'.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "The decision was made _____ the team and management.",
+    "options": ["between", "among", "by", "within"],
+    "answer": "between",
+    "explanation": "RULE: 'Between' is used for TWO parties/items or when distinct choices are specified. 'Among' is used for THREE or more (and for general groups). Team and management = two parties → 'between'.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "He was angry _____ me _____ my careless mistake.",
+    "options": ["with, for", "at, for", "on, for", "with, about"],
+    "answer": "with, for",
+    "explanation": "RULE: 'Angry with' = directed at a PERSON (angry with someone). 'Angry at' = directed at a THING or situation. 'Angry FOR' a reason/cause. So: angry WITH me FOR my mistake.",
+    "difficulty": "hard", "timeLimit": 20, "level": 3, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Fill in the Blank",
+    "questionText": "The minister _____ the problem rather than solving it.",
+    "options": ["sidestepped", "stepped aside", "stepped out", "walked away"],
+    "answer": "sidestepped",
+    "explanation": "RULE: VOCABULARY IN CONTEXT — 'Sidestep' means to avoid dealing with a problem cleverly (without confronting it directly). It is a common formal/editorial vocabulary word in bank exam passages.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","vocabulary","fill-blank"]
+  },
+  {
+    "gameType": "grammar", "topic": "Fill in the Blank",
+    "questionText": "The project was _____ due to lack of funding.",
+    "options": ["called off", "called upon", "called out", "called over"],
+    "answer": "called off",
+    "explanation": "RULE: PHRASAL VERBS — 'Call off' = cancel. 'Call upon' = request/appeal. 'Call out' = challenge or expose. 'Call over' = summon. 'The project was cancelled' → 'called off'.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","phrasal-verbs","fill-blank"]
+  },
+  {
+    "gameType": "grammar", "topic": "Fill in the Blank",
+    "questionText": "She _____ a remarkable resemblance to her grandmother.",
+    "options": ["bears", "carries", "holds", "shows"],
+    "answer": "bears",
+    "explanation": "RULE: COLLOCATIONS — 'Bear a resemblance' is the correct fixed expression. Common 'bear' collocations: bear resemblance, bear witness, bear fruit, bear responsibility, bear in mind.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","collocations","fill-blank"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "The more harder you work, the more better results you get.",
+      "The harder you work, the better results you get.",
+      "The more you work harder, the better you get results.",
+      "More harder you work, better results you get."
+    ],
+    "answer": "The harder you work, the better results you get.",
+    "explanation": "RULE: 'The + comparative...the + comparative' structure for showing proportional increase. Never use 'more' with short comparative adjectives (-er form). 'The harder, the better' — not 'more harder, more better'.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","sentence-correction","comparatives"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'She could not help but to cry when she heard the news.'",
+    "options": ["She could", "not help but", "to cry", "when she heard"],
+    "answer": "to cry",
+    "explanation": "RULE: 'Cannot/could not help but' must be followed by the BARE INFINITIVE (V1 without 'to'). Correct: 'could not help but CRY'. The 'to' after 'but' is incorrect here.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting"]
+  },
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "He was elected _____ president of the club unanimously.",
+    "options": ["a", "an", "the", "no article"],
+    "answer": "no article",
+    "explanation": "RULE: No article is used before a title/position when it follows 'elected/appointed/made/crowned/named/become' + singular office: elected president, appointed chairman, made captain.",
+    "difficulty": "hard", "timeLimit": 20, "level": 3, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Modals",
+    "questionText": "Children _____ respect their elders. (Moral obligation)",
+    "options": ["must", "should", "shall", "need"],
+    "answer": "should",
+    "explanation": "RULE: 'Should' = moral obligation or advice (less forceful). 'Must' = strict obligation or logical deduction. For expressing what is morally right or advisable, 'should' is appropriate.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","modals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Conjunctions",
+    "questionText": "He worked hard _____ failed the examination. (Choose the best conjunction)",
+    "options": ["but", "so", "and", "for"],
+    "answer": "but",
+    "explanation": "RULE: 'But' shows CONTRAST between two clauses — the expected result (passing) did not happen despite the cause (hard work). Use 'but' when the second clause is contrary to expectation.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","conjunctions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'I took part in the race but my younger brother won it.'",
+    "options": ["I took part", "in the race", "but my", "No error"],
+    "answer": "No error",
+    "explanation": "RULE: This sentence is GRAMMATICALLY CORRECT. 'Took part in' (correct phrasal verb), 'younger brother' (correct comparison — younger of two), 'won it' (correct). No error!",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","error-spotting"]
+  },
+  {
+    "gameType": "grammar", "topic": "Fill in the Blank",
+    "questionText": "The _____ of the Prime Minister's speech was well received by the media.",
+    "options": ["gist", "jest", "list", "mist"],
+    "answer": "gist",
+    "explanation": "RULE: VOCABULARY — 'Gist' means the main point or substance of something (the gist of a speech/letter = the main idea). Important bank exam word. 'Jest' = joke, 'Mist' = fog.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","vocabulary","fill-blank"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "I _____ my keys. I can't find them anywhere! (just happened)",
+    "options": ["lost", "have lost", "had lost", "am losing"],
+    "answer": "have lost",
+    "explanation": "RULE: Present Perfect (have/has + V3) is used when a past action has a PRESENT CONSEQUENCE. 'I have lost my keys' = the keys are still missing now. This connects past action to present situation.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "He has a flair _____ languages and is learning his fifth one.",
+    "options": ["for", "in", "of", "with"],
+    "answer": "for",
+    "explanation": "RULE: COLLOCATIONS with 'for': flair for, talent for, aptitude for, gift for, knack for, taste for, passion for. 'Flair for' = natural ability/talent for something.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","prepositions","collocations"]
+  },
+  {
+    "gameType": "grammar", "topic": "Active/Passive Voice",
+    "questionText": "Which is the CORRECT passive form of: 'They are building a new bridge.'",
+    "options": [
+      "A new bridge is built by them.",
+      "A new bridge has been built by them.",
+      "A new bridge is being built by them.",
+      "A new bridge was being built by them."
+    ],
+    "answer": "A new bridge is being built by them.",
+    "explanation": "RULE: Present Continuous Passive = is/am/are + being + V3. 'Are building' (active) → 'is being built' (passive). The tense marker moves to the auxiliary: are → is being.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","active-passive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "I could not find neither the book nor the pen.",
+      "I could not find either the book or the pen.",
+      "I could not find neither the book or the pen.",
+      "I could find neither the book nor the pen."
+    ],
+    "answer": "I could find neither the book nor the pen.",
+    "explanation": "RULE: 'Neither...nor' is already negative — do NOT add another negative word ('not'). Using 'could not...neither' creates a double negative. 'I could find NEITHER...NOR' is correct.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","sentence-correction","conjunctions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "The government _____ a new policy on education last week.",
+    "options": ["announces", "has announced", "announced", "will announce"],
+    "answer": "announced",
+    "explanation": "RULE: 'Last week' is a SPECIFIC past time expression — it requires SIMPLE PAST (announced). Present Perfect cannot be used with specific past time expressions (yesterday, last week, in 1990, ago).",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Fill in the Blank",
+    "questionText": "The new law will _____ from next month.",
+    "options": ["come into effect", "come to effect", "bring into effect", "come into affect"],
+    "answer": "come into effect",
+    "explanation": "RULE: IDIOM/COLLOCATION — 'Come into effect' (or 'come into force') = a law/rule becomes operative. 'Effect' (noun) vs 'Affect' (verb). 'Bring into effect' means someone else makes it happen.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","idioms","fill-blank"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'Ram and Shyam have each completed their project.'",
+    "options": ["Ram and Shyam", "have each completed", "their project", "No error"],
+    "answer": "No error",
+    "explanation": "RULE: When 'each' is used after a plural subject, the verb remains PLURAL ('have'), and 'their' is correct. This is different from 'Each of them HAS...'. 'Ram and Shyam have each' is grammatically correct.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "She has been absent _____ Monday.",
+    "options": ["since", "from", "for", "during"],
+    "answer": "since",
+    "explanation": "RULE: 'Since' is used with a POINT IN TIME (a specific moment when something started). 'Monday' is a specific point in time. 'For' is used with duration (for three days). Since Monday = from Monday until now.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "He is used to sleep early.",
+      "He is used to sleeping early.",
+      "He is used to slept early.",
+      "He used to sleeping early."
+    ],
+    "answer": "He is used to sleeping early.",
+    "explanation": "RULE: 'Be used to' = accustomed to, and is ALWAYS followed by a NOUN or GERUND (-ing). 'Is used to sleeping' = he is accustomed to it. Compare: 'Used to + infinitive' = past habit that no longer exists.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","sentence-correction","gerund-infinitive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Fill in the Blank",
+    "questionText": "The athlete's performance was _____ — she broke three world records.",
+    "options": ["phenomenal", "nominal", "minimal", "terminal"],
+    "answer": "phenomenal",
+    "explanation": "RULE: VOCABULARY — 'Phenomenal' = remarkably exceptional, extraordinary. It matches the context (breaking three world records). Bank exams test high-frequency adjectives in context.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","vocabulary","fill-blank"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "The jury _____ still out deliberating the verdict.",
+    "options": ["is", "are", "were", "have been"],
+    "answer": "is",
+    "explanation": "RULE: 'The jury is out' is a FIXED EXPRESSION meaning they're still deciding. Here 'jury' acts as one unit (singular). In general, collective nouns (jury, committee, team) take singular verbs.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "He is _____ European living in Asia.",
+    "options": ["a", "an", "the", "no article"],
+    "answer": "a",
+    "explanation": "RULE: 'European' begins with vowel letter 'E' but sounds like 'YOO-ropean' — starting with consonant sound 'y'. So use 'a'. Rule: It's about the SOUND, not the spelling. 'a European', 'a uniform', 'a one-way street'.",
+    "difficulty": "hard", "timeLimit": 20, "level": 3, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'He returned back to his village after ten years.'",
+    "options": ["He returned back", "to his village", "after ten years", "No error"],
+    "answer": "He returned back",
+    "explanation": "RULE: REDUNDANCY — 'Return' already means 'come/go back', so 'back' is unnecessary. Never say 'return back', 'revert back', 'repeat again', 're-enter again' — these are all redundant.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","error-spotting","redundancy"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'He availed the opportunity to speak in the conference.'",
+    "options": ["He availed", "the opportunity", "to speak in", "the conference"],
+    "answer": "He availed",
+    "explanation": "RULE: 'Avail' is used reflexively in Indian English: 'avail oneself OF'. Correct: 'He availed HIMSELF OF the opportunity'. Without the reflexive, use 'take advantage of' instead.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "I _____ in this office since 2018.",
+    "options": ["work", "worked", "have been working", "am working"],
+    "answer": "have been working",
+    "explanation": "RULE: PRESENT PERFECT CONTINUOUS (have/has been + V-ing) for an action that STARTED in the past and CONTINUES NOW. 'Since 2018' signals the start point of an ongoing action.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "Hardly did I enter the room than the lights went off.",
+      "Hardly had I entered the room when the lights went off.",
+      "Hardly I entered the room when the lights went off.",
+      "Hardly I had entered the room than the lights went off."
+    ],
+    "answer": "Hardly had I entered the room when the lights went off.",
+    "explanation": "RULE: 'Hardly/Scarcely + HAD + Subject + V3 + WHEN...' (Inversion required + Past Perfect + 'when'). 'Barely/Hardly/Scarcely' = use WHEN (not than). 'No sooner' = use THAN.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","sentence-correction","inversion"]
+  },
+  {
+    "gameType": "grammar", "topic": "Modals",
+    "questionText": "He _____ have reached by now — the flight was scheduled 2 hours ago.",
+    "options": ["should", "must", "could", "would"],
+    "answer": "should",
+    "explanation": "RULE: 'Should have + V3' = past expectation (we expected it to happen). 'Must have + V3' = strong logical certainty. Here we EXPECTED him to arrive (scheduled flight), so 'should have reached'.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","modals","perfect-modals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Fill in the Blank",
+    "questionText": "The two companies signed a _____ to jointly develop new technology.",
+    "options": ["memorandum", "memoranda", "memorial", "memoir"],
+    "answer": "memorandum",
+    "explanation": "RULE: VOCABULARY — 'Memorandum' (MOU = Memorandum of Understanding) = formal agreement document. Important business/formal vocabulary for bank exams. Plural = memoranda or memorandums.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","vocabulary","fill-blank"]
+  },
+  {
+    "gameType": "grammar", "topic": "Gerund/Infinitive",
+    "questionText": "She _____ to meet the deadline despite working overnight.",
+    "options": ["failed", "managed", "succeeded", "attempted"],
+    "answer": "failed",
+    "explanation": "RULE: Context clue — 'despite working overnight' shows effort but the deadline was NOT met. 'Fail + to + V1' = did not succeed. 'Managed/Succeeded' would mean she DID meet the deadline.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","gerund-infinitive","context"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "The cattle _____ grazing in the field when the storm came.",
+    "options": ["was", "were", "is", "has been"],
+    "answer": "were",
+    "explanation": "RULE: 'Cattle' is ALWAYS PLURAL and takes plural verbs. It has no singular form. Similarly: people, poultry, gentry, clergy, police are always plural. Never 'a cattle'.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "She plays _____ violin in _____ local orchestra.",
+    "options": ["the, a", "a, the", "the, the", "a, a"],
+    "answer": "the, a",
+    "explanation": "RULE 1: Use 'the' with musical instruments when playing them (play the violin/piano/guitar). RULE 2: 'A/an' for first mention of a countable noun when the listener doesn't know which specific one (a local orchestra — we haven't mentioned it before).",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "She was accompanied _____ her parents to the ceremony.",
+    "options": ["by", "with", "from", "through"],
+    "answer": "by",
+    "explanation": "RULE: 'Accompanied by' is the correct passive preposition. 'By' is used with passive voice to introduce the agent. Active: Her parents accompanied her → Passive: She was accompanied BY her parents.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'I had rather stay home than go out in this rain.'",
+    "options": ["I had rather", "stay home", "than go out", "in this rain"],
+    "answer": "I had rather",
+    "explanation": "RULE: The correct expression is 'WOULD rather' (not 'had rather'). 'Would rather + V1 + than + V1'. 'I would rather stay home than go out'. 'Had better' (advice) is different: 'You had better leave now'.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting","modals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "The teacher made the students to stand outside.",
+      "The teacher made the students stand outside.",
+      "The teacher made the students standing outside.",
+      "The teacher made the students stood outside."
+    ],
+    "answer": "The teacher made the students stand outside.",
+    "explanation": "RULE: CAUSATIVE VERBS — 'Make + object + bare infinitive (V1)'. Do NOT use 'to' after make/let/bid. 'Make someone DO something'. Similarly: 'Let him go', 'bid them stop'.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","sentence-correction","causative"]
+  },
+  {
+    "gameType": "grammar", "topic": "Conjunctions",
+    "questionText": "She is _____ tired _____ she cannot walk another step.",
+    "options": ["so, that", "such, that", "too, to", "very, that"],
+    "answer": "so, that",
+    "explanation": "RULE: 'So...that' with ADJECTIVES/ADVERBS: 'so + adj/adv + that'. 'Such...that' with NOUNS: 'such + a + noun + that'. 'She is so tired that...' (tired = adjective). 'It was such a good book that...' (book = noun).",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","conjunctions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "By the time you finish reading, I _____ dinner.",
+    "options": ["will cook", "cook", "will have cooked", "would have cooked"],
+    "answer": "will have cooked",
+    "explanation": "RULE: 'By the time + Simple Present' in future context → Future Perfect (will have + V3) in the main clause. The cooking will be COMPLETED before the future reading finishes.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","tenses","future-perfect"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'He is too honest man to tell a lie.'",
+    "options": ["He is", "too honest man", "to tell", "a lie"],
+    "answer": "too honest man",
+    "explanation": "RULE: 'Too + adjective + a + noun' is the correct order when modifying a noun. When 'too/such/so/as/how' modify adjectives before nouns, the structure is: too + adj + a/an + noun. Correct: 'too honest A MAN'.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Fill in the Blank",
+    "questionText": "The government has taken _____ measures to curb inflation.",
+    "options": ["stringent", "stringency", "stringing", "stringed"],
+    "answer": "stringent",
+    "explanation": "RULE: WORD FORM — 'Stringent' (adjective) = strict, precise, severe (often about rules/measures). Frequently used in bank exam contexts with: 'stringent measures/norms/regulations/action'.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","vocabulary","word-form","fill-blank"]
+  },
+  {
+    "gameType": "grammar", "topic": "Direct/Indirect Speech",
+    "questionText": "Change to Indirect: He said, 'I have been working here since 2015.'",
+    "options": [
+      "He said that he had been working there since 2015.",
+      "He said that he has been working there since 2015.",
+      "He said that he was working there since 2015.",
+      "He said that he had been working here since 2015."
+    ],
+    "answer": "He said that he had been working there since 2015.",
+    "explanation": "RULE: Present Perfect Continuous → Past Perfect Continuous in indirect speech. 'Has been working' → 'had been working'. 'Here' (speaker's place) → 'there' (in indirect speech). Year/dates don't change.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","narration","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Modals",
+    "questionText": "_____ I come in, sir? (Asking for permission politely)",
+    "options": ["Can", "May", "Shall", "Will"],
+    "answer": "May",
+    "explanation": "RULE: 'May' = formal/polite permission. 'Can' = informal permission or ability. In formal contexts (exam/office/formal speech), 'May I...?' is the appropriate form. 'Can' is less formal.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","modals"]
+  },
+  {
+    "gameType": "grammar", "topic": "Parts of Speech",
+    "questionText": "In 'She watched the sunrise from her window', which word is a COMPOUND NOUN?",
+    "options": ["sunrise", "window", "watched", "from"],
+    "answer": "sunrise",
+    "explanation": "RULE: COMPOUND NOUNS are formed by combining two or more words: sun + rise = sunrise. Other examples: bedroom, blackboard, airport, railway, moonlight, football, toothpaste, username.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","parts-of-speech","nouns"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "Seldom did she complain about her difficulties.",
+      "Seldom she complained about her difficulties.",
+      "Seldom she did complain about her difficulties.",
+      "Seldom has she complained never about her difficulties."
+    ],
+    "answer": "Seldom did she complain about her difficulties.",
+    "explanation": "RULE: Negative/limiting adverbs at the start (Seldom, Rarely, Never, Hardly, Scarcely, Little, Not only) cause SUBJECT-AUXILIARY INVERSION. 'Seldom + did + she + V1'. Question-like word order but it's a statement.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","sentence-correction","inversion"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "She was deprived _____ her right to education.",
+    "options": ["of", "from", "by", "with"],
+    "answer": "of",
+    "explanation": "RULE: 'Deprived of' = correct collocation. Important preposition collocations: deprived OF, proud OF, scared OF, fond OF, guilty OF, ashamed OF, afraid OF, capable OF — all use 'of'.",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","prepositions","collocations"]
+  },
+  {
+    "gameType": "grammar", "topic": "Conjunctions",
+    "questionText": "_____ the weather being bad, the match was played.",
+    "options": ["Despite", "Although", "Even though", "However"],
+    "answer": "Despite",
+    "explanation": "RULE: 'Despite / In spite of' are PREPOSITIONS (followed by noun/gerund). 'Although / Even though' are CONJUNCTIONS (followed by Subject + Verb clause). 'The weather being bad' = gerund phrase → use 'Despite'.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","conjunctions","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'Three-fourths of the work are completed.'",
+    "options": ["Three-fourths", "of the work", "are completed", "No error"],
+    "answer": "are completed",
+    "explanation": "RULE: With fractions, the verb agrees with the noun AFTER 'of'. 'Work' is an uncountable noun → singular verb. 'Three-fourths of the work IS completed'. If it were 'students': 'Three-fourths of the students ARE...'",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "It's time we _____ serious about our health.",
+    "options": ["get", "got", "have got", "should get"],
+    "answer": "got",
+    "explanation": "RULE: 'It is time' is ALWAYS followed by SIMPLE PAST in the clause, even though the meaning is present or future. This is the subjunctive mood expressing urgency. 'It is time we GOT serious'.",
+    "difficulty": "hard", "timeLimit": 20, "level": 3, "tags": ["bank-exam","tenses","subjunctive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Fill in the Blank",
+    "questionText": "His _____ approach to the problem impressed the committee.",
+    "options": ["pragmatic", "dogmatic", "erratic", "dramatic"],
+    "answer": "pragmatic",
+    "explanation": "RULE: VOCABULARY IN CONTEXT — 'Pragmatic' = dealing with practical matters based on facts rather than abstract ideas. 'Impressed the committee' suggests a positive, sensible approach = pragmatic.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","vocabulary","fill-blank"]
+  },
+  {
+    "gameType": "grammar", "topic": "Active/Passive Voice",
+    "questionText": "Convert to Active: 'He is known to be an honest man.'",
+    "options": [
+      "People know he is an honest man.",
+      "People know him to be an honest man.",
+      "He knows to be an honest man.",
+      "An honest man is known as him."
+    ],
+    "answer": "People know him to be an honest man.",
+    "explanation": "RULE: 'Is known to be' (passive) → 'People know him to be' (active). When converting impersonal passives to active, 'People' or 'They' is often used as the active subject.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","active-passive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'Being a rainy day, we stayed indoors.'",
+    "options": ["Being a rainy day", "we stayed", "indoors", "No error"],
+    "answer": "Being a rainy day",
+    "explanation": "RULE: DANGLING MODIFIER — the participial phrase 'Being a rainy day' must logically modify the subject of the main clause ('we'). But 'we' is not 'a rainy day'. Correct: 'As it was a rainy day, we stayed indoors.'",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","error-spotting","participle"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "She is junior than me by two years.",
+      "She is junior to me by two years.",
+      "She is more junior than me by two years.",
+      "She is junior from me by two years."
+    ],
+    "answer": "She is junior to me by two years.",
+    "explanation": "RULE: Latin-origin comparatives (senior, junior, superior, inferior, prior, anterior, posterior) take 'to' — NOT 'than'. Never say 'more senior/more junior'. Always: senior TO, junior TO, superior TO.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","sentence-correction","comparatives"]
+  },
+  {
+    "gameType": "grammar", "topic": "Gerund/Infinitive",
+    "questionText": "The factory workers threatened _____ if their demands were not met.",
+    "options": ["to strike", "striking", "of striking", "for striking"],
+    "answer": "to strike",
+    "explanation": "RULE: 'Threaten' is followed by INFINITIVE (to + V1). 'Threaten to do something'. Similar pattern: promise to, decide to, refuse to, agree to, demand to, intend to.",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","gerund-infinitive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Fill in the Blank",
+    "questionText": "The court's decision to _____ the sentence was hailed by activists.",
+    "options": ["commute", "commit", "communicate", "commemorate"],
+    "answer": "commute",
+    "explanation": "RULE: VOCABULARY — 'Commute' (legal term) = reduce the severity of a sentence without cancelling it. E.g., death penalty commuted to life imprisonment. Frequently appears in bank exam reading passages.",
+    "difficulty": "hard", "timeLimit": 20, "level": 3, "tags": ["bank-exam","vocabulary","fill-blank"]
+  },
+  {
+    "gameType": "grammar", "topic": "Subject-Verb Agreement",
+    "questionText": "Not only the principal but also the teachers _____ responsible.",
+    "options": ["is", "are", "was", "has been"],
+    "answer": "are",
+    "explanation": "RULE: 'Not only...but also' — verb agrees with the subject NEARER to it. 'Teachers' (plural) is closer to the verb → 'are'. Same rule applies for 'Either...or' and 'Neither...nor'.",
+    "difficulty": "hard", "timeLimit": 20, "level": 3, "tags": ["bank-exam","subject-verb"]
+  },
+  {
+    "gameType": "grammar", "topic": "Articles",
+    "questionText": "She is _____ only woman in the department who speaks Japanese.",
+    "options": ["a", "an", "the", "no article"],
+    "answer": "the",
+    "explanation": "RULE: 'The' is used before a noun made UNIQUE/SPECIFIC by the context. 'The only woman' — 'only' makes her a unique, specific person in the context. Similarly: the first, the last, the same, the very.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","articles"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'The sceneries of Himachal Pradesh are breathtaking.'",
+    "options": ["The sceneries", "of Himachal Pradesh", "are breathtaking", "No error"],
+    "answer": "The sceneries",
+    "explanation": "RULE: UNCOUNTABLE NOUNS have no plural form: scenery, furniture, equipment, information, advice, luggage, baggage, news, work, money, research, poetry. Correct: 'The SCENERY of Himachal Pradesh IS breathtaking'.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","error-spotting","countable-uncountable"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "The exhibition _____ next Saturday. (Official scheduled event)",
+    "options": ["will open", "is opening", "opens", "would open"],
+    "answer": "opens",
+    "explanation": "RULE: SCHEDULED/TIMETABLED FUTURE — Simple Present can be used for officially scheduled future events (trains, flights, exhibitions, matches). 'The train leaves at 9', 'The exhibition opens next Saturday'.",
+    "difficulty": "hard", "timeLimit": 20, "level": 3, "tags": ["bank-exam","tenses"]
+  },
+  {
+    "gameType": "grammar", "topic": "Prepositions",
+    "questionText": "He lives _____ the fifth floor of the building.",
+    "options": ["on", "at", "in", "above"],
+    "answer": "on",
+    "explanation": "RULE: 'On' is used with floors of a building (on the ground floor, on the fifth floor). 'At' is used for specific addresses (at 5 Main Street). 'In' is used for towns/cities/rooms (in the room, in Delhi).",
+    "difficulty": "easy", "timeLimit": 15, "level": 1, "tags": ["bank-exam","prepositions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Sentence Correction",
+    "questionText": "Choose the CORRECT sentence:",
+    "options": [
+      "Owing to his dishonesty, therefore, nobody trusts him.",
+      "Since he is dishonest, therefore, nobody trusts him.",
+      "He is dishonest; therefore, nobody trusts him.",
+      "Because he is dishonest, therefore nobody trusts him."
+    ],
+    "answer": "He is dishonest; therefore, nobody trusts him.",
+    "explanation": "RULE: Do NOT use 'therefore' together with 'because/since/owing to'. These are redundant pairs. 'Because' already shows cause-effect; 'therefore' is unnecessary. Use either one, not both.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","sentence-correction","conjunctions"]
+  },
+  {
+    "gameType": "grammar", "topic": "Fill in the Blank",
+    "questionText": "The RBI has decided to _____ interest rates to control inflation.",
+    "options": ["hike", "heave", "haul", "hale"],
+    "answer": "hike",
+    "explanation": "RULE: BANKING VOCABULARY — 'Hike' = increase (especially used for rates, prices, taxes). 'Hike interest rates' is standard financial/banking terminology used frequently in bank exam passages and GK sections.",
+    "difficulty": "medium", "timeLimit": 18, "level": 2, "tags": ["bank-exam","banking-vocabulary","fill-blank"]
+  },
+  {
+    "gameType": "grammar", "topic": "Error Spotting",
+    "questionText": "Identify the ERROR: 'I was surprised at his behave during the meeting.'",
+    "options": ["I was surprised at", "his behave", "during the meeting", "No error"],
+    "answer": "his behave",
+    "explanation": "RULE: WORD FORM — 'Behave' is a VERB; the NOUN form is 'behaviour' (British) / 'behavior' (American). Correct: 'his BEHAVIOUR during the meeting'. Never use a verb where a noun is needed after a possessive.",
+    "difficulty": "medium", "timeLimit": 20, "level": 2, "tags": ["bank-exam","error-spotting","word-form"]
+  },
+  {
+    "gameType": "grammar", "topic": "Gerund/Infinitive",
+    "questionText": "The doctor advised him _____ smoking immediately.",
+    "options": ["to quit", "quit", "quitting", "for quitting"],
+    "answer": "to quit",
+    "explanation": "RULE: 'Advise + object + to + V1' is the correct pattern. 'Advise someone to do something'. Without object: 'advise + gerund'. 'The doctor advised him TO QUIT' (with object = infinitive follows).",
+    "difficulty": "easy", "timeLimit": 18, "level": 1, "tags": ["bank-exam","gerund-infinitive"]
+  },
+  {
+    "gameType": "grammar", "topic": "Tenses",
+    "questionText": "No sooner _____ the news than she burst into tears.",
+    "options": ["she heard", "did she hear", "had she heard", "she had heard"],
+    "answer": "had she heard",
+    "explanation": "RULE: 'No sooner + HAD + Subject + V3 + THAN...' (Past Perfect + Inversion). 'No sooner' always uses Past Perfect and INVERSION. The structure requires: No sooner + had + subject + past participle.",
+    "difficulty": "hard", "timeLimit": 22, "level": 3, "tags": ["bank-exam","tenses","inversion"]
+  }
+]

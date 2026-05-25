@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 
 const questionSchema = new mongoose.Schema({
-  gameType:     { type: String, required: true, enum: ['calculation', 'series', 'vocab', 'syllogism', 'survival'] },
+  gameType:     { type: String, required: true, enum: ['calculation', 'series', 'vocab', 'syllogism', 'survival', 'grammar'] },
   questionText: { type: String, required: true },
   options:      { type: [String], required: true },
   answer:       { type: String, required: true },

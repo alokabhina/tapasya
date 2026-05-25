@@ -69,7 +69,7 @@ router.get('/questions/:type', async (req, res) => {
     const level    = parseInt(req.query.level) || 1
     const size     = parseInt(req.query.size)  || 20
 
-    const validTypes = ['calculation', 'series', 'vocab', 'syllogism', 'survival']
+    const validTypes = ['calculation', 'series', 'vocab', 'syllogism', 'survival', 'grammar']
     if (!validTypes.includes(type)) return res.status(400).json({ error: 'Invalid game type' })
 
     const profile   = await getOrCreateProfile(req.user.id)
@@ -203,7 +203,7 @@ router.get('/profile', async (req, res) => {
 router.get('/stats/:type', async (req, res) => {
   try {
     const { type } = req.params
-    const validTypes = ['calculation', 'series', 'vocab', 'syllogism', 'survival']
+    const validTypes = ['calculation', 'series', 'vocab', 'syllogism', 'survival', 'grammar']
     if (!validTypes.includes(type)) return res.status(400).json({ error: 'Invalid game type' })
 
     const [profile, sessions] = await Promise.all([

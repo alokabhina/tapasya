@@ -58,6 +58,7 @@ export async function sendGroupMessage(groupId, text) {
   const { data } = await api.post(`/groups/${groupId}/messages`, { text })
   return data
 }
+
 export async function sendHeartbeat(groupId, { isStudying, subjectName, subjectColor, elapsed }) {
   await api.put(`/groups/${groupId}/heartbeat`, { isStudying, subjectName, subjectColor, elapsed })
 }
@@ -68,5 +69,10 @@ export async function sendOffline(groupId) {
 
 export async function fetchMemberTodos(groupId, userId) {
   const { data } = await api.get(`/groups/${groupId}/members/${userId}/todos`)
+  return data
+}
+
+export async function fetchGroupDailySummary(groupId) {
+  const { data } = await api.get(`/groups/${groupId}/daily-summary`)
   return data
 }

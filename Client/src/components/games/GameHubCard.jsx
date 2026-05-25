@@ -11,6 +11,7 @@ const GAME_ROUTES = {
   vocab:       '/games/vocab',
   syllogism:   '/games/syllogism',
   survival:    '/games/survival',
+  grammar:     '/games/grammar',
 }
 
 export default function GameHubCard({ gameType, stats = {} }) {
