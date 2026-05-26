@@ -660,6 +660,16 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  // Auto-refresh home stats when a timer session is saved
+  useEffect(() => {
+    function onSessionSaved() {
+      // Small delay so DB write completes before we read
+      setTimeout(() => reloadSubjects(), 400);
+    }
+    window.addEventListener('tapasya:session-saved', onSessionSaved);
+    return () => window.removeEventListener('tapasya:session-saved', onSessionSaved);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Close notification panel on outside click
   useEffect(() => {
     function handleClick(e) { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotif(false); }

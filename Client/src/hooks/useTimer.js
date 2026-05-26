@@ -77,6 +77,26 @@ export function useTimer() {
     }
   }, [])
 
+  // Re-sync elapsed from wall-clock when tab becomes visible again
+  // (browser throttles workers in background tabs — this corrects drift)
+  useEffect(() => {
+    function onVisible() {
+      const s = useTimerStore.getState()
+      if (!s.isRunning || s.isPaused || !s.sessionStartTime) return
+      // Recalculate elapsed from wall-clock start time
+      const wallElapsed = Math.round((Date.now() - new Date(s.sessionStartTime).getTime()) / 1000)
+      // Only update if wall-clock is significantly ahead (>5s drift) — means worker was throttled
+      if (wallElapsed > s.elapsed + 5) {
+        useTimerStore.getState().setElapsed(wallElapsed)
+        getWorker().postMessage({ type: 'RESUME', payload: { elapsed: wallElapsed } })
+      }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') onVisible()
+    })
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
   // ── start ─────────────────────────────────────────────────────────────────
   // ── heartbeat to group (timer chal raha ho tab) ──────────────────────────
   const heartbeatRef = useRef(null)
@@ -112,11 +132,59 @@ export function useTimer() {
     }).catch(() => {})
   }
 
+  // ── checkpoint auto-save (every 60s) ────────────────────────────────────
+  // Saves a partial session to IndexedDB every minute so data is never lost
+  // if the tab crashes or is killed. On real stop(), full save happens as usual.
+  const checkpointRef = useRef(null)
+  const lastCheckpointElapsed = useRef(0)
+
+  function startCheckpoint(subject) {
+    clearInterval(checkpointRef.current)
+    lastCheckpointElapsed.current = 0
+    checkpointRef.current = setInterval(async () => {
+      const s = useTimerStore.getState()
+      if (!s.isRunning || s.isPaused) return
+      const newElapsed = s.elapsed
+      const delta = newElapsed - lastCheckpointElapsed.current
+      if (delta < 30) return // min 30s increment worth saving
+      lastCheckpointElapsed.current = newElapsed
+
+      // Save incremental seconds to offline DB only (no server spam)
+      try {
+        const { saveSessionOffline } = await import('@/utils/offlineDB')
+        const id = `checkpoint_${Date.now()}`
+        const now = new Date().toISOString()
+        const pad = n => String(n).padStart(2, '0')
+        const d = new Date()
+        const date = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+        await saveSessionOffline({
+          id,
+          subjectId:    s.subjectId,
+          subjectName:  s.subjectName,
+          subjectColor: s.subjectColor,
+          startTime:    s.sessionStartTime,
+          endTime:      now,
+          duration:     newElapsed,
+          date,
+          notes:        '',
+          _checkpoint:  true, // marked so real save can replace it
+        })
+      } catch (_) {}
+    }, 60_000) // every 60 seconds
+  }
+
+  function stopCheckpoint() {
+    clearInterval(checkpointRef.current)
+    checkpointRef.current = null
+    lastCheckpointElapsed.current = 0
+  }
+
   const start = useCallback((subject) => {
     _workerRunning = true
     _saveInProgress = false
     store.start(subject)
     getWorker().postMessage({ type: 'START', payload: { elapsed: 0 } })
+    startCheckpoint(subject)
     startHeartbeat()
     // SW ko directly batao — no useEffect race condition
     const { dailyGoalSeconds } = useUserStore.getState()
@@ -151,6 +219,7 @@ export function useTimer() {
     getWorker().postMessage({ type: 'STOP' })
     _workerRunning = false
     stopHeartbeat()
+    stopCheckpoint()
     swPost({ type: 'TIMER_STOP' })
 
     const endTime   = new Date().toISOString()
@@ -208,6 +277,16 @@ export function useTimer() {
     if (uid && totalSaved > 0) {
       window.dispatchEvent(new CustomEvent('tapasya:session-saved', { detail: { seconds: totalSaved } }))
     }
+
+    // Clean up any checkpoint records for this session (real save succeeded)
+    try {
+      const { getSessionsOffline, deleteSessionOffline } = await import('@/utils/offlineDB')
+      const all = await getSessionsOffline()
+      const checkpoints = all.filter(s => s._checkpoint)
+      for (const cp of checkpoints) {
+        await deleteSessionOffline(cp.id || cp._id).catch(() => {})
+      }
+    } catch (_) {}
 
     store.reset()
     _saveInProgress = false
