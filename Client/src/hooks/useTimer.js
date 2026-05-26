@@ -272,9 +272,20 @@ export function useTimer() {
       }
     }
 
-    // Group leaderboard update — custom event dispatch karo
-    // useGroup hook ka addSessionHours handle karega (sare groups ke liye)
+    // Group leaderboard update — directly update hours + dispatch event for UI refresh
     if (uid && totalSaved > 0) {
+      // Directly call updateMemberHours here — don't rely on StudyGroup page being mounted.
+      // useGroup's event listener only works when StudyGroup.jsx is open; this ensures
+      // weeklySeconds/totalSeconds are always updated regardless of which page is active.
+      try {
+        const { fetchMyGroups, updateMemberHours } = await import('@/api/groups')
+        const myGroups = await fetchMyGroups()
+        for (const g of myGroups) {
+          updateMemberHours(g._id, totalSaved).catch(() => {})
+        }
+      } catch (_) {}
+
+      // Also dispatch event so StudyGroup UI can re-poll / refresh if it's open
       window.dispatchEvent(new CustomEvent('tapasya:session-saved', { detail: { seconds: totalSaved } }))
     }
 

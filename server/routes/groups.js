@@ -190,6 +190,16 @@ router.put('/:id/hours', async (req, res) => {
     if (!addSeconds || addSeconds <= 0) return res.json({ ok: true })
     const group = await Group.findById(req.params.id)
     if (!group) return res.status(404).json({ error: 'Group not found' })
+
+    // Weekly reset — agar last reset 7+ din pehle tha toh sab ka weeklySeconds 0 karo
+    const now = new Date()
+    const lastReset = group.weeklyResetAt || group.createdAt || now
+    const daysSinceReset = (now - lastReset) / (1000 * 60 * 60 * 24)
+    if (daysSinceReset >= 7) {
+      group.members.forEach(m => { m.weeklySeconds = 0 })
+      group.weeklyResetAt = now
+    }
+
     const member = group.members.find(m => m.userId.toString() === req.user.id)
     if (member) {
       member.weeklySeconds = (member.weeklySeconds || 0) + addSeconds
