@@ -7,19 +7,22 @@ export function formatDuration(seconds) {
   return [h, m, sec].map((v) => String(v).padStart(2, '0')).join(':')
 }
 
-// Seconds ko "2.5h" format mein convert karo
+// Seconds ko readable format mein convert karo: 6m, 1h, 1h 30m
+// (replaces old "0.1h" style — ab human-readable hai)
 export function formatHours(seconds) {
-  const h = seconds / 3600
-  return h % 1 === 0 ? `${h}h` : `${h.toFixed(1)}h`
-}
-
-// Seconds ko "1h 30m" format mein convert karo (Stats display ke liye)
-export function formatHumanDuration(seconds) {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds || 0)
+  if (s <= 0) return '0m'
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  if (s < 60) return `${s}s`
   if (h === 0) return `${m}m`
   if (m === 0) return `${h}h`
   return `${h}h ${m}m`
+}
+
+// Alias — same as formatHours now (kept for backward compat)
+export function formatHumanDuration(seconds) {
+  return formatHours(seconds)
 }
 
 // Date object ko "YYYY-MM-DD" string mein convert karo

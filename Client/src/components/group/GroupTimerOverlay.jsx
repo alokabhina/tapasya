@@ -130,12 +130,11 @@ function LeaderboardRow({ member, rank, isCurrentUser, currentElapsed }) {
   const rankColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
   const rankColor  = rank <= 3 ? rankColors[rank - 1] : '#475569';
   const name       = isCurrentUser ? 'You' : (member.displayName?.split(' ')[0] || 'Member');
-  // Leaderboard: weeklySeconds for ranking, liveElapsed as live bonus display
-  const weekSec    = isCurrentUser ? (member.weeklySeconds || 0) : (member.weeklySeconds || 0);
-  const seconds    = weekSec; // rank by weekly hours
+  const weekSec    = member.weeklySeconds || 0;
+  const liveElapsed = isCurrentUser ? (currentElapsed || 0) : (member.liveElapsed || 0);
   const isStudying = isCurrentUser || Boolean(member.isStudying);
-  const maxSec     = 8 * 3600; // bar relative to 8h
-  const barPct     = Math.min((seconds / maxSec) * 100, 100);
+  const maxSec     = 8 * 3600;
+  const barPct     = Math.min((weekSec / maxSec) * 100, 100);
 
   return (
     <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all
@@ -149,24 +148,28 @@ function LeaderboardRow({ member, rank, isCurrentUser, currentElapsed }) {
       {/* Status dot */}
       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isStudying ? 'bg-green-400 animate-pulse' : 'bg-slate-700'}`} />
 
-      {/* Name */}
-      <span className="flex-1 text-xs font-semibold truncate"
-        style={{ color: isStudying ? '#e2e8f0' : '#64748b' }}>
-        {name}
-        {isCurrentUser && <span className="ml-1 text-[9px] text-orange-400">(you)</span>}
-      </span>
+      {/* Name + live session time */}
+      <div className="flex-1 min-w-0">
+        <span className="text-xs font-semibold truncate block"
+          style={{ color: isStudying ? '#e2e8f0' : '#64748b' }}>
+          {name}
+        </span>
+        {isStudying && liveElapsed > 0 && (
+          <span className="text-[10px] text-green-400 font-mono">{formatDuration(liveElapsed)} session</span>
+        )}
+      </div>
 
-      {/* Bar + time */}
+      {/* Weekly bar + time */}
       <div className="flex items-center gap-2 flex-shrink-0">
-        <div className="w-16 sm:w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+        <div className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-full overflow-hidden">
           <div className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${Math.max(barPct, 1)}%`,
+            style={{ width: `${Math.max(barPct, weekSec > 0 ? 3 : 0)}%`,
               backgroundColor: isStudying ? '#f97316' : '#334155',
               boxShadow: isStudying ? '0 0 4px #f9731660' : 'none' }} />
         </div>
         <span className="text-[11px] font-mono w-14 text-right"
           style={{ color: isStudying ? 'white' : '#475569' }}>
-          {seconds > 0 ? formatHumanDuration(seconds) : '—'}
+          {weekSec > 0 ? formatHours(weekSec) : '—'}
         </span>
       </div>
     </div>
@@ -216,14 +219,7 @@ export default function GroupTimerOverlay({ onClose }) {
     if (!activeGroup?._id) return;
     try {
       const data = await fetchGroupMembers(activeGroup._id);
-      const enriched = data.map((m) => ({
-        ...m,
-        // Server heartbeat handles isStudying — no fallback needed
-        isStudying:  Boolean(m.isStudying),
-        // liveElapsed = current session seconds from server heartbeat
-        liveElapsed: m.liveElapsed || 0,
-      }));
-      setMembers(enriched);
+      setMembers(data);
     } catch (e) { console.error(e); }
   }
 
