@@ -1,127 +1,135 @@
 // src/components/group/GroupCard.jsx
-// Grid card for a group — auto avatar/thumbnail from name, basic stats
+// Mobile-first group card with real data display
 
-import { formatHours } from '../../utils/time';
+import { formatHumanDuration } from '../../utils/time';
 import useUserStore from '../../store/userStore';
 
-// Generate a consistent gradient + emoji from group name
 const GRADIENTS = [
-  ['#f97316', '#dc2626'], // orange-red
-  ['#8b5cf6', '#ec4899'], // purple-pink
-  ['#06b6d4', '#3b82f6'], // cyan-blue
-  ['#10b981', '#059669'], // emerald
-  ['#f59e0b', '#f97316'], // amber-orange
-  ['#ef4444', '#f97316'], // red-orange
-  ['#6366f1', '#8b5cf6'], // indigo-purple
-  ['#14b8a6', '#10b981'], // teal-emerald
+  ['#f97316', '#dc2626'],
+  ['#8b5cf6', '#ec4899'],
+  ['#06b6d4', '#3b82f6'],
+  ['#10b981', '#059669'],
+  ['#f59e0b', '#f97316'],
+  ['#ef4444', '#f97316'],
+  ['#6366f1', '#8b5cf6'],
+  ['#14b8a6', '#10b981'],
 ];
 
 function getGroupStyle(name) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  const idx = Math.abs(hash) % GRADIENTS.length;
-  return GRADIENTS[idx];
+  return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
 }
 
-function GroupAvatar({ name, size = 'lg' }) {
+function GroupAvatar({ name }) {
   const [from, to] = getGroupStyle(name);
-  // Extract emoji if name starts with one
   const emojiMatch = name.match(/^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)/u);
   const emoji = emojiMatch ? emojiMatch[0] : null;
   const initials = !emoji ? name.replace(/[^\w\s]/g, '').trim().slice(0, 2).toUpperCase() : null;
-  const sz = size === 'lg' ? 'w-14 h-14 text-2xl' : 'w-10 h-10 text-lg';
   return (
-    <div className={`${sz} rounded-2xl flex items-center justify-center flex-shrink-0 font-bold`}
+    <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-xl"
       style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
       {emoji || initials}
     </div>
   );
 }
 
-export default function GroupCard({ group, members = [], onClick }) {
+export default function GroupCard({ group, onClick }) {
   const { uid } = useUserStore();
   const isAdmin = group.ownerUserId?.toString() === uid?.toString();
+  const allMembers = group.members || [];
 
-  // Find current user's stats in this group
-  const myMember = (group.members || members).find(m => m.userId?.toString() === uid?.toString());
+  // Current user's data
+  const myMember = allMembers.find(m => m.userId?.toString() === uid?.toString());
   const myWeekly = myMember?.weeklySeconds || 0;
 
-  // Top 3 members by weekly hours
-  const top3 = [...(group.members || [])].sort((a, b) => (b.weeklySeconds || 0) - (a.weeklySeconds || 0)).slice(0, 3);
-  const totalWeekly = (group.members || []).reduce((s, m) => s + (m.weeklySeconds || 0), 0);
+  // Group aggregate stats
+  const totalWeekly = allMembers.reduce((s, m) => s + (m.weeklySeconds || 0), 0);
+  const studyingNow = allMembers.filter(m => m.isStudying).length;
+
+  // Top 3 by weekly
+  const top3 = [...allMembers]
+    .sort((a, b) => (b.weeklySeconds || 0) - (a.weeklySeconds || 0))
+    .slice(0, 3);
 
   const [from, to] = getGroupStyle(group.name);
+  const memberCount = group.memberCount || allMembers.length;
 
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-[#111827] border border-[#1e2d42] rounded-2xl overflow-hidden hover:border-orange-500/40 transition-all duration-200 active:scale-[0.98] group"
+      className="w-full text-left bg-[#111827] border border-[#1e2d42] rounded-2xl overflow-hidden
+                 hover:border-orange-500/40 transition-all duration-200 active:scale-[0.98] group"
     >
-      {/* Top gradient bar */}
-      <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${from}, ${to})` }} />
+      {/* Gradient accent bar */}
+      <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${from}, ${to})` }} />
 
       <div className="p-4">
-        {/* Header row */}
-        <div className="flex items-start gap-3 mb-3">
-          <GroupAvatar name={group.name} size="lg" />
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-3">
+          <GroupAvatar name={group.name} />
           <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="text-sm font-bold text-white truncate leading-tight">{group.name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-white truncate">{group.name}</h3>
               {isAdmin && (
-                <span className="text-[8px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded-full font-bold flex-shrink-0">
-                  ADMIN
+                <span className="text-[8px] bg-orange-500/20 text-orange-400 border border-orange-500/30
+                                 px-1.5 py-0.5 rounded-full font-bold flex-shrink-0">ADMIN</span>
+              )}
+            </div>
+            <div className="flex items-center gap-3 mt-0.5">
+              <span className="text-[11px] text-slate-500">{memberCount} members</span>
+              {studyingNow > 0 && (
+                <span className="flex items-center gap-1 text-[11px] text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
+                  {studyingNow} active
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {group.memberCount || (group.members || []).length} members
-            </p>
-            {/* Group total study this week */}
-            <p className="text-xs text-slate-400 mt-1 font-mono">
-              <span style={{ color: from }}>{formatHours(totalWeekly)}</span>
-              <span className="text-slate-600"> group total</span>
-            </p>
+          </div>
+          <i className="ti ti-chevron-right text-slate-700 text-sm group-hover:text-slate-400 transition-colors" />
+        </div>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="bg-[#0a1628] rounded-xl px-3 py-2">
+            <div className="text-[10px] text-slate-600 mb-0.5">My week</div>
+            <div className="text-sm font-bold font-mono" style={{ color: myWeekly > 0 ? from : '#475569' }}>
+              {myWeekly > 0 ? formatHumanDuration(myWeekly) : '—'}
+            </div>
+          </div>
+          <div className="bg-[#0a1628] rounded-xl px-3 py-2">
+            <div className="text-[10px] text-slate-600 mb-0.5">Group total</div>
+            <div className="text-sm font-bold font-mono" style={{ color: totalWeekly > 0 ? from : '#475569' }}>
+              {totalWeekly > 0 ? formatHumanDuration(totalWeekly) : '—'}
+            </div>
           </div>
         </div>
 
-        {/* My stats bar */}
-        <div className="bg-[#0a1628] rounded-xl px-3 py-2 mb-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-slate-600 font-medium">My time this week</span>
-            <span className="text-[10px] font-mono font-semibold" style={{ color: from }}>
-              {formatHours(myWeekly)}
-            </span>
-          </div>
-        </div>
-
-        {/* Top 3 member avatars */}
+        {/* Top members */}
         {top3.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-slate-600 mr-1">Top:</span>
-            {top3.map((m, i) => (
-              <div key={m.userId || i} className="relative">
-                <div className="w-6 h-6 rounded-full overflow-hidden bg-[#1e293b] border border-[#334155] flex items-center justify-center">
-                  {m.photoURL
-                    ? <img src={m.photoURL} alt="" className="w-full h-full object-cover" />
-                    : <span className="text-[8px] font-bold text-slate-400">{(m.displayName || '?')[0].toUpperCase()}</span>
-                  }
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-slate-600">Top:</span>
+            <div className="flex items-center gap-1.5">
+              {top3.map((m, i) => (
+                <div key={m.userId || i} className="relative">
+                  <div className="w-6 h-6 rounded-full overflow-hidden bg-[#1e293b] border border-[#334155]
+                                  flex items-center justify-center">
+                    {m.photoURL
+                      ? <img src={m.photoURL} alt="" className="w-full h-full object-cover" />
+                      : <span className="text-[8px] font-bold text-slate-400">
+                          {(m.displayName || '?')[0].toUpperCase()}
+                        </span>
+                    }
+                  </div>
+                  {i === 0 && <span className="absolute -top-1 -right-1 text-[8px]">🥇</span>}
                 </div>
-                {i === 0 && <span className="absolute -top-1 -right-1 text-[8px]">🥇</span>}
-              </div>
-            ))}
-            {(group.memberCount || (group.members || []).length) > 3 && (
-              <span className="text-[10px] text-slate-600">+{(group.memberCount || (group.members || []).length) - 3} more</span>
-            )}
+              ))}
+              {memberCount > 3 && (
+                <span className="text-[10px] text-slate-600">+{memberCount - 3}</span>
+              )}
+            </div>
           </div>
         )}
-      </div>
-
-      {/* Bottom action hint */}
-      <div className="px-4 pb-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-slate-700">Tap to open</span>
-          <i className="ti ti-chevron-right text-slate-700 text-xs group-hover:text-slate-500 transition-colors" />
-        </div>
       </div>
     </button>
   );

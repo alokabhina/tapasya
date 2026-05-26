@@ -1,31 +1,54 @@
 // src/components/group/GroupDetailView.jsx
-// Full group detail page: tabs for Leaderboard, Chat, Members, Settings
+// Full group detail — mobile-first, tabs: Rankings, Stats, Chat, Members, Invite
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import GroupLeaderboard from './GroupLeaderboard';
 import GroupChat from './GroupChat';
 import InviteCode from './InviteCode';
 import Avatar from '../ui/Avatar';
-import { formatHours } from '../../utils/time';
+import { formatHumanDuration } from '../../utils/time';
 import GroupStatsTab from './GroupStatsTab';
 import useUserStore from '../../store/userStore';
+import { fetchGroupMembers } from '../../api/groups';
 
 const TABS = [
-  { key: 'leaderboard', icon: 'ti-trophy',          label: 'Rankings' },
-  { key: 'stats',       icon: 'ti-chart-bar',        label: 'Stats'    },
-  { key: 'chat',        icon: 'ti-message-circle',   label: 'Chat'     },
-  { key: 'members',     icon: 'ti-users',            label: 'Members'  },
-  { key: 'invite',      icon: 'ti-user-plus',        label: 'Invite'   },
+  { key: 'leaderboard', icon: 'ti-trophy',        label: 'Rankings' },
+  { key: 'stats',       icon: 'ti-chart-bar',      label: 'Stats'    },
+  { key: 'chat',        icon: 'ti-message-circle', label: 'Chat'     },
+  { key: 'members',     icon: 'ti-users',          label: 'Members'  },
+  { key: 'invite',      icon: 'ti-user-plus',      label: 'Invite'   },
 ];
 
-export default function GroupDetailView({ group, members, onLeave, onDelete, onKick, onBack }) {
+export default function GroupDetailView({ group, members: initialMembers, onLeave, onDelete, onKick, onBack }) {
   const { uid, displayName: liveDisplayName, photoURL: livePhotoURL } = useUserStore();
   const [tab, setTab] = useState('leaderboard');
+  const [members, setMembers] = useState(initialMembers || []);
   const [kickConfirm, setKickConfirm] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const pollRef = useRef(null);
 
-  // Inject live name/photo for current user row so it updates instantly
+  // Poll members every 8s for live presence
+  useEffect(() => {
+    if (!group?._id) return;
+    let active = true;
+
+    async function poll() {
+      try {
+        const data = await fetchGroupMembers(group._id);
+        if (active) setMembers(data);
+      } catch (_) {}
+    }
+
+    poll();
+    pollRef.current = setInterval(poll, 8000);
+    return () => { active = false; clearInterval(pollRef.current); };
+  }, [group?._id]);
+
+  // Sync from parent when initialMembers changes
+  useEffect(() => { setMembers(initialMembers || []); }, [initialMembers]);
+
+  // Enrich current user row
   const enrichedMembers = members.map((m) =>
     m.userId?.toString() === uid?.toString()
       ? { ...m, displayName: liveDisplayName || m.displayName, photoURL: livePhotoURL !== undefined ? livePhotoURL : m.photoURL }
@@ -33,10 +56,11 @@ export default function GroupDetailView({ group, members, onLeave, onDelete, onK
   );
 
   const isAdmin = group?.ownerUserId?.toString() === uid?.toString();
+  const studyingCount = enrichedMembers.filter(m => m.isStudying).length;
 
-  async function handleKick(userId, name) {
+  async function handleKick(userId) {
     setActionLoading(true);
-    try { await onKick(group._id, userId); setKickConfirm(null); }
+    try { await onKick(group._id, userId); setKickConfirm(null); setMembers(prev => prev.filter(m => m.userId?.toString() !== userId)); }
     catch (e) { alert(e.message); }
     finally { setActionLoading(false); }
   }
@@ -57,36 +81,53 @@ export default function GroupDetailView({ group, members, onLeave, onDelete, onK
   if (!group) return null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#0a1628]">
+    <div className="flex flex-col h-screen bg-[#0a1628] overflow-hidden">
       {/* Header */}
-      <div className="px-4 pt-5 pb-3 border-b border-[#1e293b]">
-        <div className="flex items-center gap-3 mb-1">
-          <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-[#1e293b] transition-colors">
+      <div className="flex-shrink-0 px-4 pt-safe pt-4 pb-3 border-b border-[#1e293b]">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBack}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400
+                       hover:text-white hover:bg-[#1e293b] transition-colors flex-shrink-0"
+          >
             <i className="ti ti-arrow-left text-base" />
           </button>
+
           <div className="flex-1 min-w-0">
-            <h2 className="text-base font-bold text-white truncate">{group.name}</h2>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs text-slate-500">{group.memberCount || members.length} members</span>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-white truncate">{group.name}</h2>
               {isAdmin && (
-                <span className="text-[9px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded-full font-bold">
-                  ADMIN
-                </span>
+                <span className="text-[9px] bg-orange-500/20 text-orange-400 border border-orange-500/30
+                                 px-1.5 py-0.5 rounded-full font-bold flex-shrink-0">ADMIN</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+              <span>{enrichedMembers.length} members</span>
+              {studyingCount > 0 && (
+                <>
+                  <span>·</span>
+                  <span className="flex items-center gap-1 text-emerald-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {studyingCount} studying
+                  </span>
+                </>
               )}
             </div>
           </div>
-          {/* Admin or Leave button */}
+
           {isAdmin ? (
             <button
               onClick={() => setDeleteConfirm(true)}
-              className="text-xs text-red-400/70 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10"
+              className="text-xs text-red-400/60 hover:text-red-400 px-2 py-1.5 rounded-lg
+                         hover:bg-red-500/10 transition-colors flex-shrink-0"
             >
-              <i className="ti ti-trash mr-1" />Delete
+              <i className="ti ti-trash" />
             </button>
           ) : (
             <button
               onClick={handleLeave}
-              className="text-xs text-slate-500 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10"
+              className="text-xs text-slate-500 hover:text-red-400 px-2 py-1.5 rounded-lg
+                         hover:bg-red-500/10 transition-colors flex-shrink-0"
             >
               Leave
             </button>
@@ -94,16 +135,20 @@ export default function GroupDetailView({ group, members, onLeave, onDelete, onK
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 px-4 py-2 border-b border-[#1e293b] overflow-x-auto scrollbar-none">
+      {/* Tabs — scrollable on mobile */}
+      <div className="flex-shrink-0 flex gap-1 px-3 py-2 border-b border-[#1e293b]
+                      overflow-x-auto scrollbar-none">
         {TABS.map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all flex-shrink-0
-              ${tab === t.key ? 'bg-orange-500 text-white' : 'text-slate-500 hover:text-slate-300 hover:bg-[#1e293b]'}`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium
+                        whitespace-nowrap transition-all flex-shrink-0
+                        ${tab === t.key
+                          ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
+                          : 'text-slate-500 hover:text-slate-300 hover:bg-[#1e293b]'}`}
           >
-            <i className={`ti ${t.icon}`} />
+            <i className={`ti ${t.icon} text-sm`} />
             {t.label}
           </button>
         ))}
@@ -111,97 +156,152 @@ export default function GroupDetailView({ group, members, onLeave, onDelete, onK
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
+
+        {/* Rankings */}
         {tab === 'leaderboard' && (
-          <div className="px-4 py-4 overflow-y-auto h-full">
-            <GroupLeaderboard members={enrichedMembers} currentUserId={uid} groupId={group._id} />
+          <div className="h-full overflow-y-auto px-4 py-4">
+            <GroupLeaderboard
+              members={enrichedMembers}
+              currentUserId={uid}
+              groupId={group._id}
+            />
           </div>
         )}
 
+        {/* Chat */}
         {tab === 'chat' && (
-          <div className="h-full" style={{ height: 'calc(100vh - 180px)' }}>
+          <div className="h-full">
             <GroupChat groupId={group._id} isAdmin={isAdmin} />
           </div>
         )}
 
+        {/* Members */}
         {tab === 'members' && (
-          <div className="px-4 py-4 overflow-y-auto space-y-2">
-            <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-3">
+          <div className="h-full overflow-y-auto px-4 py-4 space-y-2">
+            <p className="text-[10px] text-slate-600 uppercase tracking-widest font-semibold mb-3">
               {enrichedMembers.length} Member{enrichedMembers.length !== 1 ? 's' : ''}
             </p>
             {enrichedMembers.map(m => {
               const isOwner = group.ownerUserId?.toString() === m.userId?.toString();
               const isMe = m.userId?.toString() === uid?.toString();
               return (
-                <div key={m.userId} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors
-                  ${isMe ? 'bg-orange-950/20 border-orange-900/30' : 'bg-[#1e293b] border-[#334155]'}`}>
-                  <Avatar photoURL={m.photoURL} name={m.displayName} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-200 truncate">{m.displayName}</span>
-                      {isOwner && <span className="text-[9px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded-full font-bold">ADMIN</span>}
-                      {isMe && <span className="text-[9px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded-full font-bold">YOU</span>}
-                    </div>
-                    <p className="text-xs text-slate-600 font-mono mt-0.5">{formatHours(m.weeklySeconds || 0)} this week</p>
+                <div key={m.userId}
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-colors
+                    ${isMe ? 'bg-orange-950/20 border-orange-900/30' : 'bg-[#1a2539] border-[#1e293b]'}`}>
+                  <div className="relative flex-shrink-0">
+                    <Avatar photoURL={m.photoURL} name={m.displayName} size="sm" />
+                    {m.isStudying && (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full
+                                       bg-emerald-400 border-2 border-[#0a1628] animate-pulse" />
+                    )}
                   </div>
-                  {isAdmin && !isMe && (
-                    <button
-                      onClick={() => setKickConfirm(m)}
-                      className="text-xs text-slate-600 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10"
-                    >
-                      <i className="ti ti-user-x" />
-                    </button>
-                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-medium text-slate-200 truncate">{m.displayName}</span>
+                      {isOwner && (
+                        <span className="text-[8px] bg-orange-500/20 text-orange-400 border border-orange-500/30
+                                         px-1 py-0.5 rounded-full font-bold">ADMIN</span>
+                      )}
+                      {isMe && (
+                        <span className="text-[8px] bg-blue-500/20 text-blue-400 border border-blue-500/30
+                                         px-1 py-0.5 rounded-full font-bold">YOU</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {m.isStudying ? (
+                        <p className="text-[10px] text-emerald-400 flex items-center gap-1">
+                          <span className="w-1 h-1 rounded-full bg-emerald-400 inline-block" />
+                          {m.studyingSubject || 'Studying'}
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-slate-600 font-mono">
+                          {m.weeklySeconds > 0 ? formatHumanDuration(m.weeklySeconds) + ' this week' : 'Not studied yet'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-xs font-bold font-mono text-slate-300">
+                      {m.weeklySeconds > 0 ? formatHumanDuration(m.weeklySeconds) : '—'}
+                    </p>
+                    {isAdmin && !isMe && (
+                      <button
+                        onClick={() => setKickConfirm(m)}
+                        className="text-[10px] text-slate-600 hover:text-red-400 transition-colors mt-0.5"
+                      >
+                        kick
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
 
+        {/* Stats */}
         {tab === 'stats' && (
-          <div className="overflow-y-auto h-full">
+          <div className="h-full overflow-y-auto">
             <GroupStatsTab group={group} members={enrichedMembers} />
           </div>
         )}
 
-      {tab === 'invite' && (
-          <div className="px-4 py-4 overflow-y-auto">
+        {/* Invite */}
+        {tab === 'invite' && (
+          <div className="h-full overflow-y-auto px-4 py-4">
             <InviteCode code={group.inviteCode} isOwner={isAdmin} />
           </div>
         )}
       </div>
 
-      {/* Kick confirm modal */}
+      {/* Kick confirm */}
       {kickConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" onClick={() => setKickConfirm(null)}>
-          <div className="bg-[#1e293b] rounded-2xl border border-[#334155] p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 px-4 pb-6 sm:pb-0"
+          onClick={() => setKickConfirm(null)}>
+          <div className="bg-[#1e293b] rounded-2xl border border-[#334155] p-6 w-full max-w-sm"
+            onClick={e => e.stopPropagation()}>
             <div className="text-center mb-5">
               <div className="text-3xl mb-2">👢</div>
-              <h3 className="text-base font-semibold text-white">Kick Member?</h3>
-              <p className="text-sm text-slate-400 mt-1">Remove <span className="text-orange-400 font-medium">{kickConfirm.displayName}</span> from the group?</p>
+              <h3 className="text-base font-semibold text-white">Remove Member?</h3>
+              <p className="text-sm text-slate-400 mt-1">
+                Remove <span className="text-orange-400 font-medium">{kickConfirm.displayName}</span> from this group?
+              </p>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setKickConfirm(null)} className="flex-1 py-2.5 rounded-xl bg-[#0f172a] border border-[#334155] text-slate-300 text-sm font-medium">Cancel</button>
-              <button onClick={() => handleKick(kickConfirm.userId, kickConfirm.displayName)} disabled={actionLoading} className="flex-1 py-2.5 rounded-xl bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
-                {actionLoading ? 'Kicking...' : 'Kick'}
+              <button onClick={() => setKickConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl bg-[#0f172a] border border-[#334155] text-slate-300 text-sm font-medium">
+                Cancel
+              </button>
+              <button onClick={() => handleKick(kickConfirm.userId?.toString())} disabled={actionLoading}
+                className="flex-1 py-2.5 rounded-xl bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                {actionLoading ? 'Removing…' : 'Remove'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete confirm modal */}
+      {/* Delete confirm */}
       {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" onClick={() => setDeleteConfirm(false)}>
-          <div className="bg-[#1e293b] rounded-2xl border border-[#334155] p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 px-4 pb-6 sm:pb-0"
+          onClick={() => setDeleteConfirm(false)}>
+          <div className="bg-[#1e293b] rounded-2xl border border-[#334155] p-6 w-full max-w-sm"
+            onClick={e => e.stopPropagation()}>
             <div className="text-center mb-5">
               <div className="text-3xl mb-2">🗑️</div>
               <h3 className="text-base font-semibold text-white">Delete Group?</h3>
-              <p className="text-sm text-slate-400 mt-1">This will permanently delete <span className="text-orange-400 font-medium">{group.name}</span> and remove all members. This cannot be undone.</p>
+              <p className="text-sm text-slate-400 mt-1">
+                Permanently delete <span className="text-orange-400 font-medium">{group.name}</span>? Yeh undo nahi ho sakta.
+              </p>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(false)} className="flex-1 py-2.5 rounded-xl bg-[#0f172a] border border-[#334155] text-slate-300 text-sm font-medium">Cancel</button>
-              <button onClick={handleDelete} disabled={actionLoading} className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
-                {actionLoading ? 'Deleting...' : 'Delete Forever'}
+              <button onClick={() => setDeleteConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl bg-[#0f172a] border border-[#334155] text-slate-300 text-sm font-medium">
+                Cancel
+              </button>
+              <button onClick={handleDelete} disabled={actionLoading}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                {actionLoading ? 'Deleting…' : 'Delete Forever'}
               </button>
             </div>
           </div>

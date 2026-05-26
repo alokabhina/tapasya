@@ -8,7 +8,7 @@ import useUserStore from '../../store/userStore';
 import useSubjectStore from '../../store/subjectStore';
 import { useTimer } from '../../hooks/useTimer';
 import { fetchGroupMembers, fetchMyGroups } from '../../api/groups';
-import { formatDuration, formatHours } from '../../utils/time';
+import { formatDuration, formatHours, formatHumanDuration } from '../../utils/time';
 import { useNavigate } from 'react-router-dom';
 
 // ── Circular ring ─────────────────────────────────────────────────────────────
@@ -164,9 +164,9 @@ function LeaderboardRow({ member, rank, isCurrentUser, currentElapsed }) {
               backgroundColor: isStudying ? '#f97316' : '#334155',
               boxShadow: isStudying ? '0 0 4px #f9731660' : 'none' }} />
         </div>
-        <span className="text-[11px] font-mono w-12 text-right"
+        <span className="text-[11px] font-mono w-14 text-right"
           style={{ color: isStudying ? 'white' : '#475569' }}>
-          {formatDuration(seconds)}
+          {seconds > 0 ? formatHumanDuration(seconds) : '—'}
         </span>
       </div>
     </div>
@@ -233,15 +233,12 @@ export default function GroupTimerOverlay({ onClose }) {
   const pct        = dailyGoalSeconds > 0 ? Math.min((todayTotal / dailyGoalSeconds) * 100, 100) : 0;
   const statusText = isPaused ? 'Paused' : isRunning ? 'Focusing' : 'Ready';
 
-  // Build leaderboard: all members + current user, sorted by time desc
+  // Build leaderboard sorted by weeklySeconds (with live elapsed for current user)
+  const myMemberData = members.find(m => m.userId?.toString() === uid?.toString());
   const allMembers = [
     ...members.filter(m => m.userId?.toString() !== uid?.toString()),
-    { userId: uid, displayName, isStudying: true, liveElapsed: elapsed },
-  ].sort((a, b) => {
-    const ta = a.userId?.toString() === uid?.toString() ? elapsed : (a.liveElapsed || 0);
-    const tb = b.userId?.toString() === uid?.toString() ? elapsed : (b.liveElapsed || 0);
-    return tb - ta;
-  });
+    { ...(myMemberData || {}), userId: uid, displayName, isStudying: true, liveElapsed: elapsed },
+  ].sort((a, b) => (b.weeklySeconds || 0) - (a.weeklySeconds || 0));
 
   const studyingCount = members.filter(m =>
     m.userId?.toString() !== uid?.toString() && m.isStudying

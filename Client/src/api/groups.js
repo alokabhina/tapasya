@@ -3,22 +3,58 @@ import api from './client'
 
 export async function createGroup(name) {
   const { data } = await api.post('/groups', { name })
-  return { groupId: data.groupId, group: { _id: data.groupId, name: data.group.name, inviteCode: data.group.inviteCode, memberCount: data.group.members?.length || 1, ownerUserId: data.group.ownerUserId, members: data.group.members || [] } }
+  return {
+    groupId: data.groupId,
+    group: normalizeGroup(data.group),
+  }
 }
 
 export async function joinGroupByCode(code) {
   const { data } = await api.post('/groups/join', { code })
-  return { groupId: data.groupId, group: { _id: data.groupId, name: data.group.name, inviteCode: data.group.inviteCode, memberCount: data.group.members?.length || 1, ownerUserId: data.group.ownerUserId, members: data.group.members || [] } }
+  return {
+    groupId: data.groupId,
+    group: normalizeGroup(data.group),
+  }
 }
 
 export async function fetchMyGroups() {
   const { data } = await api.get('/groups/mine')
-  return data.map(g => ({ _id: g._id, name: g.name, inviteCode: g.inviteCode, memberCount: g.members?.length || 0, ownerUserId: g.ownerUserId, members: g.members || [] }))
+  return data.map(normalizeGroup)
 }
 
 export async function fetchGroup(groupId) {
   const { data } = await api.get(`/groups/${groupId}`)
-  return { _id: data._id, name: data.name, inviteCode: data.inviteCode, memberCount: data.members?.length || 0, ownerUserId: data.ownerUserId, members: data.members || [] }
+  return normalizeGroup(data)
+}
+
+// Normalize a group from the server — keep ALL member fields intact
+function normalizeGroup(g) {
+  return {
+    _id: g._id,
+    name: g.name,
+    inviteCode: g.inviteCode,
+    ownerUserId: g.ownerUserId,
+    memberCount: g.members?.length || 0,
+    // Keep full member objects so weeklySeconds, totalSeconds, isStudying, etc. are available
+    members: (g.members || []).map(normalizeMember),
+  }
+}
+
+function normalizeMember(m) {
+  return {
+    userId: m.userId,
+    displayName: m.displayName || 'Anonymous',
+    photoURL: m.photoURL || null,
+    weeklySeconds: m.weeklySeconds || 0,
+    totalSeconds: m.totalSeconds || 0,
+    isStudying: Boolean(m.isStudying),
+    studyingSubject: m.studyingSubject || null,
+    studyingColor: m.studyingColor || null,
+    liveElapsed: m.liveElapsed || 0,
+    lastHeartbeat: m.lastHeartbeat || null,
+    subjectBreakdown: m.subjectBreakdown || [],
+    joinedAt: m.joinedAt || null,
+  }
 }
 
 export async function leaveGroup(groupId) {
@@ -35,7 +71,7 @@ export async function kickMember(groupId, userId) {
 
 export async function fetchGroupMembers(groupId) {
   const { data } = await api.get(`/groups/${groupId}/members`)
-  return data
+  return data.map(normalizeMember)
 }
 
 export async function fetchMemberStats(groupId, userId) {
