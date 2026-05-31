@@ -45,9 +45,15 @@ export function useTimer() {
     // If timer is running (persisted from store) but worker not yet started this session
     if (s.isRunning && !s.isPaused && s.sessionStartTime && !_workerRunning) {
       _workerRunning = true
-      // BUG FIX: use store's elapsed (which was ticking before reload), NOT wall-clock diff
-      // Wall-clock diff includes paused time — store.elapsed is the pure study time
-      worker.postMessage({ type: 'START', payload: { elapsed: s.elapsed } })
+      // FIX: recalculate true elapsed on page reload:
+      // wall-clock diff minus total paused time = actual study time
+      const wallTotal = Math.round((Date.now() - new Date(s.sessionStartTime).getTime()) / 1000)
+      const totalPaused = s.totalPausedSeconds || 0
+      const trueElapsed = Math.max(s.elapsed, wallTotal - totalPaused)
+      if (trueElapsed !== s.elapsed) {
+        useTimerStore.getState().setElapsed(trueElapsed)
+      }
+      worker.postMessage({ type: 'START', payload: { elapsed: trueElapsed } })
     }
 
     return () => {}
@@ -72,8 +78,10 @@ export function useTimer() {
     const s = useTimerStore.getState()
     if (s.isRunning && !s.isPaused && s.subjectName) {
       const { dailyGoalSeconds } = useUserStore.getState()
-      const goalPct = dailyGoalSeconds > 0 ? (s.elapsed / dailyGoalSeconds) * 100 : 0
-      swPost({ type: 'TIMER_START', payload: { subject: s.subjectName, elapsed: s.elapsed, goalPct } })
+      // Use current store elapsed (already corrected by mount effect above)
+      const current = useTimerStore.getState().elapsed
+      const goalPct = dailyGoalSeconds > 0 ? (current / dailyGoalSeconds) * 100 : 0
+      swPost({ type: 'TIMER_START', payload: { subject: s.subjectName, elapsed: current, goalPct } })
     }
   }, [])
 
@@ -83,12 +91,15 @@ export function useTimer() {
     function onVisible() {
       const s = useTimerStore.getState()
       if (!s.isRunning || s.isPaused || !s.sessionStartTime) return
-      // Recalculate elapsed from wall-clock start time
-      const wallElapsed = Math.round((Date.now() - new Date(s.sessionStartTime).getTime()) / 1000)
+      // Wall-clock total time since session started
+      const wallTotal = Math.round((Date.now() - new Date(s.sessionStartTime).getTime()) / 1000)
+      // FIX: subtract accumulated pause durations — paused time must NOT count as study time
+      const totalPaused = s.totalPausedSeconds || 0
+      const trueElapsed = Math.max(0, wallTotal - totalPaused)
       // Only update if wall-clock is significantly ahead (>5s drift) — means worker was throttled
-      if (wallElapsed > s.elapsed + 5) {
-        useTimerStore.getState().setElapsed(wallElapsed)
-        getWorker().postMessage({ type: 'RESUME', payload: { elapsed: wallElapsed } })
+      if (trueElapsed > s.elapsed + 5) {
+        useTimerStore.getState().setElapsed(trueElapsed)
+        getWorker().postMessage({ type: 'RESUME', payload: { elapsed: trueElapsed } })
       }
     }
     document.addEventListener('visibilitychange', () => {
@@ -204,8 +215,10 @@ export function useTimer() {
 
   // ── resume ────────────────────────────────────────────────────────────────
   const resume = useCallback(() => {
-    const current = useTimerStore.getState().elapsed
-    store.resume()
+    const s = useTimerStore.getState()
+    const current = s.elapsed
+    // FIX: pass pausedAt so store can correctly accumulate total pause duration
+    store.resume(s.pausedAt)
     getWorker().postMessage({ type: 'RESUME', payload: { elapsed: current } })
     swPost({ type: 'TIMER_RESUME', payload: { elapsed: current } })
   }, [store])
