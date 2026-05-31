@@ -1,27 +1,37 @@
 // src/hooks/useTimer.js
-// FIXED BUGS:
-// 1. Double session save — _saveInProgress guard added
+// FIXES:
+// 1. Double session save — _saveInProgress guard
 // 2. Paused time counted in elapsed on reload — pausedAccum tracked in store
-// 3. Worker re-START on every mount (Home + Timer both mount useTimer) — workerStarted ref
+// 3. Worker re-START on every mount — workerStarted ref
+// 4. Cross-device conflict — active session heartbeat to server every 15s
+// 5. Data loss on crash/tab-kill — beforeunload + visibilitychange auto-save to IndexedDB
+// 6. Stats auto-refresh — fires tapasya:session-saved on stop
 
 import { useEffect, useRef, useCallback } from 'react'
 import useTimerStore from '@/store/timerStore'
 import useUserStore from '@/store/userStore'
-import { saveSession, addPendingSync } from '@/api/sessions'
+import { saveSession, addPendingSync, sendActiveHeartbeat, clearActiveSession } from '@/api/sessions'
 import { midnightSplit } from '@/utils/time'
 import { sendHeartbeat, sendOffline } from '@/api/groups'
 
 // ── Singleton worker ──────────────────────────────────────────────────────────
 let _worker = null
-// Guard: worker already started (prevents double-START from Home + Timer mounting)
 let _workerRunning = false
-// Guard: save already in progress (prevents double-save on fast double-click)
 let _saveInProgress = false
+
+// Unique device ID for this browser tab (persisted across page reloads)
+function getDeviceId() {
+  let id = sessionStorage.getItem('tapasya_device_id')
+  if (!id) {
+    id = `dev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    sessionStorage.setItem('tapasya_device_id', id)
+  }
+  return id
+}
 
 function getWorker() {
   if (!_worker) {
     _worker = new Worker('/timer.worker.js')
-    // Single global onmessage — never overwritten
     _worker.onmessage = (e) => {
       if (e.data.type === 'TICK') {
         useTimerStore.getState().setElapsed(e.data.elapsed)
@@ -42,11 +52,9 @@ export function useTimer() {
     const worker = getWorker()
     const s = useTimerStore.getState()
 
-    // If timer is running (persisted from store) but worker not yet started this session
     if (s.isRunning && !s.isPaused && s.sessionStartTime && !_workerRunning) {
       _workerRunning = true
-      // FIX: recalculate true elapsed on page reload:
-      // wall-clock diff minus total paused time = actual study time
+      // FIX: recalculate true elapsed — wall-clock diff minus total paused time
       const wallTotal = Math.round((Date.now() - new Date(s.sessionStartTime).getTime()) / 1000)
       const totalPaused = s.totalPausedSeconds || 0
       const trueElapsed = Math.max(s.elapsed, wallTotal - totalPaused)
@@ -59,26 +67,23 @@ export function useTimer() {
     return () => {}
   }, [])
 
-  // SW helper — send message to active SW
+  // SW helper
   function swPost(msg) {
     if (!('serviceWorker' in navigator)) return
-    // controller = already active SW (fastest path)
     if (navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage(msg)
       return
     }
-    // Fallback: wait for SW to be ready
     navigator.serviceWorker.ready.then((reg) => {
       if (reg.active) reg.active.postMessage(msg)
     }).catch(() => {})
   }
 
-  // On mount: agar timer already running tha (page reload) — SW ko batao
+  // On mount: tell SW timer is running (page reload)
   useEffect(() => {
     const s = useTimerStore.getState()
     if (s.isRunning && !s.isPaused && s.subjectName) {
       const { dailyGoalSeconds } = useUserStore.getState()
-      // Use current store elapsed (already corrected by mount effect above)
       const current = useTimerStore.getState().elapsed
       const goalPct = dailyGoalSeconds > 0 ? (current / dailyGoalSeconds) * 100 : 0
       swPost({ type: 'TIMER_START', payload: { subject: s.subjectName, elapsed: current, goalPct } })
@@ -86,17 +91,14 @@ export function useTimer() {
   }, [])
 
   // Re-sync elapsed from wall-clock when tab becomes visible again
-  // (browser throttles workers in background tabs — this corrects drift)
   useEffect(() => {
     function onVisible() {
       const s = useTimerStore.getState()
       if (!s.isRunning || s.isPaused || !s.sessionStartTime) return
-      // Wall-clock total time since session started
       const wallTotal = Math.round((Date.now() - new Date(s.sessionStartTime).getTime()) / 1000)
-      // FIX: subtract accumulated pause durations — paused time must NOT count as study time
+      // FIX: subtract total paused seconds so pause time doesn't count
       const totalPaused = s.totalPausedSeconds || 0
       const trueElapsed = Math.max(0, wallTotal - totalPaused)
-      // Only update if wall-clock is significantly ahead (>5s drift) — means worker was throttled
       if (trueElapsed > s.elapsed + 5) {
         useTimerStore.getState().setElapsed(trueElapsed)
         getWorker().postMessage({ type: 'RESUME', payload: { elapsed: trueElapsed } })
@@ -108,8 +110,53 @@ export function useTimer() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [])
 
-  // ── start ─────────────────────────────────────────────────────────────────
-  // ── heartbeat to group (timer chal raha ho tab) ──────────────────────────
+  // ── CRASH-SAFE AUTO-SAVE ────────────────────────────────────────────────────
+  // Save to IndexedDB on tab close/hide so data is never lost even if tab crashes
+  useEffect(() => {
+    async function emergencySave() {
+      const s = useTimerStore.getState()
+      if (!s.isRunning || !s.sessionStartTime || s.elapsed < 10) return
+      // Don't save if a real save is already in progress
+      if (_saveInProgress) return
+
+      try {
+        const { saveSessionOffline } = await import('@/utils/offlineDB')
+        const now = new Date().toISOString()
+        const pad = n => String(n).padStart(2, '0')
+        const d = new Date()
+        const date = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+        const id = `crash_${Date.now()}`
+        await saveSessionOffline({
+          id,
+          subjectId:    s.subjectId,
+          subjectName:  s.subjectName,
+          subjectColor: s.subjectColor,
+          startTime:    s.sessionStartTime,
+          endTime:      now,
+          duration:     s.elapsed,  // pure study time (pause-excluded)
+          date,
+          notes:        '',
+          _checkpoint:  true,       // cleaned up on next real stop
+        })
+      } catch (_) {}
+    }
+
+    // Tab is being closed/refreshed
+    function onBeforeUnload() { emergencySave() }
+    // Tab goes to background on mobile (most reliable mobile crash-save point)
+    function onVisibilityHide() {
+      if (document.visibilityState === 'hidden') emergencySave()
+    }
+
+    window.addEventListener('beforeunload', onBeforeUnload)
+    document.addEventListener('visibilitychange', onVisibilityHide)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('visibilitychange', onVisibilityHide)
+    }
+  }, [])
+
+  // ── heartbeat to group ───────────────────────────────────────────────────────
   const heartbeatRef = useRef(null)
 
   function startHeartbeat() {
@@ -118,7 +165,6 @@ export function useTimer() {
       const s = useTimerStore.getState()
       if (!s.isRunning) return
       try {
-        // Sare groups ko heartbeat bhejo
         const { fetchMyGroups } = await import('@/api/groups')
         const groups = await fetchMyGroups()
         for (const g of groups) {
@@ -130,12 +176,11 @@ export function useTimer() {
           }).catch(() => {})
         }
       } catch (_) {}
-    }, 10_000) // har 10 second
+    }, 10_000)
   }
 
   function stopHeartbeat() {
     clearInterval(heartbeatRef.current)
-    // Sare groups ko offline mark karo
     import('@/api/groups').then(({ fetchMyGroups, sendOffline: offlineApi }) => {
       fetchMyGroups().then(groups => {
         groups.forEach(g => offlineApi(g._id).catch(() => {}))
@@ -143,9 +188,39 @@ export function useTimer() {
     }).catch(() => {})
   }
 
-  // ── checkpoint auto-save (every 60s) ────────────────────────────────────
-  // Saves a partial session to IndexedDB every minute so data is never lost
-  // if the tab crashes or is killed. On real stop(), full save happens as usual.
+  // ── CROSS-DEVICE ACTIVE SESSION HEARTBEAT ──────────────────────────────────
+  // Every 15s, push timer state to server so other devices can see it and warn the user
+  const activeHeartbeatRef = useRef(null)
+
+  function startActiveHeartbeat(subject) {
+    clearInterval(activeHeartbeatRef.current)
+    const deviceId = getDeviceId()
+
+    // Send immediately on start
+    const sendNow = () => {
+      const s = useTimerStore.getState()
+      if (!s.isRunning) return
+      sendActiveHeartbeat({
+        deviceId,
+        subjectId:          s.subjectId,
+        subjectName:        s.subjectName,
+        subjectColor:       s.subjectColor,
+        startTime:          s.sessionStartTime,
+        elapsed:            s.elapsed,
+        isPaused:           s.isPaused,
+        totalPausedSeconds: s.totalPausedSeconds || 0,
+      })
+    }
+    sendNow()
+    activeHeartbeatRef.current = setInterval(sendNow, 15_000)
+  }
+
+  function stopActiveHeartbeat() {
+    clearInterval(activeHeartbeatRef.current)
+    clearActiveSession().catch(() => {})
+  }
+
+  // ── checkpoint auto-save (every 60s) ────────────────────────────────────────
   const checkpointRef = useRef(null)
   const lastCheckpointElapsed = useRef(0)
 
@@ -157,10 +232,9 @@ export function useTimer() {
       if (!s.isRunning || s.isPaused) return
       const newElapsed = s.elapsed
       const delta = newElapsed - lastCheckpointElapsed.current
-      if (delta < 30) return // min 30s increment worth saving
+      if (delta < 30) return
       lastCheckpointElapsed.current = newElapsed
 
-      // Save incremental seconds to offline DB only (no server spam)
       try {
         const { saveSessionOffline } = await import('@/utils/offlineDB')
         const id = `checkpoint_${Date.now()}`
@@ -178,10 +252,10 @@ export function useTimer() {
           duration:     newElapsed,
           date,
           notes:        '',
-          _checkpoint:  true, // marked so real save can replace it
+          _checkpoint:  true,
         })
       } catch (_) {}
-    }, 60_000) // every 60 seconds
+    }, 60_000)
   }
 
   function stopCheckpoint() {
@@ -190,6 +264,7 @@ export function useTimer() {
     lastCheckpointElapsed.current = 0
   }
 
+  // ── start ──────────────────────────────────────────────────────────────────
   const start = useCallback((subject) => {
     _workerRunning = true
     _saveInProgress = false
@@ -197,35 +272,41 @@ export function useTimer() {
     getWorker().postMessage({ type: 'START', payload: { elapsed: 0 } })
     startCheckpoint(subject)
     startHeartbeat()
-    // SW ko directly batao — no useEffect race condition
+    startActiveHeartbeat(subject)
     const { dailyGoalSeconds } = useUserStore.getState()
-    const goalPct = dailyGoalSeconds > 0 ? 0 : 0 // fresh start = 0%
     swPost({
       type: 'TIMER_START',
-      payload: { subject: subject?.name || subject?.subjectName || 'Study', elapsed: 0, goalPct },
+      payload: { subject: subject?.name || subject?.subjectName || 'Study', elapsed: 0, goalPct: 0 },
     })
   }, [store])
 
-  // ── pause ─────────────────────────────────────────────────────────────────
+  // ── pause ──────────────────────────────────────────────────────────────────
   const pause = useCallback(() => {
     store.pause()
     getWorker().postMessage({ type: 'PAUSE' })
     swPost({ type: 'TIMER_PAUSE' })
+    // Update server active session to show paused state
+    const s = useTimerStore.getState()
+    sendActiveHeartbeat({
+      deviceId: getDeviceId(),
+      subjectId: s.subjectId, subjectName: s.subjectName, subjectColor: s.subjectColor,
+      startTime: s.sessionStartTime, elapsed: s.elapsed,
+      isPaused: true, totalPausedSeconds: s.totalPausedSeconds || 0,
+    }).catch(() => {})
   }, [store])
 
-  // ── resume ────────────────────────────────────────────────────────────────
+  // ── resume ─────────────────────────────────────────────────────────────────
   const resume = useCallback(() => {
     const s = useTimerStore.getState()
     const current = s.elapsed
-    // FIX: pass pausedAt so store can correctly accumulate total pause duration
+    // FIX: pass pausedAt so store accumulates total pause duration correctly
     store.resume(s.pausedAt)
     getWorker().postMessage({ type: 'RESUME', payload: { elapsed: current } })
     swPost({ type: 'TIMER_RESUME', payload: { elapsed: current } })
   }, [store])
 
-  // ── core save ─────────────────────────────────────────────────────────────
+  // ── core save ──────────────────────────────────────────────────────────────
   const _saveAndReset = useCallback(async (minSeconds = 10) => {
-    // BUG FIX: prevent double-save (e.g. stop called twice quickly)
     if (_saveInProgress) return 0
     _saveInProgress = true
 
@@ -233,11 +314,11 @@ export function useTimer() {
     _workerRunning = false
     stopHeartbeat()
     stopCheckpoint()
+    stopActiveHeartbeat()    // ← clear from server so other devices know timer stopped
     swPost({ type: 'TIMER_STOP' })
 
     const endTime   = new Date().toISOString()
     const startTime = store.sessionStartTime
-    // elapsed = actual study time from worker (pauses already excluded by worker)
     const elapsed   = store.elapsed
 
     if (!startTime || elapsed < minSeconds) {
@@ -255,7 +336,6 @@ export function useTimer() {
 
     for (const split of splits) {
       const wallSplit  = Math.round((new Date(split.endTime) - new Date(split.startTime)) / 1000)
-      // Proportional actual study time — elapsed is the true value, wall-clock only used for split ratio
       const duration   = splits.length === 1
         ? elapsed
         : Math.round((wallSplit / wallTotal) * elapsed)
@@ -268,7 +348,7 @@ export function useTimer() {
         subjectColor: store.subjectColor,
         startTime:    split.startTime,
         endTime:      split.endTime,
-        duration,         // ✅ pure study time, no paused durations
+        duration,
         date:         split.date,
         notes:        '',
       }
@@ -285,11 +365,8 @@ export function useTimer() {
       }
     }
 
-    // Group leaderboard update — directly update hours + dispatch event for UI refresh
+    // Group leaderboard update
     if (uid && totalSaved > 0) {
-      // Directly call updateMemberHours here — don't rely on StudyGroup page being mounted.
-      // useGroup's event listener only works when StudyGroup.jsx is open; this ensures
-      // weeklySeconds/totalSeconds are always updated regardless of which page is active.
       try {
         const { fetchMyGroups, updateMemberHours } = await import('@/api/groups')
         const myGroups = await fetchMyGroups()
@@ -298,11 +375,11 @@ export function useTimer() {
         }
       } catch (_) {}
 
-      // Also dispatch event so StudyGroup UI can re-poll / refresh if it's open
+      // ── AUTO-REFRESH: Stats page aur Home ko batao session save hua ─────────
       window.dispatchEvent(new CustomEvent('tapasya:session-saved', { detail: { seconds: totalSaved } }))
     }
 
-    // Clean up any checkpoint records for this session (real save succeeded)
+    // Clean checkpoint records for this session
     try {
       const { getSessionsOffline, deleteSessionOffline } = await import('@/utils/offlineDB')
       const all = await getSessionsOffline()
@@ -320,7 +397,7 @@ export function useTimer() {
   const stop      = useCallback(() => _saveAndReset(10), [_saveAndReset])
   const stopOnBack = useCallback(() => _saveAndReset(10), [_saveAndReset])
 
-  // Listen for messages FROM SW (notification action buttons)
+  // Listen for SW notification action buttons
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
     function onSwMessage(event) {

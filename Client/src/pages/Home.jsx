@@ -13,6 +13,7 @@ import { getTodos, updateTodo } from '@/api/todos';
 import { getSessions } from '@/api/sessions';
 import ColorPicker from '@/components/ui/ColorPicker';
 import { saveFocusSession } from '@/utils/focusHistory';
+import { checkCrossDeviceConflict } from '@/hooks/useCrossDeviceGuard';
 import { useSmartNotifications } from '@/hooks/useSmartNotifications';
 
 // ── Aesthetic background styles for cards ─────────────────────────────────────
@@ -627,6 +628,8 @@ export default function Home() {
 
   const [modal,         setModal]         = useState(null);
   const [switchWarning, setSwitchWarning] = useState(null);
+  const [crossDeviceWarning, setCrossDeviceWarning] = useState(null); // { subjectName, elapsed, isPaused }
+  const pendingSubjectRef = useRef(null); // subject waiting after cross-device confirm
   const [todayTodos, setTodayTodos] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
   const [notifRead, setNotifRead] = useState(() => {
@@ -725,9 +728,17 @@ export default function Home() {
     // Same subject already running/paused → go to timer
     if ((isRunning || isPaused) && activeId === sid) { navigate('/timer'); return; }
 
-    // Different subject running/paused → show warning
+    // Different subject running/paused locally → show warning
     if ((isRunning || isPaused) && activeId && activeId !== sid) {
       setSwitchWarning(subject);
+      return;
+    }
+
+    // Cross-device conflict check — is timer running on another device?
+    const conflict = await checkCrossDeviceConflict();
+    if (conflict) {
+      pendingSubjectRef.current = subject;
+      setCrossDeviceWarning(conflict);
       return;
     }
 
@@ -739,6 +750,15 @@ export default function Home() {
     const subject = switchWarning;
     setSwitchWarning(null);
     await stop(); // saves current session (elapsed-based, pauses excluded)
+    await start(subject);
+    navigate('/timer');
+  }
+
+  async function handleConfirmCrossDevice() {
+    const subject = pendingSubjectRef.current;
+    pendingSubjectRef.current = null;
+    setCrossDeviceWarning(null);
+    if (!subject) return;
     await start(subject);
     navigate('/timer');
   }
@@ -1010,6 +1030,50 @@ export default function Home() {
           </div>
         );
       })()}
+
+      {/* Cross-Device Timer Conflict Warning */}
+      {crossDeviceWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setCrossDeviceWarning(null)} />
+          <div className="relative bg-[#151f2e] rounded-2xl border border-slate-700 shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="h-0.5 w-full bg-gradient-to-r from-blue-500 to-purple-500" />
+            <div className="p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                  <i className="ti ti-device-mobile text-blue-400 text-xl" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold">Timer running on another device!</h3>
+                  <p className="text-slate-400 text-xs mt-0.5">Same account, different device</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 bg-[#0f172a] rounded-xl px-3 py-2.5 mb-4 border border-slate-800">
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: crossDeviceWarning.subjectColor || '#f97316' }} />
+                <span className="text-sm text-slate-200 font-medium">{crossDeviceWarning.subjectName}</span>
+                <span className="text-xs text-slate-500 ml-auto">
+                  {crossDeviceWarning.isPaused ? 'Paused' : 'Running'}
+                </span>
+              </div>
+              <p className="text-slate-400 text-sm mb-5">
+                Starting here will create a <span className="text-white font-semibold">separate session</span>. The other device's timer will keep running.
+                <br />
+                <span className="text-xs text-slate-500 mt-1 block">Stop the timer on the other device first to avoid duplicate sessions.</span>
+              </p>
+              <div className="flex gap-2.5">
+                <button onClick={() => setCrossDeviceWarning(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-700 text-sm text-slate-300 hover:bg-slate-800 transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleConfirmCrossDevice}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-400 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2">
+                  <i className="ti ti-player-play text-sm" />
+                  Start Anyway
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

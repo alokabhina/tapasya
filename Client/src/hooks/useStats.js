@@ -7,8 +7,8 @@ import {
 } from '@/utils/stats'
 import { getTodayString, get4amDayString } from '@/utils/time'
 
-// period = { period, startDate, endDate }
-export function useStats(period = {}) {
+// period = { period, startDate, endDate }, refreshKey = optional counter to force refetch
+export function useStats(period = {}, refreshKey = 0) {
   const { uid, setStreak, setTotalHours } = useUserStore()
   const [sessions, setSessions]         = useState([])
   const [loading, setLoading]           = useState(true)
@@ -22,11 +22,11 @@ export function useStats(period = {}) {
 
   useEffect(() => {
     if (!uid) return
-    const key = JSON.stringify(period)
+    const key = JSON.stringify(period) + '|' + refreshKey
     if (key === prevKey.current) return
     prevKey.current = key
     fetchAndProcess()
-  }, [uid, JSON.stringify(period)])
+  }, [uid, JSON.stringify(period), refreshKey])
 
   async function fetchAndProcess() {
     setLoading(true)

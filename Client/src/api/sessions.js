@@ -75,6 +75,33 @@ export async function deleteSession(id) {
   return { ok: true }
 }
 
+// ── Active session (cross-device conflict detection) ─────────────────────────
+
+// Send heartbeat — call every 15s while timer is running
+export async function sendActiveHeartbeat(payload) {
+  if (!navigator.onLine) return
+  try {
+    await api.post('/sessions/active', payload)
+  } catch (_) {}
+}
+
+// Get active session on another device for same user
+export async function getActiveSession() {
+  if (!navigator.onLine) return null
+  try {
+    const data = await api.get('/sessions/active').then(r => r.data)
+    return data.active ? data : null
+  } catch (_) { return null }
+}
+
+// Clear active session from server (on timer stop)
+export async function clearActiveSession() {
+  if (!navigator.onLine) return
+  try {
+    await api.delete('/sessions/active')
+  } catch (_) {}
+}
+
 // ── Pending sync (legacy — still used by old code) ────────────────────────────
 const PENDING_KEY = 'tapasya_pending_sessions'
 export function getPendingSync() {

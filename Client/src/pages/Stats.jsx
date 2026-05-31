@@ -394,7 +394,9 @@ export default function Stats() {
     const refresh = () => setRefreshKey(k => k + 1);
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('focus', refresh);
-    return () => { document.removeEventListener('visibilitychange', refresh); window.removeEventListener('focus', refresh); };
+    // AUTO-REFRESH: timer stop hone par stats turant update ho
+    window.addEventListener('tapasya:session-saved', refresh);
+    return () => { document.removeEventListener('visibilitychange', refresh); window.removeEventListener('focus', refresh); window.removeEventListener('tapasya:session-saved', refresh); };
   }, []);
 
   // Navigate forward/back
@@ -453,7 +455,7 @@ export default function Stats() {
     startDate, endDate,
   }), [activeTab, startDate, endDate]);
 
-  const { donutData, loading, totalSeconds, sessions } = useStats(period);
+  const { donutData, loading, totalSeconds, sessions } = useStats(period, refreshKey);
 
   // ── Daily view data ──────────────────────────────────────────────────────
   const daySubjects = useMemo(() => activeTab === 'Day' ? aggregateForDay(sessions || [], dayNav) : [], [sessions, dayNav, activeTab]);
