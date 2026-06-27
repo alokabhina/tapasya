@@ -15,6 +15,8 @@ import ColorPicker from '@/components/ui/ColorPicker';
 import { saveFocusSession } from '@/utils/focusHistory';
 import { checkCrossDeviceConflict } from '@/hooks/useCrossDeviceGuard';
 import { useSmartNotifications } from '@/hooks/useSmartNotifications';
+import ExamCountdown, { ExamCountdownMobile, useExams } from '@/components/home/ExamCountdown';
+import { fetchWordOfDay } from '@/api/vocab';
 
 // ── Aesthetic background styles for cards ─────────────────────────────────────
 const CARD_BACKGROUNDS = [
@@ -626,6 +628,8 @@ export default function Home() {
   const { start, stop }  = useTimer();
   const navigate         = useNavigate();
 
+  const exams = useExams();
+  const [showExamPanel, setShowExamPanel] = useState(false);
   const [modal,         setModal]         = useState(null);
   const [switchWarning, setSwitchWarning] = useState(null);
   const [crossDeviceWarning, setCrossDeviceWarning] = useState(null); // { subjectName, elapsed, isPaused }
@@ -642,6 +646,11 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const notifRef = useRef(null);
   const quote = getTodayQuote();
+  const [wordOfDay, setWordOfDay] = useState(null);
+
+  useEffect(() => {
+    fetchWordOfDay().then((d) => setWordOfDay(d.word)).catch(() => {});
+  }, []);
 
   const todayTotal = subjects.reduce((sum, s) => sum + (s.todaySeconds || 0), 0);
   const goalPct    = dailyGoalSeconds > 0 ? Math.min((todayTotal / dailyGoalSeconds) * 100, 100) : 0;
@@ -790,10 +799,14 @@ export default function Home() {
         <div className="p-4 md:p-5 max-w-4xl pb-2 md:pb-5">
 
           {/* Header */}
-          <div className="flex items-start justify-between mb-5">
+          <div className="flex items-start justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold text-white">{greeting}, {firstName} 👋</h1>
               <p className="text-slate-400 text-sm mt-1">Small steps today, big results tomorrow.</p>
+              {/* Mobile Exam Countdown Strip — right below greeting */}
+              <div className="xl:hidden mt-2">
+                <ExamCountdownMobile exams={exams} onOpenPanel={() => setShowExamPanel(true)} />
+              </div>
             </div>
             <div className="flex items-center gap-2">
             <button
@@ -900,6 +913,9 @@ export default function Home() {
         {/* Focus Mode - Pomodoro (FIRST) */}
         <FocusMode subjects={subjects} />
 
+        {/* Exam Countdown */}
+        <ExamCountdown />
+
         {/* Quote */}
         <div className="bg-[#141d2e] rounded-2xl p-4 border border-slate-800">
           <div className="flex gap-2">
@@ -910,6 +926,21 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* Word of the Day */}
+        {wordOfDay && (
+          <button
+            onClick={() => navigate('/vocab')}
+            className="text-left bg-[#141d2e] rounded-2xl p-4 border border-slate-800 hover:border-orange-500/30 transition-colors"
+          >
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <i className="ti ti-book-2 text-orange-400 text-sm" />
+              <span className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">Word of the Day</span>
+            </div>
+            <p className="font-serif text-white text-base">{wordOfDay.word}</p>
+            <p className="text-slate-400 text-xs mt-1 leading-relaxed">{wordOfDay.meaning}</p>
+          </button>
+        )}
 
         {/* Today's Plan */}
         <div className="bg-[#141d2e] rounded-2xl p-4 border border-slate-800">
@@ -967,6 +998,22 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Mobile Exam Panel — slides up on mobile when user taps exam strip */}
+      {showExamPanel && (
+        <div className="fixed inset-0 z-50 flex items-end xl:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowExamPanel(false)} />
+          <div className="relative bg-[#0f172a] rounded-t-3xl border-t border-slate-700 w-full max-h-[70vh] overflow-y-auto p-4 pb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-bold">Exam Countdown</h3>
+              <button onClick={() => setShowExamPanel(false)} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center">
+                <i className="ti ti-x text-slate-400 text-sm" />
+              </button>
+            </div>
+            <ExamCountdown />
+          </div>
+        </div>
+      )}
 
       {/* Subject Modal */}
       {modal && (

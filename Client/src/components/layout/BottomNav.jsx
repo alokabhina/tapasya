@@ -9,10 +9,10 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 const MAIN_NAV = [
   { to: '/',        icon: 'ti-home',      label: 'Home'    },
-  { to: '/games',   icon: 'ti-sword',     label: 'Games'   },  // Stats moved to drawer
+  { to: '/vocab',   icon: 'ti-book-2',    label: 'Vocab'   },
   { to: '/todo',    icon: 'ti-checkbox',  label: 'Todo'    },
   { to: '/group',   icon: 'ti-users',     label: 'Group'   },
-  { to: '/profile', icon: 'ti-user',      label: 'Profile' },
+  { to: '/stats',   icon: 'ti-chart-bar', label: 'Stats'   },
 ];
 
 export default function BottomNav() {
