@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   fetchWords, addWord, uploadWords, deleteWord, fetchVocabStats, fetchStreak, setDailyTarget,
-} from '@/api/vocab';
+} from '@/api/Vocab';
 import BookReader from '@/components/vocab/PagedBook';
 
 const TYPE_FILTERS = [
