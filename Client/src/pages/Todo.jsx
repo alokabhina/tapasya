@@ -440,39 +440,59 @@ function TodayOverview({ todayTasks, streakDays }) {
 }
 
 // ── History Section with Day Navigation ──────────────────────────────────────
-function HistorySection({ tasks }) {
+function HistorySection({ tasks, onToggle }) {
   const todayStr = get4amDateString();
   const [viewDate, setViewDate] = useState(todayStr);
   const [filterSubject, setFilterSubject] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all"); // 'all' | 'done' | 'undone'
 
   const canGoNext = viewDate < todayStr;
 
   const dayTasks = useMemo(() => {
     return tasks.filter((t) => {
-      const taskDate = t.completedAt || t.date || "";
-      if (taskDate !== viewDate) return false;
-      if (!t.done) return false;
+      // Match by task date (use date field for all tasks, completedAt for done tasks on that day)
+      const taskDate = t.date || "";
+      const completedDate = t.completedAt || "";
+      const matchDate = taskDate === viewDate || (t.done && completedDate === viewDate);
+      if (!matchDate) return false;
+      if (filterStatus === "done" && !t.done) return false;
+      if (filterStatus === "undone" && t.done) return false;
       if (filterSubject !== "all" && t.subjectName !== filterSubject) return false;
       return true;
     });
-  }, [tasks, viewDate, filterSubject]);
+  }, [tasks, viewDate, filterSubject, filterStatus]);
 
   const subjectNames = useMemo(() =>
-    [...new Set(tasks.filter((t) => t.done && t.subjectName).map((t) => t.subjectName))],
+    [...new Set(tasks.filter((t) => t.subjectName).map((t) => t.subjectName))],
     [tasks]
   );
+
+  const doneCount = dayTasks.filter(t => t.done).length;
+  const totalCount = dayTasks.length;
 
   return (
     <div className="bg-[#141d2e] rounded-2xl border border-slate-800 overflow-hidden">
       <div className="flex items-center justify-between px-4 sm:px-5 pt-4 pb-3 border-b border-slate-800 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <h3 className="text-white font-semibold">History</h3>
-          <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{dayTasks.length} done</span>
+          <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
+            {doneCount}/{totalCount} done
+          </span>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Status filter */}
+          <div className="flex gap-0.5 bg-[#0f172a] rounded-lg border border-slate-700/50 p-0.5">
+            {[{v:'all',l:'All'},{v:'done',l:'✓ Done'},{v:'undone',l:'○ Pending'}].map(({v,l}) => (
+              <button key={v} onClick={() => setFilterStatus(v)}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-all
+                  ${filterStatus === v ? 'bg-orange-500 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
           <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}
             className="bg-[#1e293b] border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none">
-            <option value="all">All</option>
+            <option value="all">All Subjects</option>
             {subjectNames.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           {/* Day navigator */}
@@ -493,19 +513,29 @@ function HistorySection({ tasks }) {
       {dayTasks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-slate-600">
           <i className="ti ti-history text-2xl mb-2" />
-          <p className="text-sm">No completed tasks {viewDate === todayStr ? "today" : "this day"}</p>
+          <p className="text-sm">No tasks {viewDate === todayStr ? "today" : "this day"}</p>
         </div>
       ) : (
         <div className="divide-y divide-slate-800/30">
           {dayTasks.map((task) => {
             const p = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG["Medium"];
             return (
-              <div key={task._id || task.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/20 transition-colors">
-                <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
-                  <i className="ti ti-check text-white text-[9px]" />
-                </div>
+              <div key={task._id || task.id}
+                className={`flex items-center gap-3 px-4 py-3 hover:bg-slate-800/20 transition-colors
+                  ${task.done ? '' : 'opacity-80'}`}>
+                {/* Toggle button */}
+                <button
+                  onClick={() => onToggle && onToggle(task._id || task.id, task.done)}
+                  className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all
+                    ${task.done
+                      ? 'bg-green-500 border-green-500'
+                      : 'border-slate-600 hover:border-orange-400 bg-transparent'}`}>
+                  {task.done && <i className="ti ti-check text-white text-[9px]" />}
+                </button>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-slate-300 line-through truncate">{task.text}</p>
+                  <p className={`text-sm truncate ${task.done ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                    {task.text}
+                  </p>
                   {task.subjectName && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-md mt-0.5 inline-block"
                       style={{ backgroundColor: (task.subjectColor || "#f97316") + "22", color: task.subjectColor || "#fb923c" }}>
@@ -520,7 +550,10 @@ function HistorySection({ tasks }) {
                     </span>
                   )}
                   {task.estMins && <span className="text-xs text-slate-500">{formatEstTime(task.estMins)}</span>}
-                  <span className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">Done</span>
+                  {task.done
+                    ? <span className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">Done</span>
+                    : <span className="text-xs text-slate-500 bg-slate-800/60 border border-slate-700/40 px-2 py-0.5 rounded-full">Pending</span>
+                  }
                 </div>
               </div>
             );
@@ -906,7 +939,7 @@ export default function Todo() {
             </div>
 
             {/* History */}
-            <HistorySection tasks={tasks} />
+            <HistorySection tasks={tasks} onToggle={handleToggle} />
           </div>
 
           {/* Sidebar */}

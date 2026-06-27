@@ -5,8 +5,8 @@
 import api from './client'
 
 // ── GET /api/vocab/words — paginated dictionary (search + filters) ───────────
-export async function fetchWords({ search = '', wordType = 'all', difficulty = 'all', tag = '', attempted = false, page = 1, limit = 30 } = {}) {
-  const res = await api.get('/vocab/words', { params: { search, wordType, difficulty, tag, attempted, page, limit } })
+export async function fetchWords({ search = '', wordType = 'all', difficulty = 'all', tag = '', attempted = false, masteryFilter = 'all', mine = false, page = 1, limit = 30 } = {}) {
+  const res = await api.get('/vocab/words', { params: { search, wordType, difficulty, tag, attempted, masteryFilter, mine, page, limit } })
   return res.data // { words[], total, page, pages }
 }
 
@@ -28,16 +28,32 @@ export async function deleteWord(id) {
   return res.data
 }
 
-// ── GET /api/vocab/quiz — smart 80/20 word selection ──────────────────────────
-export async function fetchQuiz({ n = 10, pool = 'all', tag } = {}) {
-  const res = await api.get('/vocab/quiz', { params: { n, pool, tag } })
+// ── GET /api/vocab/quiz — smart due-date based word selection ────────────────
+// mode: 'recognition' (word → guess meaning, default) | 'reverse' (meaning → guess word)
+// wordIds: optional array of specific word _ids for a custom quiz (skips smart selection)
+export async function fetchQuiz({ n = 10, pool = 'all', tag, mode = 'recognition', wordIds } = {}) {
+  const params = { n, pool, tag, mode }
+  if (wordIds?.length) params.wordIds = wordIds.join(',')
+  const res = await api.get('/vocab/quiz', { params })
   return res.data // { words[] }
 }
 
 // ── POST /api/vocab/progress — save a quiz answer ─────────────────────────────
 export async function saveProgress(wordId, correct) {
   const res = await api.post('/vocab/progress', { wordId, correct })
-  return res.data // { ok, progress }
+  return res.data // { ok, progress, streak }
+}
+
+// ── GET /api/vocab/streak — today's revision count + streak ─────────────────
+export async function fetchStreak() {
+  const res = await api.get('/vocab/streak')
+  return res.data // { dailyTarget, todayCount, currentStreak, longestStreak }
+}
+
+// ── POST /api/vocab/streak/target — set daily word-revision target ──────────
+export async function setDailyTarget(dailyTarget) {
+  const res = await api.post('/vocab/streak/target', { dailyTarget })
+  return res.data
 }
 
 // ── GET /api/vocab/stats — overall dictionary + mastery stats ────────────────

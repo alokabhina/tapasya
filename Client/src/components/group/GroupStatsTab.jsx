@@ -30,6 +30,15 @@ function buildGrid(heatmap, days=70) {
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const DAYS=['S','M','T','W','T','F','S']
 
+function formatExactTime(sec) {
+  if (!sec || sec <= 0) return null
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  if (h > 0 && m > 0) return `${h}h${m}m`
+  if (h > 0) return `${h}h`
+  return `${m}m`
+}
+
 function MiniHeatmap({heatmap}){
   const weeks=buildGrid(heatmap,70)
   const today=dateKey(new Date())
@@ -39,6 +48,11 @@ function MiniHeatmap({heatmap}){
     const first=week.find(d=>d!==null)
     if(first){const m=first.getMonth();if(m!==lastM){monthLabels.push({wi,label:MONTHS[m]});lastM=m}}
   })
+
+  // Find max for sizing
+  const allSecs = weeks.flat().filter(Boolean).map(d => heatmap[dateKey(d)]||0)
+  const maxSec = Math.max(...allSecs, 1)
+
   return(
     <div className="w-full">
       <div className="flex mb-1" style={{paddingLeft:'18px'}}>
@@ -47,21 +61,29 @@ function MiniHeatmap({heatmap}){
           return <div key={wi} className="flex-1 text-[9px] text-slate-500">{label?label.label:''}</div>
         })}
       </div>
-      <div className="flex gap-1">
-        <div className="flex flex-col gap-1" style={{minWidth:'14px'}}>
-          {DAYS.map((l,i)=><div key={i} className="text-[9px] text-slate-600 leading-none h-3 flex items-center">{l}</div>)}
+      <div className="flex gap-0.5">
+        <div className="flex flex-col gap-0.5" style={{minWidth:'14px'}}>
+          {DAYS.map((l,i)=><div key={i} className="text-[9px] text-slate-600 leading-none h-5 flex items-center">{l}</div>)}
         </div>
-        <div className="flex gap-1 flex-1">
+        <div className="flex gap-0.5 flex-1">
           {weeks.map((week,wi)=>(
-            <div key={wi} className="flex flex-col gap-1 flex-1">
+            <div key={wi} className="flex flex-col gap-0.5 flex-1">
               {week.map((date,di)=>{
-                if(!date) return <div key={di} className="h-3 rounded-sm" style={{backgroundColor:'transparent'}}/>
+                if(!date) return <div key={di} className="h-5 rounded-sm" style={{backgroundColor:'transparent'}}/>
                 const key=dateKey(date)
                 const sec=heatmap[key]||0
+                const label=formatExactTime(sec)
                 return(
-                  <div key={di} title={`${key}${sec>0?` — ${formatHours(sec)}`:''}`}
-                    className={`h-3 rounded-sm ${key===today?'ring-1 ring-orange-400':''}`}
-                    style={{backgroundColor:cellColor(sec)}}/>
+                  <div key={di}
+                    title={`${key}${sec>0?` — ${formatHours(sec)}`:''}`}
+                    className={`h-5 rounded-sm flex items-center justify-center overflow-hidden ${key===today?'ring-1 ring-orange-400':''}`}
+                    style={{backgroundColor:cellColor(sec)}}>
+                    {label && (
+                      <span className="text-[7px] font-bold leading-none text-white/90 select-none pointer-events-none px-0.5 truncate">
+                        {label}
+                      </span>
+                    )}
+                  </div>
                 )
               })}
             </div>

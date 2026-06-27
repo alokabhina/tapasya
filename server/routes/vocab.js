@@ -4,6 +4,7 @@
 import express from 'express'
 import VocabWord from '../models/VocabWord.js'
 import UserVocabProgress from '../models/UserVocabProgress.js'
+import UserVocabStreak from '../models/UserVocabStreak.js'
 import authMiddleware from '../middleware/auth.js'
 
 const router = express.Router()
@@ -81,12 +82,13 @@ router.post('/add', authMiddleware, async (req, res) => {
 // ── GET /api/vocab/words — dictionary view (paginated, filterable) ─────────────
 router.get('/words', authMiddleware, async (req, res) => {
   try {
-    const { search, wordType, difficulty, tag, attempted, page = 1, limit = 30 } = req.query
+    const { search, wordType, difficulty, tag, attempted, masteryFilter, mine, page = 1, limit = 30 } = req.query
     const filter = {}
     if (search) filter.word = { $regex: search, $options: 'i' }
     if (wordType && wordType !== 'all') filter.wordType = wordType
     if (difficulty && difficulty !== 'all') filter.difficulty = difficulty
     if (tag) filter.tags = tag
+    if (mine === 'true') filter.addedBy = req.user.id
 
     // "attempted" tab — only words this user has tried at least once in a quiz
     if (attempted === 'true') {
@@ -94,6 +96,24 @@ router.get('/words', authMiddleware, async (req, res) => {
         userId: req.user.id, seenCount: { $gt: 0 }
       }).select('wordId').lean()
       filter._id = { $in: attemptedProgress.map(p => p.wordId) }
+    }
+
+    // "Mastered / Weak / Unseen" quick-filter chips
+    if (masteryFilter === 'mastered') {
+      const ids = await UserVocabProgress.find({
+        userId: req.user.id, masteryScore: { $gte: 80 }
+      }).select('wordId').lean()
+      filter._id = { $in: ids.map(p => p.wordId) }
+    } else if (masteryFilter === 'weak') {
+      const ids = await UserVocabProgress.find({
+        userId: req.user.id, seenCount: { $gt: 0 }, masteryScore: { $lt: 40 }
+      }).select('wordId').lean()
+      filter._id = { $in: ids.map(p => p.wordId) }
+    } else if (masteryFilter === 'unseen') {
+      const seenIds = await UserVocabProgress.find({
+        userId: req.user.id, seenCount: { $gt: 0 }
+      }).select('wordId').lean()
+      filter._id = { $nin: seenIds.map(p => p.wordId) }
     }
 
     const total = await VocabWord.countDocuments(filter)
@@ -125,8 +145,27 @@ router.get('/words', authMiddleware, async (req, res) => {
 // ── GET /api/vocab/quiz — smart 80/20 word selection ─────────────────────────
 router.get('/quiz', authMiddleware, async (req, res) => {
   try {
-    const { n = 10, pool = 'all', tag } = req.query
+    const { n = 10, pool = 'all', tag, mode = 'recognition', wordIds } = req.query
     const count = Math.min(+n, 50)
+    const now = new Date()
+
+    // ── Custom quiz: user picked specific words (e.g. "give me just these 20") ──
+    if (wordIds) {
+      const ids = String(wordIds).split(',').map(s => s.trim()).filter(Boolean)
+      const allWords = await VocabWord.find({ _id: { $in: ids } }).lean()
+      if (!allWords.length) return res.json({ words: [] })
+
+      const progressList = await UserVocabProgress.find({
+        userId: req.user.id, wordId: { $in: allWords.map(w => w._id) }
+      }).lean()
+      const progressMap = {}
+      progressList.forEach(p => { progressMap[p.wordId.toString()] = p })
+
+      const shuffle = arr => arr.sort(() => Math.random() - 0.5)
+      const enriched = shuffle(allWords.map(w => ({ ...w, progress: progressMap[w._id.toString()] || null })))
+      const withOptions = buildOptions(enriched, allWords, mode)
+      return res.json({ words: withOptions.slice(0, count) })
+    }
 
     // Base word filter
     const wordFilter = {}
@@ -140,75 +179,99 @@ router.get('/quiz', authMiddleware, async (req, res) => {
     const allWords = await VocabWord.find(wordFilter).lean()
     if (!allWords.length) return res.json({ words: [] })
 
-    const wordIds = allWords.map(w => w._id)
+    const wordIdsAll = allWords.map(w => w._id)
     const progressList = await UserVocabProgress.find({
-      userId: req.user.id, wordId: { $in: wordIds }
+      userId: req.user.id, wordId: { $in: wordIdsAll }
     }).lean()
 
     const progressMap = {}
     progressList.forEach(p => { progressMap[p.wordId.toString()] = p })
 
-    // Categorize: unseen, weak, seen
-    const unseen = [], weak = [], seen = []
+    // Categorize using SM-2 due dates: unseen, due-now (overdue/never-reviewed-but-attempted), not-due-yet
+    const unseen = [], dueNow = [], notDue = []
     allWords.forEach(w => {
       const p = progressMap[w._id.toString()]
-      if (!p || p.seenCount === 0)       unseen.push(w)
-      else if (p.wrongCount > 0)         weak.push(w)
-      else                               seen.push(w)
+      if (!p || p.seenCount === 0) { unseen.push(w); return }
+      const due = p.nextReviewDate ? new Date(p.nextReviewDate) : null
+      if (!due || due <= now || p.wrongCount > 0) dueNow.push(w)
+      else notDue.push(w)
     })
 
-    // 80/20 logic
+    // 80/20 — 80% priority (unseen + due-now, sorted so most-overdue comes first), 20% review (not yet due)
     const prioritySlots = Math.ceil(count * 0.8)
     const reviewSlots   = count - prioritySlots
 
     const shuffle = arr => arr.sort(() => Math.random() - 0.5)
+    const byMostOverdue = (a, b) => {
+      const pa = progressMap[a._id.toString()], pb = progressMap[b._id.toString()]
+      const da = pa?.nextReviewDate ? new Date(pa.nextReviewDate).getTime() : 0
+      const db = pb?.nextReviewDate ? new Date(pb.nextReviewDate).getTime() : 0
+      return da - db // older due date (more overdue) first; unseen (no progress) sort with shuffle below
+    }
 
     let selected = []
-    // Fill priority slots from unseen + weak
-    const priority = shuffle([...unseen, ...weak])
-    selected = priority.slice(0, prioritySlots)
+    const priorityPool = shuffle([...unseen, ...dueNow])
+    // keep the due-now ones biased toward most overdue, unseen interspersed via shuffle above
+    priorityPool.sort((a, b) => {
+      const aHasProgress = !!progressMap[a._id.toString()]
+      const bHasProgress = !!progressMap[b._id.toString()]
+      if (aHasProgress && bHasProgress) return byMostOverdue(a, b)
+      return 0 // leave shuffle order for unseen vs unseen / unseen vs due mix
+    })
+    selected = priorityPool.slice(0, prioritySlots)
 
-    // If priority not enough, fill from seen
+    // If priority not enough, fill from notDue
     if (selected.length < prioritySlots) {
-      const extra = shuffle([...seen]).slice(0, prioritySlots - selected.length)
+      const extra = shuffle([...notDue]).slice(0, prioritySlots - selected.length)
       selected.push(...extra)
     }
 
-    // Fill review slots from seen
-    const reviewPool = shuffle([...seen]).filter(w =>
+    // Fill review slots from notDue (already-healthy words, light touch review)
+    const reviewPool = shuffle([...notDue]).filter(w =>
       !selected.find(s => s._id.toString() === w._id.toString())
     )
     selected.push(...reviewPool.slice(0, reviewSlots))
 
     // If total still not enough, add more from any pool
     if (selected.length < count) {
-      const remaining = shuffle([...unseen, ...weak, ...seen])
+      const remaining = shuffle([...unseen, ...dueNow, ...notDue])
         .filter(w => !selected.find(s => s._id.toString() === w._id.toString()))
       selected.push(...remaining.slice(0, count - selected.length))
     }
 
-    // Enrich with progress
-    const enriched = selected.slice(0, count).map(w => ({
+    const finalWords = shuffle(selected.slice(0, count).map(w => ({
       ...w,
       progress: progressMap[w._id.toString()] || null
-    }))
+    })))
 
-    const finalWords = shuffle(enriched)
-
-    // ── Build 4-option MCQ for each word: 1 correct meaning + 3 random distractor meanings ──
-    const meaningPool = allWords.map(w => w.meaning).filter(Boolean)
-    const withOptions = finalWords.map(w => {
-      const distractorPool = meaningPool.filter(m => m !== w.meaning)
-      const distractors = shuffle([...distractorPool]).slice(0, 3)
-      const options = shuffle([w.meaning, ...distractors]) // random position, never fixed
-      return { ...w, options }
-    })
-
+    const withOptions = buildOptions(finalWords, allWords, mode)
     res.json({ words: withOptions })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
 })
+
+// ── Build 4-option MCQ. mode='recognition' → word shown, guess meaning (default).
+//    mode='reverse' → meaning shown, guess the word (harder, tests recall). ──
+function buildOptions(selectedWords, allWordsPool, mode) {
+  const shuffle = arr => [...arr].sort(() => Math.random() - 0.5)
+  if (mode === 'reverse') {
+    const wordPool = allWordsPool.map(w => w.word).filter(Boolean)
+    return selectedWords.map(w => {
+      const distractorPool = wordPool.filter(x => x !== w.word)
+      const distractors = shuffle(distractorPool).slice(0, 3)
+      const options = shuffle([w.word, ...distractors])
+      return { ...w, mode: 'reverse', options }
+    })
+  }
+  const meaningPool = allWordsPool.map(w => w.meaning).filter(Boolean)
+  return selectedWords.map(w => {
+    const distractorPool = meaningPool.filter(m => m !== w.meaning)
+    const distractors = shuffle(distractorPool).slice(0, 3)
+    const options = shuffle([w.meaning, ...distractors])
+    return { ...w, mode: 'recognition', options }
+  })
+}
 
 // ── POST /api/vocab/progress — save quiz answer ───────────────────────────────
 router.post('/progress', authMiddleware, async (req, res) => {
@@ -217,25 +280,92 @@ router.post('/progress', authMiddleware, async (req, res) => {
     if (!wordId) return res.status(400).json({ error: 'wordId required' })
 
     const today = new Date().toISOString().split('T')[0]
+    const existing = await UserVocabProgress.findOne({ userId: req.user.id, wordId })
+
+    // ── SM-2 lite ──────────────────────────────────────────────────────────
+    let repetitions  = existing?.repetitions  || 0
+    let easeFactor    = existing?.easeFactor   || 2.5
+    let intervalDays  = existing?.intervalDays || 0
+    let masteryScore  = existing?.masteryScore || 0
+
+    if (correct) {
+      repetitions += 1
+      if (repetitions === 1)      intervalDays = 1
+      else if (repetitions === 2) intervalDays = 6
+      else                        intervalDays = Math.round(intervalDays * easeFactor)
+      easeFactor = Math.max(1.3, easeFactor + 0.1)
+      masteryScore = Math.min(100, masteryScore + 5)
+    } else {
+      repetitions  = 0
+      intervalDays = 1 // review again tomorrow after a miss
+      easeFactor   = Math.max(1.3, easeFactor - 0.2)
+      masteryScore = Math.max(0, masteryScore - 10)
+    }
+
+    const nextReviewDate = new Date()
+    nextReviewDate.setDate(nextReviewDate.getDate() + intervalDays)
 
     const p = await UserVocabProgress.findOneAndUpdate(
       { userId: req.user.id, wordId },
       {
-        $inc: {
-          seenCount:  1,
-          wrongCount: correct ? 0 : 1,
-          masteryScore: correct ? 5 : -10,
+        $inc: { seenCount: 1, wrongCount: correct ? 0 : 1 },
+        $set: {
+          lastSeenAt: new Date(), lastSeenDate: today,
+          repetitions, easeFactor, intervalDays, nextReviewDate,
+          masteryScore,
         },
-        $set: { lastSeenAt: new Date(), lastSeenDate: today }
       },
       { upsert: true, new: true }
     )
 
-    // Clamp masteryScore 0-100
-    if (p.masteryScore < 0)   await UserVocabProgress.updateOne({ _id: p._id }, { masteryScore: 0 })
-    if (p.masteryScore > 100) await UserVocabProgress.updateOne({ _id: p._id }, { masteryScore: 100 })
+    // ── Daily streak + target ────────────────────────────────────────────
+    let streak = await UserVocabStreak.findOne({ userId: req.user.id })
+    if (!streak) streak = new UserVocabStreak({ userId: req.user.id })
 
-    res.json({ ok: true, progress: p })
+    if (streak.lastActiveDate !== today) {
+      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
+      const yStr = yesterday.toISOString().split('T')[0]
+      streak.currentStreak = streak.lastActiveDate === yStr ? streak.currentStreak + 1 : 1
+      streak.todayCount = 0
+      streak.lastActiveDate = today
+    }
+    streak.todayCount += 1
+    streak.longestStreak = Math.max(streak.longestStreak, streak.currentStreak)
+    await streak.save()
+
+    res.json({ ok: true, progress: p, streak })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── GET /api/vocab/streak — today's progress toward daily target + streak ────
+router.get('/streak', authMiddleware, async (req, res) => {
+  try {
+    let streak = await UserVocabStreak.findOne({ userId: req.user.id }).lean()
+    if (!streak) streak = { dailyTarget: 10, todayCount: 0, currentStreak: 0, longestStreak: 0, lastActiveDate: '' }
+
+    const today = new Date().toISOString().split('T')[0]
+    // If user hasn't been active today yet, show today's count as 0 (don't mutate here, just display)
+    const todayCount = streak.lastActiveDate === today ? streak.todayCount : 0
+
+    res.json({ ...streak, todayCount })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── POST /api/vocab/streak/target — set daily word-revision target ──────────
+router.post('/streak/target', authMiddleware, async (req, res) => {
+  try {
+    const { dailyTarget } = req.body
+    const target = Math.max(5, Math.min(100, +dailyTarget || 10))
+    const streak = await UserVocabStreak.findOneAndUpdate(
+      { userId: req.user.id },
+      { $set: { dailyTarget: target } },
+      { upsert: true, new: true }
+    )
+    res.json(streak)
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

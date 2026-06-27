@@ -16,7 +16,7 @@ import { saveFocusSession } from '@/utils/focusHistory';
 import { checkCrossDeviceConflict } from '@/hooks/useCrossDeviceGuard';
 import { useSmartNotifications } from '@/hooks/useSmartNotifications';
 import ExamCountdown, { ExamCountdownMobile, useExams } from '@/components/home/ExamCountdown';
-import { fetchWordOfDay } from '@/api/vocab';
+import { fetchWordOfDay } from '@/api/Vocab';
 
 // ── Aesthetic background styles for cards ─────────────────────────────────────
 const CARD_BACKGROUNDS = [
@@ -36,7 +36,7 @@ const TIMER_BG = `
 // ── Motivational quotes ───────────────────────────────────────────────────────
 const QUOTES = [
   { text: 'Discipline today, success tomorrow.', author: 'Your future self' },
-  { text: 'Small steps every day lead to big results.', author: 'Your future self' },
+  { text: 'Small step every day lead to big results.', author: 'Your future self' },
   { text: 'The expert was once a beginner who never quit.', author: 'Your future self' },
   { text: 'Every hour invested is an hour closer to your goal.', author: 'Your future self' },
   { text: 'Success is the sum of small efforts repeated daily.', author: 'Your future self' },

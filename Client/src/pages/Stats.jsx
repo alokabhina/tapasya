@@ -274,6 +274,344 @@ function CumulativeChart({ data }) {
 }
 
 // ─── Focus charts ─────────────────────────────────────────────────────────────
+// ── Helpers for daily start/end/rest ─────────────────────────────────────────
+function parseSessTime(s, field) {
+  const raw = s[field];
+  if (!raw) return null;
+  const d = raw?.toDate ? raw.toDate() : new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function fmt12(date) {
+  if (!date) return '--';
+  return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+function fmtRestDur(ms) {
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60), rm = m % 60;
+  return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
+}
+
+// Get sorted + parsed blocks from sessions
+function buildSessionBlocks(sessions) {
+  return sessions
+    .map(s => {
+      const start = parseSessTime(s, 'startTime');
+      let end = parseSessTime(s, 'endTime');
+      if (!end && start && s.duration) end = new Date(start.getTime() + s.duration * 1000);
+      if (!start) return null;
+      if (!end || end <= start) end = new Date(start.getTime() + (s.duration || 0) * 1000);
+      return {
+        start, end,
+        subject: s.subjectName || 'Unknown',
+        color: s.subjectColor || '#f97316',
+        duration: s.duration || Math.round((end - start) / 1000),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start);
+}
+
+// ── Daily Start/End/Rest summary banner ──────────────────────────────────────
+function DayStartEndBanner({ sessions }) {
+  if (!sessions || sessions.length === 0) return null;
+  const blocks = buildSessionBlocks(sessions);
+  if (!blocks.length) return null;
+
+  const dayStart = blocks[0].start;
+  const dayEnd   = blocks[blocks.length - 1].end;
+  const totalSpanMs = dayEnd - dayStart;
+  const studyMs = blocks.reduce((s, b) => s + b.duration * 1000, 0);
+  const restMs  = Math.max(0, totalSpanMs - studyMs);
+
+  const studyPct = totalSpanMs > 0 ? Math.round((studyMs / totalSpanMs) * 100) : 0;
+  const restPct  = 100 - studyPct;
+
+  return (
+    <div className="bg-[#0d1625] rounded-2xl border border-slate-800/60 overflow-hidden">
+      {/* Top bar: study vs rest ratio */}
+      <div className="flex h-1.5 w-full overflow-hidden">
+        <div style={{ width: `${studyPct}%`, backgroundColor: '#f97316' }} className="transition-all duration-700"/>
+        <div style={{ width: `${restPct}%`, backgroundColor: '#1e293b' }}/>
+      </div>
+
+      <div className="p-4">
+        {/* Start / End row */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="bg-[#0a0f1a] rounded-xl p-3 border border-slate-800/40">
+            <div className="flex items-center gap-1.5 mb-1">
+              <i className="ti ti-player-play text-green-400 text-xs"/>
+              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Day Start</span>
+            </div>
+            <p className="text-lg font-bold font-mono text-green-400">{fmt12(dayStart)}</p>
+            <p className="text-[10px] text-slate-600 mt-0.5">First session began</p>
+          </div>
+          <div className="bg-[#0a0f1a] rounded-xl p-3 border border-slate-800/40">
+            <div className="flex items-center gap-1.5 mb-1">
+              <i className="ti ti-player-stop text-red-400 text-xs"/>
+              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Day End</span>
+            </div>
+            <p className="text-lg font-bold font-mono text-red-400">{fmt12(dayEnd)}</p>
+            <p className="text-[10px] text-slate-600 mt-0.5">Last session ended</p>
+          </div>
+        </div>
+
+        {/* Study vs Rest comparison */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-center gap-2.5 bg-orange-500/8 border border-orange-500/20 rounded-xl px-3 py-2.5">
+            <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+              <i className="ti ti-book-2 text-orange-400 text-sm"/>
+            </div>
+            <div>
+              <p className="text-sm font-bold font-mono text-orange-400">{fmtRestDur(studyMs)}</p>
+              <p className="text-[10px] text-slate-500">Study time <span className="text-orange-500/70">({studyPct}%)</span></p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 bg-slate-800/30 border border-slate-700/30 rounded-xl px-3 py-2.5">
+            <div className="w-8 h-8 rounded-lg bg-slate-700/30 flex items-center justify-center flex-shrink-0">
+              <i className="ti ti-coffee text-slate-400 text-sm"/>
+            </div>
+            <div>
+              <p className="text-sm font-bold font-mono text-slate-300">{fmtRestDur(restMs)}</p>
+              <p className="text-[10px] text-slate-500">Rest / breaks <span className="text-slate-600">({restPct}%)</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Daily Study Timeline (vertical with gaps) ─────────────────────────────────
+function DayStudyTimeline({ sessions }) {
+  if (!sessions || sessions.length === 0) return (
+    <div className="flex flex-col items-center justify-center h-20 gap-2">
+      <i className="ti ti-timeline text-2xl text-slate-700"/>
+      <p className="text-slate-600 text-sm">No sessions to show</p>
+    </div>
+  );
+
+  const blocks = buildSessionBlocks(sessions);
+  if (!blocks.length) return (
+    <div className="flex items-center justify-center h-16 text-slate-600 text-sm">No valid sessions</div>
+  );
+
+  // Build interleaved list: session + gap between sessions
+  const items = [];
+  blocks.forEach((b, i) => {
+    items.push({ type: 'session', ...b });
+    if (i < blocks.length - 1) {
+      const gapMs = blocks[i + 1].start - b.end;
+      if (gapMs > 30000) { // only show gaps > 30s
+        items.push({ type: 'gap', start: b.end, end: blocks[i + 1].start, ms: gapMs });
+      }
+    }
+  });
+
+  // Total span for proportional heights (min 10px per block, max 120px per block)
+  const totalSpanMs = blocks[blocks.length - 1].end - blocks[0].start;
+
+  function heightPx(ms) {
+    if (totalSpanMs <= 0) return 48;
+    return Math.min(120, Math.max(48, Math.round((ms / totalSpanMs) * 400)));
+  }
+
+  return (
+    <div className="w-full">
+      {/* Header: total span */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-green-400"/>
+          <span className="text-[10px] text-slate-500">{fmt12(blocks[0].start)}</span>
+        </div>
+        <span className="text-[10px] text-slate-600">
+          {fmtRestDur(totalSpanMs)} total span
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-slate-500">{fmt12(blocks[blocks.length-1].end)}</span>
+          <span className="w-2 h-2 rounded-full bg-red-400"/>
+        </div>
+      </div>
+
+      {/* Vertical timeline */}
+      <div className="flex gap-3">
+        {/* Left time column */}
+        <div className="flex flex-col items-end flex-shrink-0 w-14">
+          {items.map((item, i) => (
+            <div key={i} className="flex flex-col items-end justify-between"
+              style={{ height: `${heightPx(item.type === 'session' ? item.duration * 1000 : item.ms)}px` }}>
+              <span className="text-[9px] text-slate-600 leading-none">{fmt12(item.start)}</span>
+              {i === items.length - 1 && (
+                <span className="text-[9px] text-slate-600 leading-none">{fmt12(item.end)}</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Center line + blocks */}
+        <div className="flex flex-col items-center flex-shrink-0 w-6 relative">
+          {/* Continuous vertical line */}
+          <div className="absolute top-2 bottom-2 w-px bg-slate-800 left-1/2 -translate-x-1/2"/>
+          {items.map((item, i) => {
+            const h = heightPx(item.type === 'session' ? item.duration * 1000 : item.ms);
+            return (
+              <div key={i} className="relative z-10 flex flex-col items-center"
+                style={{ height: `${h}px` }}>
+                {item.type === 'session' ? (
+                  <>
+                    {/* Top dot */}
+                    <div className="w-3 h-3 rounded-full border-2 border-[#0d1625] flex-shrink-0 mt-0.5"
+                      style={{ backgroundColor: item.color }}/>
+                    {/* Filled line */}
+                    <div className="flex-1 w-1 rounded-full my-0.5"
+                      style={{ backgroundColor: item.color + 'aa' }}/>
+                    {/* Bottom dot */}
+                    <div className="w-2.5 h-2.5 rounded-full border-2 border-[#0d1625] flex-shrink-0 mb-0.5"
+                      style={{ backgroundColor: item.color + '88' }}/>
+                  </>
+                ) : (
+                  <>
+                    {/* Gap — dashed line */}
+                    <div className="flex-1 w-px border-l-2 border-dashed border-slate-700/50 my-1"/>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right content column */}
+        <div className="flex flex-col flex-1 min-w-0">
+          {items.map((item, i) => {
+            const h = heightPx(item.type === 'session' ? item.duration * 1000 : item.ms);
+            return (
+              <div key={i} className="flex items-start pt-0.5"
+                style={{ height: `${h}px` }}>
+                {item.type === 'session' ? (
+                  <div className="rounded-xl px-3 py-2 border w-full"
+                    style={{
+                      backgroundColor: item.color + '14',
+                      borderColor: item.color + '33',
+                    }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}/>
+                        <span className="text-xs font-semibold truncate" style={{ color: item.color }}>{item.subject}</span>
+                      </div>
+                      <span className="text-xs font-bold font-mono text-white flex-shrink-0">{formatDuration(item.duration)}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      {fmt12(item.start)} → {fmt12(item.end)}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 px-2 py-1 w-full">
+                    <i className="ti ti-coffee text-slate-700 text-xs flex-shrink-0"/>
+                    <span className="text-[10px] text-slate-700">
+                      Break · {fmtRestDur(item.ms)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Weekly Improvement (for Month view) ────────────────────────────────────────
+// Shows each week of the month with hours + % change vs prev week
+function WeeklyImprovement({ sessions, monthNav }) {
+  const weeks = useMemo(() => {
+    if (!sessions || !monthNav) return [];
+    const [y, m] = monthNav.split('-').map(Number);
+    const firstDay = new Date(y, m - 1, 1);
+    const lastDay = new Date(y, m, 0);
+
+    // Build week buckets: Sun–Sat within month
+    const result = [];
+    let cur = new Date(firstDay);
+    let weekNum = 1;
+    while (cur <= lastDay) {
+      const weekStart = new Date(cur);
+      // End of week = next Saturday or end of month
+      const weekEnd = new Date(cur);
+      weekEnd.setDate(weekEnd.getDate() + (6 - weekEnd.getDay()));
+      if (weekEnd > lastDay) weekEnd.setTime(lastDay.getTime());
+
+      const startStr = getDateString(weekStart);
+      const endStr = getDateString(weekEnd);
+
+      const weekSessions = sessions.filter(s => {
+        const d = s.date || getDateString(new Date(s.startTime?.toDate?.()?.toISOString() || s.startTime));
+        return d >= startStr && d <= endStr;
+      });
+      const totalSecs = weekSessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+
+      result.push({
+        label: `Week ${weekNum}`,
+        startStr, endStr,
+        seconds: totalSecs,
+        hours: totalSecs / 3600,
+      });
+
+      // Move to next Sunday
+      const nextSun = new Date(weekEnd);
+      nextSun.setDate(nextSun.getDate() + 1);
+      cur = nextSun;
+      weekNum++;
+    }
+    return result;
+  }, [sessions, monthNav]);
+
+  if (weeks.length === 0) return (
+    <div className="flex items-center justify-center h-16 text-slate-600 text-sm">No data</div>
+  );
+
+  const maxHours = Math.max(...weeks.map(w => w.hours), 1);
+
+  return (
+    <div className="space-y-2">
+      {weeks.map((week, i) => {
+        const prev = weeks[i - 1];
+        const diff = prev ? week.hours - prev.hours : null;
+        const pct = Math.round((week.hours / maxHours) * 100);
+        const improved = diff !== null && diff > 0;
+        const declined = diff !== null && diff < 0;
+
+        return (
+          <div key={i} className="bg-[#0a0f1a] rounded-xl p-3 border border-slate-800/40">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-300">{week.label}</span>
+                <span className="text-[10px] text-slate-600">{week.startStr.slice(5)} – {week.endStr.slice(5)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {diff !== null && (
+                  <span className={`text-[10px] font-bold flex items-center gap-0.5
+                    ${improved ? 'text-green-400' : declined ? 'text-red-400' : 'text-slate-500'}`}>
+                    <i className={`ti ${improved ? 'ti-trending-up' : declined ? 'ti-trending-down' : 'ti-minus'} text-[10px]`}/>
+                    {diff > 0 ? '+' : ''}{diff.toFixed(1)}h
+                  </span>
+                )}
+                <span className="text-xs font-bold font-mono text-orange-400">{week.hours.toFixed(1)}h</span>
+              </div>
+            </div>
+            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${pct}%`, backgroundColor: improved ? '#22c55e' : declined ? '#ef4444' : '#f97316' }}/>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function FocusDailyBars({ byDay }) {
   if (!byDay.length) return <div className="flex flex-col items-center justify-center h-28 gap-2"><i className="ti ti-target text-2xl text-slate-700"/><p className="text-slate-600 text-sm">No focus sessions yet</p></div>;
   const data = byDay.slice(-14).map(d => ({ ...d, hours: +(d.focusSeconds/3600).toFixed(2) }));
@@ -613,6 +951,12 @@ export default function Stats() {
                 {/* ─ DAY VIEW ─ */}
                 {activeTab === 'Day' && (
                   <>
+                    {/* Start / End / Study-Rest banner */}
+                    {sessions && sessions.length > 0 && (
+                      <div className="mb-4">
+                        <DayStartEndBanner sessions={sessions} />
+                      </div>
+                    )}
                     <div className="mb-4">
                       <ChartCard title={`${isToday ? 'Today' : formatDayLabel(dayNav)} — Subject Breakdown`} icon="ti-chart-donut-3">
                         {daySubjects.length > 0 ? (
@@ -625,6 +969,13 @@ export default function Stats() {
                         )}
                       </ChartCard>
                     </div>
+                    {sessions && sessions.length > 0 && (
+                      <div className="mb-4">
+                        <ChartCard title="Study Timeline" icon="ti-timeline">
+                          <DayStudyTimeline sessions={sessions} />
+                        </ChartCard>
+                      </div>
+                    )}
                     {sessions && sessions.length > 0 && (
                       <ChartCard title="Sessions Log" icon="ti-list">
                         <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
@@ -680,6 +1031,15 @@ export default function Stats() {
                       </ChartCard>
                       <ChartCard title="Daily Hours This Month" icon="ti-chart-bar">
                         <StackedBarChart data={monthBarData} xKey="label" height={180} />
+                      </ChartCard>
+                    </div>
+                    {/* Weekly Improvement */}
+                    <div className="mb-4">
+                      <ChartCard title="Weekly Improvement" icon="ti-trending-up" badge="this month">
+                        <p className="text-[10px] text-slate-500 mb-3 font-semibold uppercase tracking-[0.12em]">
+                          Week-by-week comparison — green = improved, red = less than prev week
+                        </p>
+                        <WeeklyImprovement sessions={sessions || []} monthNav={monthNav} />
                       </ChartCard>
                     </div>
                     {/* Hourly activity heatmap */}
