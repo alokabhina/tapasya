@@ -428,12 +428,74 @@ function AddWordModal({ onClose, onAdded, darkMode }) {
   );
 }
 
+/* ── Best prompts to give ChatGPT for extracting vocab as JSON ── */
+const VOCAB_JSON_SHAPE = '[{"word": "Abate", "meaning": "to reduce in intensity", "type": "synonym", "difficulty": "medium", "example": "The storm finally began to abate."}]'
+
+const PROMPT_PHOTOS = `You are helping me digitize a handwritten/printed vocabulary list from photos for my exam prep app.
+
+Look at the attached image(s) carefully and extract every vocabulary word along with its meaning. If a word's type or difficulty isn't written, infer it sensibly.
+
+Return ONLY a valid JSON array (no markdown, no explanation, no code fences) where each item looks exactly like this:
+${VOCAB_JSON_SHAPE}
+
+Rules:
+- "type" must be one of: "synonym", "antonym", "one-word", "idiom", "general"
+- "difficulty" must be one of: "easy", "medium", "hard"
+- "example" is optional — include a short example sentence if you can, otherwise omit it
+- Keep "meaning" short and clear (under 15 words)
+- Do not skip any word visible in the image, even if handwriting is unclear — make your best guess
+- Output raw JSON only, starting with [ and ending with ]`
+
+const PROMPT_PDF = `You are helping me digitize a vocabulary list from an attached PDF for my exam prep app.
+
+Read through the entire PDF and extract every vocabulary word along with its meaning. If a word's type or difficulty isn't mentioned, infer it sensibly.
+
+Return ONLY a valid JSON array (no markdown, no explanation, no code fences) where each item looks exactly like this:
+${VOCAB_JSON_SHAPE}
+
+Rules:
+- "type" must be one of: "synonym", "antonym", "one-word", "idiom", "general"
+- "difficulty" must be one of: "easy", "medium", "hard"
+- "example" is optional — include a short example sentence if you can, otherwise omit it
+- Keep "meaning" short and clear (under 15 words)
+- Go through the whole document, do not skip any pages or words
+- Output raw JSON only, starting with [ and ending with ]`
+
+function CopyPromptBox({ darkMode, prompt }) {
+  const [copied, setCopied] = useState(false);
+  const box = darkMode
+    ? 'bg-[#242118] border-[#2e2c26] text-[#a8a290]'
+    : 'bg-[#fdfcf9] border-[#e7e3d8] text-[#7a7460]';
+  const btn = darkMode
+    ? 'bg-[#2e2c26] text-[#e8e3d5] hover:bg-[#3a372e]'
+    : 'bg-[#1f1b14] text-[#faf9f4] hover:bg-[#34301f]';
+
+  async function copy() {
+    try { await navigator.clipboard.writeText(prompt); setCopied(true); setTimeout(() => setCopied(false), 1800); }
+    catch { /* clipboard unavailable */ }
+  }
+
+  return (
+    <div className={`relative rounded-xl border p-3 text-[11px] font-mono leading-relaxed max-h-32 overflow-y-auto whitespace-pre-wrap ${box}`}>
+      {prompt}
+      <button
+        onClick={copy}
+        className={`absolute top-2 right-2 px-2 py-1 rounded-lg text-[10px] font-sans font-medium transition-colors flex items-center gap-1 ${btn}`}
+      >
+        <i className={`ti ${copied ? 'ti-check' : 'ti-copy'} text-[11px]`} />
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </div>
+  );
+}
+
 /* ── Upload JSON Modal ── */
 function UploadJsonModal({ onClose, onDone, darkMode }) {
   const [raw, setRaw]       = useState('');
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState('');
   const [result, setResult] = useState(null);
+  const [sourceTab, setSourceTab] = useState('photos'); // 'photos' | 'pdf'
 
   const inp = darkMode
     ? 'w-full px-3 py-2.5 rounded-xl bg-[#242118] border border-[#2e2c26] text-[#e8e3d5] text-xs font-mono focus:outline-none focus:border-[#4a4538] resize-none'
@@ -442,6 +504,13 @@ function UploadJsonModal({ onClose, onDone, darkMode }) {
     ? 'w-full mt-3 py-2.5 rounded-xl bg-[#e8e3d5] text-[#1a1814] text-sm font-medium hover:bg-[#d4cfc0] disabled:opacity-50'
     : 'w-full mt-3 py-2.5 rounded-xl bg-[#1f1b14] text-[#faf9f4] text-sm font-medium hover:bg-[#34301f] disabled:opacity-50';
   const hint = darkMode ? 'text-[#6a6350]' : 'text-[#7a7460]';
+  const label = darkMode ? 'text-[#e8e3d5]' : 'text-[#1f1b14]';
+  const stepNum = darkMode
+    ? 'bg-[#e8e3d5] text-[#1a1814]'
+    : 'bg-[#1f1b14] text-[#faf9f4]';
+  const tabBase = 'flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors';
+  const tabOn = darkMode ? 'bg-[#e8e3d5] text-[#1a1814]' : 'bg-[#1f1b14] text-[#faf9f4]';
+  const tabOff = darkMode ? 'bg-[#242118] text-[#a8a290] hover:text-[#e8e3d5]' : 'bg-[#fdfcf9] text-[#7a7460] hover:text-[#1f1b14]';
 
   async function submit() {
     setError(''); setResult(null);
@@ -456,15 +525,52 @@ function UploadJsonModal({ onClose, onDone, darkMode }) {
 
   return (
     <ModalShell onClose={onClose} title="Upload from ChatGPT JSON" darkMode={darkMode}>
-      <p className={`text-xs ${hint} mb-2`}>Paste the JSON array — format: word, meaning, type, difficulty.</p>
-      <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={8}
-        placeholder='[{"word": "Abate", "meaning": "to reduce", "type": "synonym", "difficulty": "medium"}]'
-        className={inp} />
-      {error && <p className="text-rose-500 text-xs mt-2">{error}</p>}
-      {result && <p className="text-emerald-600 text-xs mt-2">Added {result.upserted} new words 🎉</p>}
-      <button onClick={submit} disabled={busy || !raw.trim()} className={btn}>
-        {busy ? 'Uploading…' : 'Upload words'}
-      </button>
+      <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+
+        {/* Step 1 */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${stepNum}`}>1</span>
+            <p className={`text-xs font-medium ${label}`}>Send your vocab to ChatGPT</p>
+          </div>
+          <p className={`text-[11px] ${hint} mb-2 ml-7`}>
+            Click pics of your vocab list (notes / book) or upload a PDF to ChatGPT, then paste this prompt with it:
+          </p>
+          <div className="ml-7 flex gap-1.5 mb-2">
+            <button onClick={() => setSourceTab('photos')} className={`${tabBase} ${sourceTab === 'photos' ? tabOn : tabOff}`}>
+              <i className="ti ti-camera text-[12px] mr-1" />Photos
+            </button>
+            <button onClick={() => setSourceTab('pdf')} className={`${tabBase} ${sourceTab === 'pdf' ? tabOn : tabOff}`}>
+              <i className="ti ti-file-text text-[12px] mr-1" />PDF
+            </button>
+          </div>
+          <div className="ml-7">
+            <CopyPromptBox darkMode={darkMode} prompt={sourceTab === 'photos' ? PROMPT_PHOTOS : PROMPT_PDF} />
+          </div>
+        </div>
+
+        {/* Step 2 */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${stepNum}`}>2</span>
+            <p className={`text-xs font-medium ${label}`}>Copy ChatGPT's JSON reply and paste it here</p>
+          </div>
+          <div className="ml-7">
+            <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={6}
+              placeholder='[{"word": "Abate", "meaning": "to reduce", "type": "synonym", "difficulty": "medium"}]'
+              className={inp} />
+          </div>
+        </div>
+
+        {/* Step 3 */}
+        <div className="ml-7">
+          {error && <p className="text-rose-500 text-xs mb-1">{error}</p>}
+          {result && <p className="text-emerald-600 text-xs mb-1">Added {result.upserted} new words 🎉</p>}
+          <button onClick={submit} disabled={busy || !raw.trim()} className={btn.replace('mt-3','')}>
+            {busy ? 'Uploading…' : 'Upload words'}
+          </button>
+        </div>
+      </div>
     </ModalShell>
   );
 }

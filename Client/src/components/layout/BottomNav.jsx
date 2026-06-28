@@ -8,11 +8,11 @@ import MobileDrawer from './MobileDrawer';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 const MAIN_NAV = [
-  { to: '/',        icon: 'ti-home',      label: 'Home'    },
-  { to: '/vocab',   icon: 'ti-book-2',    label: 'Vocab'   },
-  { to: '/todo',    icon: 'ti-checkbox',  label: 'Todo'    },
-  { to: '/group',   icon: 'ti-users',     label: 'Group'   },
-  { to: '/stats',   icon: 'ti-chart-bar', label: 'Stats'   },
+  { to: '/',          icon: 'ti-home',      label: 'Home'     },
+  { to: '/syllabus',  icon: 'ti-books',     label: 'Syllabus' },
+  { to: '/todo',      icon: 'ti-checkbox',  label: 'Todo'     },
+  { to: '/group',     icon: 'ti-users',     label: 'Group'    },
+  { to: '/stats',     icon: 'ti-chart-bar', label: 'Stats'    },
 ];
 
 export default function BottomNav() {

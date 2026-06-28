@@ -1,6 +1,7 @@
 import express from 'express'
 import authMiddleware from '../middleware/auth.js'
 import Exam from '../models/Exam.js'
+import SyllabusTopic from '../models/Syllabus.js'
 
 const router = express.Router()
 router.use(authMiddleware)
@@ -42,11 +43,13 @@ router.put('/:id', async (req, res) => {
   }
 })
 
-// DELETE /api/exams/:id — delete exam
+// DELETE /api/exams/:id — delete exam (and all its syllabus topics)
 router.delete('/:id', async (req, res) => {
   try {
-    await Exam.findOneAndDelete({ _id: req.params.id, userId: req.user.id })
-    res.json({ ok: true })
+    const exam = await Exam.findOneAndDelete({ _id: req.params.id, userId: req.user.id })
+    if (!exam) return res.status(404).json({ error: 'Exam not found' })
+    const { deletedCount } = await SyllabusTopic.deleteMany({ examId: req.params.id, userId: req.user.id })
+    res.json({ ok: true, deletedTopics: deletedCount })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

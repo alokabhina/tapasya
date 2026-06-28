@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { to: '/stats',        icon: 'ti-chart-bar',        label: 'Stats' },
   { to: '/calendar',     icon: 'ti-calendar',         label: 'Calendar' },
   { to: '/todo',         icon: 'ti-checkbox',         label: 'Todo' },
+  { to: '/syllabus',     icon: 'ti-books',            label: 'Syllabus' },
   { to: '/vocab',        icon: 'ti-book-2',           label: 'Vocab Master' },
   { to: '/history',      icon: 'ti-history',          label: 'History' },
   { to: '/achievements', icon: 'ti-trophy',           label: 'Achievements' },
