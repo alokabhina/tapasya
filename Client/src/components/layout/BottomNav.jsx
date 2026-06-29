@@ -9,7 +9,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 const MAIN_NAV = [
   { to: '/',          icon: 'ti-home',      label: 'Home'     },
-  { to: '/syllabus',  icon: 'ti-books',     label: 'Syllabus' },
+  { to: '/vocab',     icon: 'ti-language',  label: 'Vocab'    },
   { to: '/todo',      icon: 'ti-checkbox',  label: 'Todo'     },
   { to: '/group',     icon: 'ti-users',     label: 'Group'    },
   { to: '/stats',     icon: 'ti-chart-bar', label: 'Stats'    },

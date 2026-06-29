@@ -63,6 +63,8 @@ export default function PagedBook({
     const dx = t.clientX - touchStart.current.x;
     const dy = t.clientY - touchStart.current.y;
     if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy)) return;
+    // Swipe right (finger moves left->right, dx > 0) => next page
+    // Swipe left  (finger moves right->left, dx < 0) => previous page
     if (dx > 0) goNext();
     else goPrev();
   }

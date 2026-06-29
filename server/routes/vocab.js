@@ -79,10 +79,31 @@ router.post('/add', authMiddleware, async (req, res) => {
   }
 })
 
+// Simple deterministic PRNG (mulberry32) so the same seed always
+// produces the same shuffle order — lets us paginate a randomized
+// list safely without skipping/duplicating words across pages.
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+function seededShuffle(arr, seed) {
+  const rand = mulberry32(seed)
+  const out = [...arr]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
 // ── GET /api/vocab/words — dictionary view (paginated, filterable) ─────────────
 router.get('/words', authMiddleware, async (req, res) => {
   try {
-    const { search, wordType, difficulty, tag, attempted, masteryFilter, mine, page = 1, limit = 30 } = req.query
+    const { search, wordType, difficulty, tag, attempted, masteryFilter, mine, page = 1, limit = 30, seed } = req.query
     const filter = {}
     if (search) filter.word = { $regex: search, $options: 'i' }
     if (wordType && wordType !== 'all') filter.wordType = wordType
@@ -116,12 +137,25 @@ router.get('/words', authMiddleware, async (req, res) => {
       filter._id = { $nin: seenIds.map(p => p.wordId) }
     }
 
+    // Random order every fresh visit (instead of always createdAt-newest-first),
+    // so the same handful of words don't always land on page 1.
+    // The client sends a `seed` it generated once per session/load() call, and
+    // reuses it for loadMore() pagination calls so pages don't overlap/skip.
+    const rngSeed = Number(seed) || Math.floor(Math.random() * 2 ** 31)
+
     const total = await VocabWord.countDocuments(filter)
-    const words = await VocabWord.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((+page - 1) * +limit)
-      .limit(+limit)
-      .lean()
+
+    // Pull just the ids+createdAt (cheap) to compute a stable shuffled order,
+    // then fetch the actual page slice by _id — keeps this fast even with
+    // large dictionaries instead of loading every full doc into memory.
+    const idDocs = await VocabWord.find(filter).select('_id').sort({ _id: 1 }).lean()
+    const shuffledIds = seededShuffle(idDocs.map(d => d._id.toString()), rngSeed)
+    const pageIds = shuffledIds.slice((+page - 1) * +limit, (+page - 1) * +limit + +limit)
+
+    const pageDocs = await VocabWord.find({ _id: { $in: pageIds } }).lean()
+    const docsById = {}
+    pageDocs.forEach(d => { docsById[d._id.toString()] = d })
+    const words = pageIds.map(id => docsById[id]).filter(Boolean)
 
     // Attach user's progress for each word
     const wordIds = words.map(w => w._id)
@@ -136,7 +170,7 @@ router.get('/words', authMiddleware, async (req, res) => {
       progress: progressMap[w._id.toString()] || null
     }))
 
-    res.json({ words: enriched, total, page: +page, pages: Math.ceil(total / +limit) })
+    res.json({ words: enriched, total, page: +page, pages: Math.ceil(total / +limit), seed: rngSeed })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

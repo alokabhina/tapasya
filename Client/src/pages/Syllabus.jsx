@@ -43,7 +43,7 @@ export default function Syllabus() {
     try {
       const [e, s, t, st] = await Promise.all([
         api.get('/exams').then(r => r.data),
-        api.get('/subjects').then(r => r.data),
+        api.get('/subjects', { params: { scope: 'syllabus' } }).then(r => r.data),
         getSyllabus(),
         getStats(),
       ])

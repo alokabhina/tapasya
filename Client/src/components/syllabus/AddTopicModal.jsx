@@ -43,7 +43,8 @@ export default function AddTopicModal({ exams: initialExams, subjects: initialSu
     try {
       const sub = await api.post('/subjects', {
         name: newSubjectName.trim(),
-        color: '#f97316'
+        color: '#f97316',
+        scope: 'syllabus',
       }).then(r => r.data)
       setSubjects(prev => [...prev, sub])
       setSubjectId(sub._id)

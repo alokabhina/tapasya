@@ -9,6 +9,7 @@ import { useUserStore } from '../../store/userStore';
 import Avatar from '../ui/Avatar';
 
 const SECONDARY_NAV = [
+  { to: '/syllabus',     icon: 'ti-books',     label: 'Syllabus',         desc: 'Track topics & progress'     },
   { to: '/games',        icon: 'ti-sword',     label: 'Games',            desc: 'Practice Arena'              },
   { to: '/profile',      icon: 'ti-user',      label: 'Profile',          desc: 'Your account'                },
   { to: '/calendar',     icon: 'ti-calendar',  label: 'Calendar',         desc: 'Study heatmap & schedule'    },

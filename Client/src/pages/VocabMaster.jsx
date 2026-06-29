@@ -58,6 +58,10 @@ export default function VocabMaster() {
   const [mine, setMine]               = useState(false);
   const [stats, setStats]             = useState(null);
   const [streak, setStreak]           = useState(null);
+  // Random shuffle seed for this dictionary session — regenerated each fresh
+  // load() so word order varies between visits, but reused for loadMore()
+  // pagination so pages don't repeat/skip words mid-session.
+  const [wordSeed, setWordSeed]       = useState(null);
 
   // NEW: per-page size + dark mode
   const [pageSize, setPageSize]       = useState(5);
@@ -78,6 +82,7 @@ export default function VocabMaster() {
       setPages(data.pages || 1);
       setPage(1);
       setBookIndex(0);
+      setWordSeed(data.seed ?? null);
     } catch (e) {
       console.error(e);
     } finally {
@@ -101,7 +106,7 @@ export default function VocabMaster() {
     setFetchingMore(true);
     try {
       const nextPage = page + 1;
-      const data = await fetchWords({ search, wordType, difficulty, masteryFilter, mine, page: nextPage, limit: 40 });
+      const data = await fetchWords({ search, wordType, difficulty, masteryFilter, mine, page: nextPage, limit: 40, seed: wordSeed });
       setWords((w) => [...w, ...data.words]);
       setPage(nextPage);
     } catch (e) {
@@ -110,7 +115,7 @@ export default function VocabMaster() {
       setFetchingMore(false);
       fetchingRef.current = false;
     }
-  }, [page, pages, search, wordType, difficulty, masteryFilter, mine]);
+  }, [page, pages, search, wordType, difficulty, masteryFilter, mine, wordSeed]);
 
   async function handleDelete(id) {
     if (!confirm('Remove this word from your dictionary?')) return;

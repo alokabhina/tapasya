@@ -5,9 +5,9 @@
 import api from './client'
 
 // ── GET /api/vocab/words — paginated dictionary (search + filters) ───────────
-export async function fetchWords({ search = '', wordType = 'all', difficulty = 'all', tag = '', attempted = false, masteryFilter = 'all', mine = false, page = 1, limit = 30 } = {}) {
-  const res = await api.get('/vocab/words', { params: { search, wordType, difficulty, tag, attempted, masteryFilter, mine, page, limit } })
-  return res.data // { words[], total, page, pages }
+export async function fetchWords({ search = '', wordType = 'all', difficulty = 'all', tag = '', attempted = false, masteryFilter = 'all', mine = false, page = 1, limit = 30, seed } = {}) {
+  const res = await api.get('/vocab/words', { params: { search, wordType, difficulty, tag, attempted, masteryFilter, mine, page, limit, seed } })
+  return res.data // { words[], total, page, pages, seed }
 }
 
 // ── POST /api/vocab/add — single word manual add ─────────────────────────────

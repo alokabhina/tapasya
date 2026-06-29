@@ -284,7 +284,7 @@ export default function PDFParser({ exams: initialExams, subjects: initialSubjec
       for (const [si, sub] of parsed.entries()) {
         const sel = sub.topics.filter((_,ti)=>checked[si]?.[ti]); if (!sel.length) continue
         let existingSub = subjects.find(s=>s.name.toLowerCase()===sub.name.toLowerCase())
-        if (!existingSub) { existingSub = await api.post('/subjects',{name:sub.name,color:'#f97316'}).then(r=>r.data); setSubjects(p=>[...p,existingSub]) }
+        if (!existingSub) { existingSub = await api.post('/subjects',{name:sub.name,color:'#f97316',scope:'syllabus'}).then(r=>r.data); setSubjects(p=>[...p,existingSub]) }
         await onAdd({ examId, subjectId: existingSub._id, topics: sel, source: 'pdf' })
       }
       onClose()
