@@ -3,7 +3,7 @@ import mongoose from 'mongoose'
 const vocabWordSchema = new mongoose.Schema({
   word:       { type: String, required: true, trim: true },
   meaning:    { type: String, required: true, trim: true },
-  wordType:   { type: String, enum: ['synonym', 'antonym', 'one-word', 'idiom', 'general'], default: 'general' },
+  wordType:   { type: String, enum: ['synonym', 'antonym', 'one-word', 'idiom', 'root-word', 'general'], default: 'general' },
   difficulty: { type: String, enum: ['easy', 'medium', 'hard'], default: 'medium' },
   example:    { type: String, default: '' },
   tags:       { type: [String], default: [] },

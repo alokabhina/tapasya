@@ -13,6 +13,7 @@ import gameRoutes    from './routes/games.js'
 import examRoutes    from './routes/exams.js'
 import vocabRoutes     from './routes/vocab.js'
 import syllabusRoutes  from './routes/syllabus.js'
+import pushRoutes, { cronRouter as pushCronRouter } from './routes/push.js'
 import { checkAndFetchVocab } from './utils/opentdbFetcher.js'
 
 dotenv.config()
@@ -40,6 +41,8 @@ app.use('/api/games',    gameRoutes)
 app.use('/api/exams',   examRoutes)
 app.use('/api/vocab',     vocabRoutes)
 app.use('/api/syllabus',  syllabusRoutes)
+app.use('/api/push',      pushRoutes)
+app.use('/api/cron/push', pushCronRouter)
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ ok: true }))

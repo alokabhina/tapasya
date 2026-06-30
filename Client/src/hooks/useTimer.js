@@ -158,10 +158,13 @@ export function useTimer() {
 
   // ── heartbeat to group ───────────────────────────────────────────────────────
   const heartbeatRef = useRef(null)
+  const heartbeatVisibilityCleanupRef = useRef(null)
 
   function startHeartbeat() {
     clearInterval(heartbeatRef.current)
-    heartbeatRef.current = setInterval(async () => {
+    heartbeatVisibilityCleanupRef.current?.()
+
+    const sendNow = async () => {
       const s = useTimerStore.getState()
       if (!s.isRunning) return
       try {
@@ -176,11 +179,28 @@ export function useTimer() {
           }).catch(() => {})
         }
       } catch (_) {}
-    }, 10_000)
+    }
+
+    // FIX: pehla heartbeat turant bhejo — pehle 10s ka wait tha jisse
+    // jaldi stop ya jaldi background jaane par server ko 'isStudying: true'
+    // kabhi pata hi nahi chalta tha, aur group mein member show nahi hota tha
+    sendNow()
+    heartbeatRef.current = setInterval(sendNow, 10_000)
+
+    // FIX: background se wapas foreground aane par turant resync —
+    // mobile OS background mein setInterval ko throttle/freeze kar deta hai
+    function onVisibleHeartbeat() {
+      if (document.visibilityState === 'visible') sendNow()
+    }
+    document.addEventListener('visibilitychange', onVisibleHeartbeat)
+    heartbeatVisibilityCleanupRef.current = () =>
+      document.removeEventListener('visibilitychange', onVisibleHeartbeat)
   }
 
   function stopHeartbeat() {
     clearInterval(heartbeatRef.current)
+    heartbeatVisibilityCleanupRef.current?.()
+    heartbeatVisibilityCleanupRef.current = null
     import('@/api/groups').then(({ fetchMyGroups, sendOffline: offlineApi }) => {
       fetchMyGroups().then(groups => {
         groups.forEach(g => offlineApi(g._id).catch(() => {}))

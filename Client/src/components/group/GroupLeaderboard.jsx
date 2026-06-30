@@ -7,6 +7,7 @@ import useUserStore from '../../store/userStore';
 import useTimerStore from '../../store/timerStore';
 import { fetchGroupMembers } from '../../api/groups';
 import { formatHumanDuration } from '../../utils/time';
+import { useLiveTicker } from '../../hooks/useLiveTicker';
 
 export default function GroupLeaderboard({ members: initialMembers = [], currentUserId, groupId }) {
   const [tab, setTab] = useState('week');
@@ -55,7 +56,10 @@ export default function GroupLeaderboard({ members: initialMembers = [], current
     };
   });
 
-  const sorted = [...enriched]
+  // FIX: sec-by-sec smooth ticking instead of jumping every 8-10s poll
+  const ticked = useLiveTicker(enriched);
+
+  const sorted = [...ticked]
     .sort((a, b) => tab === 'week'
       ? (b.weeklySeconds || 0) - (a.weeklySeconds || 0)
       : (b.totalSeconds  || 0) - (a.totalSeconds  || 0)

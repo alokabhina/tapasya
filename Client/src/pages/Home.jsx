@@ -800,7 +800,7 @@ export default function Home() {
 
           {/* Header */}
           <div className="flex items-start justify-between mb-4">
-            <div>
+            <div className="min-w-0">
               <h1 className="text-2xl font-bold text-white">{greeting}, {firstName} 👋</h1>
               <p className="text-slate-400 text-sm mt-1">Small steps today, big results tomorrow.</p>
               {/* Mobile Exam Countdown Strip — right below greeting */}

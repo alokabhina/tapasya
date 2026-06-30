@@ -34,7 +34,7 @@ router.post('/upload', authMiddleware, async (req, res) => {
     const docs = words.map(w => ({
       word:       w.word?.trim(),
       meaning:    w.meaning?.trim(),
-      wordType:   ['synonym','antonym','one-word','idiom','general'].includes(w.type) ? w.type : 'general',
+      wordType:   ['synonym','antonym','one-word','idiom','root-word','general'].includes(w.type) ? w.type : 'general',
       difficulty: ['easy','medium','hard'].includes(w.difficulty) ? w.difficulty : 'medium',
       example:    w.example?.trim() || '',
       tags:       w.tags || [],
@@ -103,9 +103,10 @@ function seededShuffle(arr, seed) {
 // ── GET /api/vocab/words — dictionary view (paginated, filterable) ─────────────
 router.get('/words', authMiddleware, async (req, res) => {
   try {
-    const { search, wordType, difficulty, tag, attempted, masteryFilter, mine, page = 1, limit = 30, seed } = req.query
+    const { search, wordType, difficulty, tag, attempted, masteryFilter, mine, letter, page = 1, limit = 30, seed } = req.query
     const filter = {}
     if (search) filter.word = { $regex: search, $options: 'i' }
+    if (letter && letter !== 'all') filter.word = { $regex: `^${letter}`, $options: 'i' }
     if (wordType && wordType !== 'all') filter.wordType = wordType
     if (difficulty && difficulty !== 'all') filter.difficulty = difficulty
     if (tag) filter.tags = tag

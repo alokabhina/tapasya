@@ -121,9 +121,31 @@ export default function Settings() {
   const handleToggleNotif = async () => {
     if (!notifEnabled) {
       const perm = await Notification.requestPermission();
-      if (perm === "granted") setNotifEnabled(true);
+      if (perm === "granted") {
+        setNotifEnabled(true);
+        // FIX: sirf permission lena kaafi nahi tha — actual background push
+        // ke liye browser ke push service se subscribe bhi karna padta hai
+        const { subscribeToPush } = await import("@/utils/push");
+        await subscribeToPush();
+      }
     } else {
       setNotifEnabled(false);
+      const { unsubscribeFromPush } = await import("@/utils/push");
+      await unsubscribeFromPush();
+    }
+  };
+
+  const [testPushState, setTestPushState] = useState("idle"); // idle | sending | sent | error
+  const handleTestPush = async () => {
+    setTestPushState("sending");
+    try {
+      const { sendTestPush } = await import("@/utils/push");
+      await sendTestPush();
+      setTestPushState("sent");
+    } catch (e) {
+      setTestPushState("error");
+    } finally {
+      setTimeout(() => setTestPushState("idle"), 3000);
     }
   };
 
@@ -274,6 +296,20 @@ export default function Settings() {
                 <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${notifEnabled ? "translate-x-6" : "translate-x-0.5"}`} />
               </button>
             </div>
+            {notifEnabled && (
+              <div className="px-4 pb-3.5 -mt-1">
+                <button
+                  onClick={handleTestPush}
+                  disabled={testPushState === "sending"}
+                  className="text-xs text-orange-400 hover:text-orange-300 disabled:opacity-50"
+                >
+                  {testPushState === "sending" && "Bhej rahe hain…"}
+                  {testPushState === "sent" && "✓ Bheja gaya — app band karke check karo"}
+                  {testPushState === "error" && "✕ Fail ho gaya, dobara try karo"}
+                  {testPushState === "idle" && "Test push bhejo"}
+                </button>
+              </div>
+            )}
           </div>
         </section>
 

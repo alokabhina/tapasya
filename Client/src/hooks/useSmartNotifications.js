@@ -50,7 +50,17 @@ export function useSmartNotifications({
   useEffect(() => { nameRef.current    = displayName   }, [displayName])
 
   // ── 1. Permission ─────────────────────────────────────────────────────────
-  useEffect(() => { requestPermission() }, [])
+  useEffect(() => {
+    requestPermission().then((granted) => {
+      // FIX: ab tak sirf local in-page timers (setTimeout/setInterval) se
+      // notification schedule hoti thi — ye sirf tab kaam karta hai jab tab
+      // open/foreground ho. Ab Web Push subscribe bhi karte hain taaki
+      // server (cron) trigger karke app band hone par bhi push bhej sake.
+      if (granted) {
+        import('@/utils/push').then(({ subscribeToPush }) => subscribeToPush()).catch(() => {})
+      }
+    })
+  }, [])
 
   // ── 2. Day reset — naya din detect karo ──────────────────────────────────
   useEffect(() => {

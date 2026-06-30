@@ -10,20 +10,23 @@ import {
 import BookReader from '@/components/vocab/PagedBook';
 
 const TYPE_FILTERS = [
-  { value: 'all',      label: 'All' },
-  { value: 'synonym',  label: 'Syn' },
-  { value: 'antonym',  label: 'Ant' },
-  { value: 'one-word', label: '1W' },
+  { value: 'all',      label: 'All Types' },
+  { value: 'synonym',  label: 'Synonym' },
+  { value: 'antonym',  label: 'Antonym' },
+  { value: 'one-word', label: 'One-Word' },
   { value: 'idiom',    label: 'Idiom' },
-  { value: 'general',  label: 'Gen' },
+  { value: 'root-word', label: 'Root Word' },
+  { value: 'general',  label: 'General' },
 ];
 
 const DIFF_FILTERS = [
-  { value: 'all',    label: 'All' },
+  { value: 'all',    label: 'All Levels' },
   { value: 'easy',   label: 'Easy' },
-  { value: 'medium', label: 'Med' },
+  { value: 'medium', label: 'Medium' },
   { value: 'hard',   label: 'Hard' },
 ];
+
+const ALPHABET = ['all', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
 
 const MASTERY_FILTERS = [
   { value: 'all',      label: 'All' },
@@ -55,6 +58,7 @@ export default function VocabMaster() {
   const [wordType, setWordType]       = useState('all');
   const [difficulty, setDifficulty]   = useState('all');
   const [masteryFilter, setMasteryFilter] = useState('all');
+  const [letter, setLetter]           = useState('all');
   const [mine, setMine]               = useState(false);
   const [stats, setStats]             = useState(null);
   const [streak, setStreak]           = useState(null);
@@ -76,7 +80,7 @@ export default function VocabMaster() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchWords({ search, wordType, difficulty, masteryFilter, mine, page: 1, limit: 40 });
+      const data = await fetchWords({ search, wordType, difficulty, masteryFilter, mine, letter, page: 1, limit: 40 });
       setWords(data.words);
       setTotal(data.total);
       setPages(data.pages || 1);
@@ -88,7 +92,7 @@ export default function VocabMaster() {
     } finally {
       setLoading(false);
     }
-  }, [search, wordType, difficulty, masteryFilter, mine]);
+  }, [search, wordType, difficulty, masteryFilter, mine, letter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -106,7 +110,7 @@ export default function VocabMaster() {
     setFetchingMore(true);
     try {
       const nextPage = page + 1;
-      const data = await fetchWords({ search, wordType, difficulty, masteryFilter, mine, page: nextPage, limit: 40, seed: wordSeed });
+      const data = await fetchWords({ search, wordType, difficulty, masteryFilter, mine, letter, page: nextPage, limit: 40, seed: wordSeed });
       setWords((w) => [...w, ...data.words]);
       setPage(nextPage);
     } catch (e) {
@@ -115,7 +119,7 @@ export default function VocabMaster() {
       setFetchingMore(false);
       fetchingRef.current = false;
     }
-  }, [page, pages, search, wordType, difficulty, masteryFilter, mine, wordSeed]);
+  }, [page, pages, search, wordType, difficulty, masteryFilter, mine, letter, wordSeed]);
 
   async function handleDelete(id) {
     if (!confirm('Remove this word from your dictionary?')) return;
@@ -270,8 +274,8 @@ export default function VocabMaster() {
             </div>
           </div>
 
-          {/* Row 4: Filter chips */}
-          <div className="flex items-center gap-1 mt-1.5 overflow-x-auto whitespace-nowrap pb-0.5
+          {/* Row 4: Mastery chips + Me toggle + Type/Difficulty dropdowns */}
+          <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto whitespace-nowrap pb-0.5
                           [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {MASTERY_FILTERS.map((f) => (
               <Chip key={f.value} active={masteryFilter === f.value} onClick={() => setMasteryFilter(f.value)}
@@ -284,18 +288,42 @@ export default function VocabMaster() {
               <i className="ti ti-user text-[10px] mr-0.5" />Me
             </Chip>
             <span className={`w-px h-3.5 ${darkMode ? 'bg-[#2e2c26]' : 'bg-[#e7e3d8]'} shrink-0`} />
-            {TYPE_FILTERS.map((f) => (
-              <Chip key={f.value} active={wordType === f.value} onClick={() => setWordType(f.value)}
-                    chipBase={chipBase} chipActive={chipActive}>
-                {f.label}
-              </Chip>
-            ))}
-            <span className={`w-px h-3.5 ${darkMode ? 'bg-[#2e2c26]' : 'bg-[#e7e3d8]'} shrink-0`} />
-            {DIFF_FILTERS.map((f) => (
-              <Chip key={f.value} active={difficulty === f.value} onClick={() => setDifficulty(f.value)}
-                    chipBase={chipBase} chipActive={chipActive}>
-                {f.label}
-              </Chip>
+
+            {/* FIX: type/difficulty chips le rahe the bahut jagah, ab dropdown mein —
+                space messy nahi lagta aur "Root Word" jaisa naya option bhi fit ho jaata hai */}
+            <select
+              value={wordType}
+              onChange={(e) => setWordType(e.target.value)}
+              className={`shrink-0 text-[10px] font-medium rounded-lg px-2 py-1 border focus:outline-none
+                ${darkMode ? 'bg-[#1a1814] border-[#2e2c26] text-[#e8e3d5]' : 'bg-[#fdfcf9] border-[#e7e3d8] text-[#1f1b14]'}`}
+            >
+              {TYPE_FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+              className={`shrink-0 text-[10px] font-medium rounded-lg px-2 py-1 border focus:outline-none
+                ${darkMode ? 'bg-[#1a1814] border-[#2e2c26] text-[#e8e3d5]' : 'bg-[#fdfcf9] border-[#e7e3d8] text-[#1f1b14]'}`}
+            >
+              {DIFF_FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+          </div>
+
+          {/* Row 5: A-Z alphabet filter */}
+          <div className="flex items-center gap-1 mt-1.5 overflow-x-auto whitespace-nowrap pb-0.5
+                          [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {ALPHABET.map((l) => (
+              <button
+                key={l}
+                onClick={() => setLetter(l)}
+                className={`shrink-0 w-5 h-5 rounded-md text-[10px] font-semibold flex items-center justify-center transition-colors
+                  ${letter === l
+                    ? (darkMode ? 'bg-[#e8e3d5] text-[#1a1814]' : 'bg-[#1f1b14] text-white')
+                    : (darkMode ? 'text-[#7a7460] hover:bg-[#2e2c26]' : 'text-[#7a7460] hover:bg-[#f1eee5]')
+                  }`}
+              >
+                {l === 'all' ? '*' : l}
+              </button>
             ))}
           </div>
         </div>
@@ -402,7 +430,8 @@ function AddWordModal({ onClose, onAdded, darkMode }) {
 
   const TYPE_FULL = [
     { value: 'synonym', label: 'Synonym' }, { value: 'antonym', label: 'Antonym' },
-    { value: 'one-word', label: 'One-Word' }, { value: 'idiom', label: 'Idiom' }, { value: 'general', label: 'General' },
+    { value: 'one-word', label: 'One-Word' }, { value: 'idiom', label: 'Idiom' },
+    { value: 'root-word', label: 'Root Word' }, { value: 'general', label: 'General' },
   ];
   const DIFF_FULL = [
     { value: 'easy', label: 'Easy' }, { value: 'medium', label: 'Medium' }, { value: 'hard', label: 'Hard' },

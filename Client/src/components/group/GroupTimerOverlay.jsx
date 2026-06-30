@@ -10,6 +10,7 @@ import { useTimer } from '../../hooks/useTimer';
 import { fetchGroupMembers, fetchMyGroups } from '../../api/groups';
 import { formatDuration, formatHours, formatHumanDuration } from '../../utils/time';
 import { useNavigate } from 'react-router-dom';
+import { useLiveTicker } from '../../hooks/useLiveTicker';
 
 // ── Circular ring ─────────────────────────────────────────────────────────────
 function CircularTimer({ elapsed, color = '#f97316', size = 180 }) {
@@ -229,14 +230,17 @@ export default function GroupTimerOverlay({ onClose }) {
   const pct        = dailyGoalSeconds > 0 ? Math.min((todayTotal / dailyGoalSeconds) * 100, 100) : 0;
   const statusText = isPaused ? 'Paused' : isRunning ? 'Focusing' : 'Ready';
 
+  // FIX: sec-by-sec smooth ticking instead of jumping every 8s poll
+  const tickedMembers = useLiveTicker(members);
+
   // Build leaderboard sorted by weeklySeconds (with live elapsed for current user)
-  const myMemberData = members.find(m => m.userId?.toString() === uid?.toString());
+  const myMemberData = tickedMembers.find(m => m.userId?.toString() === uid?.toString());
   const allMembers = [
-    ...members.filter(m => m.userId?.toString() !== uid?.toString()),
+    ...tickedMembers.filter(m => m.userId?.toString() !== uid?.toString()),
     { ...(myMemberData || {}), userId: uid, displayName, isStudying: true, liveElapsed: elapsed },
   ].sort((a, b) => (b.weeklySeconds || 0) - (a.weeklySeconds || 0));
 
-  const studyingCount = members.filter(m =>
+  const studyingCount = tickedMembers.filter(m =>
     m.userId?.toString() !== uid?.toString() && m.isStudying
   ).length + 1; // +1 for self
 
@@ -398,14 +402,14 @@ export default function GroupTimerOverlay({ onClose }) {
               /* ── Members grid ── */
               <div className="flex flex-wrap gap-2.5 justify-start">
                 {/* Studying members first */}
-                {members
+                {tickedMembers
                   .filter(m => m.userId?.toString() !== uid?.toString() && m.isStudying)
                   .map(m => <MemberCard key={m.userId} member={m} isCurrentUser={false} currentElapsed={0} />)}
                 {/* You */}
                 <MemberCard member={{ userId: uid, displayName, isStudying: true }}
                   isCurrentUser={true} currentElapsed={elapsed} />
                 {/* Idle members */}
-                {members
+                {tickedMembers
                   .filter(m => m.userId?.toString() !== uid?.toString() && !m.isStudying)
                   .map(m => <MemberCard key={m.userId} member={m} isCurrentUser={false} currentElapsed={0} />)}
               </div>

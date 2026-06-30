@@ -8,6 +8,7 @@ const TYPE_LABEL = {
   antonym:  'Antonym',
   'one-word': 'One-Word',
   idiom:    'Idiom',
+  'root-word': 'Root Word',
   general:  'General',
 }
 
