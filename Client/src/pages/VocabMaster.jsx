@@ -8,6 +8,7 @@ import {
   fetchWords, addWord, uploadWords, deleteWord, fetchVocabStats, fetchStreak, setDailyTarget,
 } from '@/api/Vocab';
 import BookReader from '@/components/vocab/PagedBook';
+import useVocabReadingTracker from '@/hooks/useVocabReadingTracker';
 
 const TYPE_FILTERS = [
   { value: 'all',      label: 'All Types' },
@@ -46,6 +47,7 @@ const PAGE_SIZES = [
 
 export default function VocabMaster() {
   const navigate = useNavigate();
+  useVocabReadingTracker(true); // book padhte waqt active reading time count ho
 
   const [words, setWords]             = useState([]);
   const [total, setTotal]             = useState(0);

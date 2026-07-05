@@ -27,6 +27,9 @@ router.post('/login', async (req, res) => {
     const user = await User.findOne({ email })
     if (!user || !await bcrypt.compare(password, user.password))
       return res.status(401).json({ error: 'Invalid credentials' })
+    if (user.isBanned) return res.status(403).json({ error: 'ACCOUNT_BANNED', reason: user.banReason || 'Your account has been banned.' })
+    if (user.timeoutUntil && new Date(user.timeoutUntil) > new Date())
+      return res.status(403).json({ error: 'ACCOUNT_TIMEOUT', until: user.timeoutUntil, reason: user.banReason || 'Your account is temporarily suspended.' })
     res.json({ token: sign(user), user: { id: user._id, displayName: user.displayName, email: user.email, photoURL: user.photoURL } })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -43,6 +46,9 @@ router.post('/google', async (req, res) => {
     } else {
       if (payload.picture && user.photoURL !== payload.picture) { user.photoURL = payload.picture; await user.save() }
     }
+    if (user.isBanned) return res.status(403).json({ error: 'ACCOUNT_BANNED', reason: user.banReason || 'Your account has been banned.' })
+    if (user.timeoutUntil && new Date(user.timeoutUntil) > new Date())
+      return res.status(403).json({ error: 'ACCOUNT_TIMEOUT', until: user.timeoutUntil, reason: user.banReason || 'Your account is temporarily suspended.' })
     res.json({ token: sign(user), user: { id: user._id, displayName: user.displayName, email: user.email, photoURL: user.photoURL } })
   } catch (e) { res.status(401).json({ error: 'Google sign-in failed: ' + e.message }) }
 })

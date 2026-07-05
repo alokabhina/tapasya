@@ -67,3 +67,15 @@ export async function fetchWordOfDay() {
   const res = await api.get('/vocab/word-of-day')
   return res.data // { word }
 }
+
+// ── POST /api/vocab/reading/heartbeat — active reading time ping ────────────
+export async function sendReadingHeartbeat(date, seconds) {
+  const res = await api.post('/vocab/reading/heartbeat', { date, seconds })
+  return res.data
+}
+
+// ── GET /api/vocab/reading/stats — Stats page ke liye ─────────────────────
+export async function fetchReadingStats(date) {
+  const res = await api.get('/vocab/reading/stats', { params: { date } })
+  return res.data // { todaySeconds, weekSeconds, totalSeconds, currentStreak, longestStreak, bestDay, avgSecondsPerActiveDay, daysActiveThisWeek, daysActiveTotal, last7Days[] }
+}

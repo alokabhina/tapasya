@@ -24,6 +24,8 @@ const NAV_ITEMS = [
   { to: '/wellbeing',    icon: 'ti-heart',            label: 'Wellbeing' },
 ];
 
+const ADMIN_EMAIL = 'alokabhiii9@gmail.com';
+
 export default function Sidebar() {
   const { user } = useAuth();
 
@@ -159,6 +161,22 @@ export default function Sidebar() {
             )}
           </NavLink>
         ))}
+
+        {/* Admin Panel — sirf alokabhiii9@gmail.com ke liye visible */}
+        {user?.email?.toLowerCase() === ADMIN_EMAIL && (
+          <NavLink
+            to="/admin"
+            title={collapsed ? 'Admin Panel' : undefined}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 mt-2 border-t border-slate-800/70 pt-3
+              ${collapsed ? 'justify-center' : ''}
+              ${isActive ? 'text-red-400' : 'text-slate-400 hover:text-red-400'}`
+            }
+          >
+            <i className="ti ti-shield-lock text-[18px] flex-shrink-0" />
+            {!collapsed && <span className="truncate font-medium">Admin Panel</span>}
+          </NavLink>
+        )}
       </nav>
 
       {/* =========================

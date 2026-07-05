@@ -5,11 +5,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchQuiz, saveProgress, fetchWords } from '@/api/Vocab';
+import useVocabReadingTracker from '@/hooks/useVocabReadingTracker';
 
 const SIZES = [10, 15, 20];
 
 export default function VocabQuiz() {
   const navigate = useNavigate();
+  useVocabReadingTracker(true); // quiz attempt karte waqt bhi reading time count ho
 
   const [size, setSize]       = useState(10);
   const [mode, setMode]       = useState('recognition'); // 'recognition' (word→meaning) | 'reverse' (meaning→word)

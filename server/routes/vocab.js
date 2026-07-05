@@ -5,9 +5,94 @@ import express from 'express'
 import VocabWord from '../models/VocabWord.js'
 import UserVocabProgress from '../models/UserVocabProgress.js'
 import UserVocabStreak from '../models/UserVocabStreak.js'
+import VocabReadingLog from '../models/VocabReadingLog.js'
 import authMiddleware from '../middleware/auth.js'
 
 const router = express.Router()
+
+// ── POST /api/vocab/reading/heartbeat — client har ~15s active reading time bhejta hai ──
+// Body: { date: 'YYYY-MM-DD', seconds: <delta since last heartbeat> }
+router.post('/reading/heartbeat', authMiddleware, async (req, res) => {
+  try {
+    const { date, seconds } = req.body
+    const delta = Math.max(0, Math.min(Number(seconds) || 0, 120)) // safety cap — max 2min per heartbeat
+    if (!date || delta <= 0) return res.json({ ok: true, skipped: true })
+
+    await VocabReadingLog.findOneAndUpdate(
+      { userId: req.user.id, date },
+      { $inc: { seconds: delta } },
+      { upsert: true, new: true }
+    )
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── GET /api/vocab/reading/stats — Stats page ke liye summary ──────────────
+router.get('/reading/stats', authMiddleware, async (req, res) => {
+  try {
+    const { date } = req.query // today's date string from client (4am-boundary aware)
+    const logs = await VocabReadingLog.find({ userId: req.user.id }).sort({ date: -1 }).limit(90).lean()
+
+    const totalSeconds = logs.reduce((sum, l) => sum + l.seconds, 0)
+    const todaySeconds = date ? (logs.find(l => l.date === date)?.seconds || 0) : 0
+
+    const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const last7Days = logs.filter(l => l.date >= sevenDaysAgo)
+    const weekSeconds = last7Days.reduce((sum, l) => sum + l.seconds, 0)
+
+    // ── Best day ──────────────────────────────────────────────────────────
+    const bestDay = logs.reduce((best, l) => (!best || l.seconds > best.seconds ? l : best), null)
+
+    // ── Average per active day (days jab bhi kuch padha) ────────────────────
+    const avgSecondsPerActiveDay = logs.length ? Math.round(totalSeconds / logs.length) : 0
+
+    // ── Streaks — consecutive calendar days with reading logged ────────────
+    const sortedAsc = [...logs].sort((a, b) => (a.date < b.date ? -1 : 1))
+    const dateSet = new Set(sortedAsc.map(l => l.date))
+
+    function prevDateStr(d) {
+      const dt = new Date(d + 'T00:00:00')
+      dt.setDate(dt.getDate() - 1)
+      return dt.toISOString().slice(0, 10)
+    }
+
+    // Longest streak — scan all logged dates
+    let longestStreak = 0, run = 0, prevD = null
+    for (const l of sortedAsc) {
+      if (prevD && prevDateStr(l.date) === prevD) run += 1
+      else run = 1
+      longestStreak = Math.max(longestStreak, run)
+      prevD = l.date
+    }
+
+    // Current streak — walk backwards from today (or yesterday if today not logged yet)
+    let currentStreak = 0
+    if (date) {
+      let cursor = dateSet.has(date) ? date : prevDateStr(date)
+      while (dateSet.has(cursor)) {
+        currentStreak += 1
+        cursor = prevDateStr(cursor)
+      }
+    }
+
+    res.json({
+      todaySeconds,
+      weekSeconds,
+      totalSeconds,
+      daysActiveThisWeek: last7Days.length,
+      daysActiveTotal: logs.length,
+      avgSecondsPerActiveDay,
+      bestDay: bestDay ? { date: bestDay.date, seconds: bestDay.seconds } : null,
+      currentStreak,
+      longestStreak,
+      last7Days: last7Days.map(l => ({ date: l.date, seconds: l.seconds })).reverse(),
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
 
 // ── POST /api/vocab/seed — bulk seed from JSON array (admin use) ──────────────
 router.post('/seed', authMiddleware, async (req, res) => {
@@ -430,19 +515,22 @@ router.get('/word-of-day', authMiddleware, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0]
 
-    // Find a word user hasn't seen today
-    const seen = await UserVocabProgress.find({
-      userId: req.user.id,
-      lastSeenDate: today
-    }).lean()
-    const seenIds = seen.map(s => s.wordId)
+    const totalWords = await VocabWord.countDocuments()
+    if (totalWords === 0) return res.json({ word: null })
 
-    let word = await VocabWord.findOne({ _id: { $nin: seenIds } }).lean()
-    if (!word) {
-      // All seen today — pick random
-      word = await VocabWord.findOne().lean()
+    // BUG FIX: pehle `findOne({ _id: { $nin: seenIds } })` bina sort ke chalta tha,
+    // jo MongoDB mein hamesha collection ka pehla (natural order) document deta hai —
+    // isliye roz same word aata tha. Ab date+user se deterministic index nikal ke
+    // us position ka word uthate hain: same din mein same word, agle din alag word,
+    // aur har user ko alag word-of-day milta hai.
+    const seedStr = `${today}-${req.user.id}`
+    let hash = 0
+    for (let i = 0; i < seedStr.length; i++) {
+      hash = (hash * 31 + seedStr.charCodeAt(i)) >>> 0
     }
+    const skip = hash % totalWords
 
+    const word = await VocabWord.findOne().sort({ _id: 1 }).skip(skip).lean()
     res.json({ word })
   } catch (e) {
     res.status(500).json({ error: e.message })

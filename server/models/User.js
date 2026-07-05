@@ -8,5 +8,11 @@ const userSchema = new mongoose.Schema({
   googleId:    String,
   dailyGoalSeconds: { type: Number, default: 21600 },
   // groupId removed — users can now create/join unlimited groups freely
+
+  // ── Admin controls ────────────────────────────────────────────────────
+  isBanned:     { type: Boolean, default: false },
+  banReason:    { type: String, default: '' },
+  bannedAt:     { type: Date, default: null },
+  timeoutUntil: { type: Date, default: null }, // temporary suspension, auto-lifts after this time
 }, { timestamps: true })
 export default mongoose.model('User', userSchema)

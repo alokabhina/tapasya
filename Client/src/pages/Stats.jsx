@@ -13,6 +13,7 @@ import useStats from '@/hooks/useStats';
 import { formatDuration, formatHumanDuration, getDateString, get4amDayString, getSundayWeekRange, getNDaysFrom, getLastNDays } from '@/utils/time';
 import { aggregateForDay, aggregateByDateList, aggregateWeeklySunSat, getHourlyPattern, getHourlyMinutes, getCumulative, aggregateBySubject } from '@/utils/stats';
 import { getFocusHistory, getFocusStats } from '@/utils/focusHistory';
+import { fetchReadingStats } from '@/api/Vocab';
 import { exportStatsPDF, exportStatsCSV } from '@/utils/export';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -636,6 +637,29 @@ function FocusDailyBars({ byDay }) {
   );
 }
 
+function VocabDailyBars({ last7Days }) {
+  if (!last7Days?.length) return <div className="flex flex-col items-center justify-center h-28 gap-2"><i className="ti ti-book-2 text-2xl text-slate-700"/><p className="text-slate-600 text-sm">No vocab reading yet</p></div>;
+  const data = last7Days.map(d => ({ ...d, minutes: +(d.seconds/60).toFixed(1) }));
+  return (
+    <ResponsiveContainer width="100%" height={120}>
+      <ReBarChart data={data} barSize={16} barCategoryGap="30%">
+        <defs><linearGradient id="vb" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.9}/><stop offset="100%" stopColor="#10b981" stopOpacity={0.4}/></linearGradient></defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+        <XAxis dataKey="date" tickFormatter={d=>d.slice(5)} tick={{fill:'#475569',fontSize:9}} axisLine={false} tickLine={false} />
+        <YAxis tick={{fill:'#475569',fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>`${v}m`} width={28} />
+        <Tooltip content={({active,payload,label})=>{
+          if(!active||!payload?.length) return null;
+          return (<div className="bg-[#0d1117] border border-slate-700/50 rounded-xl px-3 py-2.5 text-xs shadow-2xl">
+            <p className="text-slate-400 mb-1 font-medium">{label}</p>
+            <p className="text-emerald-400 font-bold font-mono">{payload[0].value}m reading</p>
+          </div>);
+        }} cursor={{fill:'rgba(255,255,255,0.02)'}} />
+        <Bar dataKey="minutes" fill="url(#vb)" radius={[4,4,0,0]} />
+      </ReBarChart>
+    </ResponsiveContainer>
+  );
+}
+
 function FocusHourlyHeatmap({ pattern }) {
   const max = Math.max(...pattern, 0.01);
   const LABELS = ['12a','1','2','3','4','5','6','7','8','9','10','11','12p','1','2','3','4','5','6','7','8','9','10','11'];
@@ -722,6 +746,8 @@ export default function Stats() {
   const [activeSection, setActiveSection] = useState('study');
   const [exporting,     setExporting]     = useState('');
   const [refreshKey,    setRefreshKey]    = useState(0);
+  const [vocabStats,    setVocabStats]    = useState(null);
+  const [vocabLoading,  setVocabLoading]  = useState(false);
 
   // Navigation dates per mode
   const [dayNav,   setDayNav]   = useState(today4am);            // YYYY-MM-DD
@@ -736,6 +762,13 @@ export default function Stats() {
     window.addEventListener('tapasya:session-saved', refresh);
     return () => { document.removeEventListener('visibilitychange', refresh); window.removeEventListener('focus', refresh); window.removeEventListener('tapasya:session-saved', refresh); };
   }, []);
+
+  // Vocab reading time — sirf jab uska tab khula ho tab fetch karo
+  useEffect(() => {
+    if (activeSection !== 'vocab') return;
+    setVocabLoading(true);
+    fetchReadingStats(today4am).then(setVocabStats).finally(() => setVocabLoading(false));
+  }, [activeSection, refreshKey, today4am]);
 
   // Navigate forward/back
   function handleNav(dir) {
@@ -927,6 +960,10 @@ export default function Stats() {
           <button onClick={()=>setActiveSection('focus')}
             className={`px-4 sm:px-5 py-2 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 ${activeSection==='focus'?'bg-purple-600 text-white shadow-lg shadow-purple-600/30':'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}`}>
             <i className="ti ti-target text-sm"/> Focus Mode
+          </button>
+          <button onClick={()=>setActiveSection('vocab')}
+            className={`px-4 sm:px-5 py-2 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 ${activeSection==='vocab'?'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30':'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}`}>
+            <i className="ti ti-book-2 text-sm"/> Vocab Reading
           </button>
         </div>
 
@@ -1199,6 +1236,42 @@ export default function Stats() {
                 </div>
               )}
             </ChartCard>
+          </>
+        )}
+
+        {/* ── VOCAB READING TIME STATS ── */}
+        {activeSection==='vocab' && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] text-slate-600 font-medium">Sirf active reading time count hota hai — 20 sec idle rehne pe timer ruk jaata hai</p>
+              <button onClick={() => setRefreshKey(k => k + 1)}
+                className="flex items-center gap-1.5 text-[10px] text-slate-500 hover:text-emerald-400 transition-colors px-2 py-1 rounded-lg hover:bg-emerald-500/5">
+                <i className="ti ti-refresh text-xs"/> Refresh
+              </button>
+            </div>
+
+            {vocabLoading && !vocabStats ? (
+              <div className="text-center py-16"><p className="text-sm text-slate-600">Loading vocab stats...</p></div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+                  <MetricCard icon="ti-clock"        label="Today"      value={formatHumanDuration(vocabStats?.todaySeconds || 0)} sub="active reading" accent="green" />
+                  <MetricCard icon="ti-calendar"     label="This Week"  value={formatHumanDuration(vocabStats?.weekSeconds || 0)}  sub="last 7 days"    accent="blue" />
+                  <MetricCard icon="ti-book-2"       label="All Time"   value={formatHumanDuration(vocabStats?.totalSeconds || 0)} sub="total reading"  accent="purple" />
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                  <MetricCard icon="ti-flame"        label="Current Streak" value={`${vocabStats?.currentStreak || 0}d`}  sub="days in a row"     accent="orange" />
+                  <MetricCard icon="ti-trophy"       label="Longest Streak" value={`${vocabStats?.longestStreak || 0}d`}  sub="personal best"     accent="purple" />
+                  <MetricCard icon="ti-star"         label="Best Day"       value={formatHumanDuration(vocabStats?.bestDay?.seconds || 0)} sub={vocabStats?.bestDay?.date || 'no data yet'} accent="green" />
+                  <MetricCard icon="ti-chart-line"   label="Daily Average"  value={formatHumanDuration(vocabStats?.avgSecondsPerActiveDay || 0)} sub="on active days"   accent="blue" />
+                </div>
+                <div className="mb-4">
+                  <ChartCard title="Daily Vocab Reading Time" icon="ti-chart-bar" right={<span className="text-xs text-slate-600 font-medium">{vocabStats?.daysActiveThisWeek || 0}/7 days active</span>}>
+                    <VocabDailyBars last7Days={vocabStats?.last7Days || []} />
+                  </ChartCard>
+                </div>
+              </>
+            )}
           </>
         )}
 
