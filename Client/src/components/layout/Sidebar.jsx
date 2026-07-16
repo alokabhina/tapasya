@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { to: '/achievements', icon: 'ti-trophy',           label: 'Achievements' },
   { to: '/group',        icon: 'ti-users',            label: 'Study Group' },
   { to: '/wellbeing',    icon: 'ti-heart',            label: 'Wellbeing' },
+  { to: '/money',        icon: 'ti-wallet',           label: 'Money' },  // NEW — separate from study Stats
 ];
 
 const ADMIN_EMAIL = 'alokabhiii9@gmail.com';

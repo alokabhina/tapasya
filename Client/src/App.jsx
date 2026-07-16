@@ -30,6 +30,10 @@ const Wellbeing    = lazy(() => import('./pages/Wellbeing'));
 const Profile      = lazy(() => import('./pages/Profile'));
 const Settings     = lazy(() => import('./pages/Settings'));
 
+// ── Money (income/expense tracker — fully separate from study Stats) ───────
+const Money        = lazy(() => import('./pages/Money'));
+const MoneyStats   = lazy(() => import('./pages/MoneyStats'));
+
 // ── Games (Practice Arena) ───────────────────────────────────────────────────
 const Games         = lazy(() => import('./pages/Games'));
 const GameStats     = lazy(() => import('./pages/GameStats'));
@@ -131,6 +135,8 @@ export default function App() {
             ['/wellbeing',          <Wellbeing />],
             ['/profile',            <Profile />],
             ['/settings',           <Settings />],
+            ['/money',              <Money />],
+            ['/money/stats',        <MoneyStats />],
             ['/vocab',              <VocabMaster />],
             ['/vocab/quiz',         <VocabQuiz />],
             ['/syllabus',           <Syllabus />],
