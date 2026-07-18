@@ -28,13 +28,13 @@ export default function MoneySummaryCards({ totals }) {
         return (
           <div
             key={c.label}
-            className={`bg-gradient-to-br from-[#111827] to-[#0d1420] ring-1 ${s.ring} rounded-2xl p-3.5`}
+            className={`bg-gradient-to-br from-[#111827] to-[#0d1420] ring-1 ${s.ring} rounded-2xl p-3 sm:p-3.5`}
           >
-            <div className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${s.bg} mb-2`}>
+            <div className={`inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg ${s.bg} mb-1.5 sm:mb-2`}>
               <i className={`ti ${c.icon} text-sm ${s.tc}`} />
             </div>
             <p className="text-[9px] text-slate-500 mb-0.5 font-semibold tracking-[0.1em] uppercase">{c.label}</p>
-            <p className={`text-base font-black font-mono ${s.tc}`}>{formatMoney(c.value, true)}</p>
+            <p className={`text-sm sm:text-base font-black font-mono ${s.tc}`}>{formatMoney(c.value, true)}</p>
           </div>
         )
       })}

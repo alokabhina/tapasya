@@ -29,3 +29,18 @@ export async function getMoneyCategories(type) {
   const { data } = await api.get('/money/categories', { params: { type } })
   return data
 }
+
+export async function getQuickExpenses() {
+  const { data } = await api.get('/money/quick')
+  return data
+}
+
+export async function addQuickExpense(payload) {
+  const { data } = await api.post('/money/quick', payload)
+  return data
+}
+
+export async function deleteQuickExpense(id) {
+  const { data } = await api.delete(`/money/quick/${id}`)
+  return data
+}

@@ -4,6 +4,10 @@
 // from src/pages/Stats.jsx (study stats): different hook (useMoney, not
 // useStats), different data (Transaction, not Session), different route.
 // Money never appears on the study Stats page, and vice versa.
+//
+// Keeps the plain income/expense/balance 3-card breakdown (MoneySummaryCards)
+// that Money.jsx moved away from — that framing (raw totals, not "budget
+// remaining") is exactly what's useful here for pure analysis.
 
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
@@ -44,89 +48,91 @@ export default function MoneyStats() {
 
   return (
     <div className="min-h-screen bg-[#07090f] text-white pb-28" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      {/* Header */}
-      <div className="px-5 pt-7 pb-5 flex items-start justify-between">
-        <div>
-          <p className="text-[11px] text-slate-600 uppercase tracking-[0.2em] font-semibold mb-1">Breakdown</p>
-          <h1
-            className="text-2xl font-bold text-white tracking-tight"
-            style={{ fontFamily: "'Sora', sans-serif", letterSpacing: '-0.03em' }}
-          >
-            Money Stats
-          </h1>
-        </div>
-        <Link
-          to="/money"
-          className="mt-1 flex items-center gap-1.5 bg-slate-800/60 border border-slate-700/60 rounded-full px-3 py-1.5 text-slate-300 text-xs font-semibold"
-        >
-          <i className="ti ti-arrow-left text-sm" /> Back
-        </Link>
-      </div>
-
-      {/* Period tabs */}
-      <div className="px-5 mb-5">
-        <div className="flex p-1 bg-slate-800/60 rounded-xl w-fit">
-          {TABS.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                tab === t ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-500'
-              }`}
+      <div className="max-w-3xl mx-auto px-4 sm:px-5">
+        {/* Header */}
+        <div className="pt-6 sm:pt-7 pb-5 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] text-slate-600 uppercase tracking-[0.2em] font-semibold mb-1">Breakdown</p>
+            <h1
+              className="text-xl sm:text-2xl font-bold text-white tracking-tight"
+              style={{ fontFamily: "'Sora', sans-serif", letterSpacing: '-0.03em' }}
             >
-              {t}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Summary cards */}
-      <div className="px-5 mb-5">
-        <MoneySummaryCards totals={totals} />
-      </div>
-
-      {/* Trend chart */}
-      <div className="px-5 mb-5">
-        <div className="bg-[#0d1420] border border-slate-800/70 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <i className="ti ti-chart-bar text-emerald-400 text-base" />
-            <span className="text-[13px] font-semibold text-slate-300">Income vs Expense</span>
+              Money Stats
+            </h1>
           </div>
-          {loading ? (
-            <p className="text-slate-600 text-sm text-center py-10">Loading...</p>
-          ) : (
-            <MoneyTrendChart data={trend} />
-          )}
+          <Link
+            to="/money"
+            className="mt-1 flex items-center gap-1.5 bg-slate-800/60 border border-slate-700/60 rounded-full px-3 py-1.5 text-slate-300 text-xs font-semibold shrink-0"
+          >
+            <i className="ti ti-arrow-left text-sm" /> Back
+          </Link>
         </div>
-      </div>
 
-      {/* Category breakdown */}
-      <div className="px-5 mb-5">
-        <div className="bg-[#0d1420] border border-slate-800/70 rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <i className="ti ti-chart-donut-3 text-emerald-400 text-base" />
-              <span className="text-[13px] font-semibold text-slate-300">By Category</span>
-            </div>
-            <div className="flex p-1 bg-slate-800/60 rounded-xl">
-              {['expense', 'income'].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setChartTab(t)}
-                  className={`px-3 py-1 rounded-lg text-[11px] font-semibold capitalize transition-colors ${
-                    chartTab === t ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-500'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
+        {/* Period tabs */}
+        <div className="mb-5">
+          <div className="flex p-1 bg-slate-800/60 rounded-xl w-fit">
+            {TABS.map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  tab === t ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-500'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
           </div>
-          {loading ? (
-            <p className="text-slate-600 text-sm text-center py-10">Loading...</p>
-          ) : (
-            <MoneyCategoryChart data={chartTab === 'expense' ? expenseByCategory : incomeByCategory} />
-          )}
+        </div>
+
+        {/* Summary cards */}
+        <div className="mb-5">
+          <MoneySummaryCards totals={totals} />
+        </div>
+
+        {/* Trend chart */}
+        <div className="mb-5">
+          <div className="bg-[#0d1420] border border-slate-800/70 rounded-2xl p-3.5 sm:p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <i className="ti ti-chart-bar text-emerald-400 text-base" />
+              <span className="text-[13px] font-semibold text-slate-300">Income vs Expense</span>
+            </div>
+            {loading ? (
+              <p className="text-slate-600 text-sm text-center py-10">Loading...</p>
+            ) : (
+              <MoneyTrendChart data={trend} />
+            )}
+          </div>
+        </div>
+
+        {/* Category breakdown */}
+        <div className="mb-5">
+          <div className="bg-[#0d1420] border border-slate-800/70 rounded-2xl p-3.5 sm:p-4">
+            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <i className="ti ti-chart-donut-3 text-emerald-400 text-base" />
+                <span className="text-[13px] font-semibold text-slate-300">By Category</span>
+              </div>
+              <div className="flex p-1 bg-slate-800/60 rounded-xl">
+                {['expense', 'income'].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setChartTab(t)}
+                    className={`px-3 py-1 rounded-lg text-[11px] font-semibold capitalize transition-colors ${
+                      chartTab === t ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-500'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {loading ? (
+              <p className="text-slate-600 text-sm text-center py-10">Loading...</p>
+            ) : (
+              <MoneyCategoryChart data={chartTab === 'expense' ? expenseByCategory : incomeByCategory} />
+            )}
+          </div>
         </div>
       </div>
     </div>

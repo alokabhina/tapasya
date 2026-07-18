@@ -31,12 +31,19 @@ export default function TransactionForm({ expenseCategories, incomeCategories, i
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    // [FIX] This was z-50, same as BottomNav (components/layout/BottomNav.jsx)
+    // — BottomNav renders later in the tree, so at equal z-index it painted
+    // on top of this sheet's bottom edge, hiding the Save button behind the
+    // nav bar. Bumped above BottomNav's z-50, and added bottom padding
+    // matching the nav bar's own height (see App.jsx's `pb-[56px] md:pb-0`
+    // on <main>) so the button also isn't just barely peeking out from
+    // behind it.
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-lg mx-0 sm:mx-4 mb-0 bg-[#151f2e] rounded-t-2xl sm:rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden">
         <div className="h-0.5 w-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-600" />
 
-        <div className="p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+        <div className="p-5 pb-[calc(56px+env(safe-area-inset-bottom)+1rem)] md:pb-5 space-y-4 max-h-[85vh] overflow-y-auto">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-white">{initial ? 'Edit Transaction' : 'Add Transaction'}</h2>
             <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>

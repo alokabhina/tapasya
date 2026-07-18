@@ -6,6 +6,7 @@ import express from 'express'
 import authMiddleware from '../middleware/auth.js'
 import Transaction from '../models/Transaction.js'
 import MoneyCategory from '../models/MoneyCategory.js'
+import QuickExpense from '../models/QuickExpense.js'
 import { getStudyDayString } from '../utils/dayBoundary.js'
 
 const router = express.Router()
@@ -34,6 +35,52 @@ router.get('/categories', async (req, res) => {
     if (req.query.type) filter.type = req.query.type
     const cats = await MoneyCategory.find(filter).sort({ name: 1 })
     res.json(cats)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// GET /api/money/quick — saved one-tap expense presets
+router.get('/quick', async (req, res) => {
+  try {
+    const items = await QuickExpense.find({ userId: req.user.id }).sort({ order: 1, createdAt: 1 })
+    res.json(items)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// POST /api/money/quick — save a new preset
+router.post('/quick', async (req, res) => {
+  try {
+    const { label, amount, category, type } = req.body
+
+    if (!label || !label.trim()) return res.status(400).json({ error: 'Label is required' })
+    if (!amount || amount <= 0) return res.status(400).json({ error: 'Amount must be greater than 0' })
+    if (!category || !category.trim()) return res.status(400).json({ error: 'Category is required' })
+
+    const count = await QuickExpense.countDocuments({ userId: req.user.id })
+    const item = await QuickExpense.create({
+      userId: req.user.id,
+      label: label.trim(),
+      amount,
+      category: category.trim(),
+      type: type === 'income' ? 'income' : 'expense',
+      order: count,
+    })
+
+    await rememberCategory(req.user.id, item.category, item.type)
+    res.json(item)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// DELETE /api/money/quick/:id — remove a preset (doesn't touch past transactions)
+router.delete('/quick/:id', async (req, res) => {
+  try {
+    await QuickExpense.findOneAndDelete({ _id: req.params.id, userId: req.user.id })
+    res.json({ ok: true })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
