@@ -12,7 +12,7 @@ const MAIN_NAV = [
   { to: '/vocab',     icon: 'ti-language',  label: 'Vocab'    },
   { to: '/todo',      icon: 'ti-checkbox',  label: 'Todo'     },
   { to: '/group',     icon: 'ti-users',     label: 'Group'    },
-  { to: '/stats',     icon: 'ti-chart-bar', label: 'Stats'    },
+  { to: '/money',     icon: 'ti-wallet',    label: 'Money'    },
 ];
 
 export default function BottomNav() {

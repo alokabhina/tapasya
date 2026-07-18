@@ -5,7 +5,7 @@ import {
   aggregateBySubject, getCumulative,
   getScatterData, getHeatmapData, calculateStreak,
 } from '@/utils/stats'
-import { getTodayString, get4amDayString } from '@/utils/time'
+import { getStudyDayString } from '@/utils/time'
 
 // period = { period, startDate, endDate }, refreshKey = optional counter to force refetch
 export function useStats(period = {}, refreshKey = 0) {
@@ -32,8 +32,8 @@ export function useStats(period = {}, refreshKey = 0) {
     setLoading(true)
     try {
       const { startDate, endDate } = period
-      const start = startDate || get4amDayString()
-      const end   = endDate   || get4amDayString()
+      const start = startDate || getStudyDayString()
+      const end   = endDate   || getStudyDayString()
 
       const data = await getSessions(start, end)
       setSessions(data)
@@ -46,7 +46,7 @@ export function useStats(period = {}, refreshKey = 0) {
       setTotalSeconds(data.reduce((sum, s) => sum + (s.duration || 0), 0))
 
       // Streak + total hours (from all sessions)
-      const allSessions = await getSessions('2020-01-01', getTodayString())
+      const allSessions = await getSessions('2020-01-01', getStudyDayString())
       const streak = calculateStreak(allSessions)
       const totalHrs = allSessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 3600
       setStreak(streak)

@@ -8,13 +8,13 @@ import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useMoney } from '@/hooks/useMoney'
 import { groupByDate, getTotals, formatMoney } from '@/utils/money'
-import { getMonthStart, getDateString, getTodayString } from '@/utils/time'
+import { getMonthStart, getDateString, getStudyDayString } from '@/utils/time'
 import MoneySummaryCards from '@/components/money/MoneySummaryCards'
 import TransactionItem from '@/components/money/TransactionItem'
 import TransactionForm from '@/components/money/TransactionForm'
 
 function formatDayLabel(dateStr) {
-  const today = getTodayString()
+  const today = getStudyDayString()
   const y = new Date()
   y.setDate(y.getDate() - 1)
   const yesterday = getDateString(y)
@@ -33,7 +33,7 @@ function dayNetLabel(txns) {
 export default function Money() {
   const period = useMemo(() => ({
     startDate: getDateString(getMonthStart()),
-    endDate: getTodayString(),
+    endDate: getStudyDayString(),
   }), [])
 
   const {

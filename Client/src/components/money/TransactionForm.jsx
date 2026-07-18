@@ -4,14 +4,14 @@
 
 import { useState, useRef, useEffect } from 'react'
 import CategoryChips from './CategoryChips'
-import { getTodayString } from '@/utils/time'
+import { getStudyDayString } from '@/utils/time'
 
 export default function TransactionForm({ expenseCategories, incomeCategories, initial, onClose, onSave }) {
   const [type, setType]         = useState(initial?.type || 'expense')
   const [amount, setAmount]     = useState(initial?.amount ? String(initial.amount) : '')
   const [category, setCategory] = useState(initial?.category || '')
   const [note, setNote]         = useState(initial?.note || '')
-  const [date, setDate]         = useState(initial?.date || getTodayString())
+  const [date, setDate]         = useState(initial?.date || getStudyDayString())
   const [saving, setSaving]     = useState(false)
   const amountRef = useRef(null)
 

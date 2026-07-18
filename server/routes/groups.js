@@ -7,6 +7,7 @@ import Group from '../models/Group.js'
 import GroupMessage from '../models/GroupMessage.js'
 import User from '../models/User.js'
 import crypto from 'crypto'
+import { getStudyDayString } from '../utils/dayBoundary.js'
 
 const router = express.Router()
 router.use(authMiddleware)
@@ -265,7 +266,7 @@ router.get('/:id/members/:userId/todos', async (req, res) => {
       return res.status(403).json({ error: 'Not a member' })
     // Import Todo model dynamically
     const Todo = (await import('../models/Todo.js')).default
-    const today = new Date().toISOString().slice(0, 10)
+    const today = getStudyDayString()
     const todos = await Todo.find({ userId: req.params.userId, date: today }).sort({ createdAt: 1 }).lean()
     // Only return non-sensitive fields
     res.json(todos.map(t => ({
@@ -285,9 +286,7 @@ router.get('/:id/daily-summary', async (req, res) => {
       return res.status(403).json({ error: 'Not a member' })
 
     const Session = (await import('../models/Session.js')).default
-    const pad = n => String(n).padStart(2, '0')
-    const today = new Date()
-    const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`
+    const todayStr = getStudyDayString()
 
     const memberIds = group.members.map(m => m.userId.toString())
     const sessions = await Session.find({ userId: { $in: memberIds }, date: todayStr }).lean()

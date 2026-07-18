@@ -10,7 +10,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import useStats from '@/hooks/useStats';
-import { formatDuration, formatHumanDuration, getDateString, get4amDayString, getSundayWeekRange, getNDaysFrom, getLastNDays } from '@/utils/time';
+import { formatDuration, formatHumanDuration, getDateString, getStudyDayString, getSundayWeekRange, getNDaysFrom, getLastNDays } from '@/utils/time';
 import { aggregateForDay, aggregateByDateList, aggregateWeeklySunSat, getHourlyPattern, getHourlyMinutes, getCumulative, aggregateBySubject } from '@/utils/stats';
 import { getFocusHistory, getFocusStats } from '@/utils/focusHistory';
 import { fetchReadingStats } from '@/api/Vocab';
@@ -41,7 +41,7 @@ function formatMonthName(dateStr) {
 
 // Compute startDate/endDate for each period mode
 function getPeriodRange(mode, navDate) {
-  const today = get4amDayString();
+  const today = getStudyDayString();
   if (mode === 'day') {
     return { startDate: navDate, endDate: navDate };
   }
@@ -706,7 +706,7 @@ function PeriodNavigator({ mode, navDate, onNav }) {
   }
 
   const canGoForward = () => {
-    const today = get4amDayString();
+    const today = getStudyDayString();
     if (mode === 'day') return navDate < today;
     if (mode === 'week') {
       const { end } = getSundayWeekRange(new Date(navDate + 'T12:00:00'));
@@ -739,7 +739,7 @@ function PeriodNavigator({ mode, navDate, onNav }) {
 const PERIODS = ['Day', 'Week', 'Month', 'Custom'];
 
 export default function Stats() {
-  const today4am = get4amDayString();
+  const today4am = getStudyDayString();
   const [activeTab,     setActiveTab]     = useState('Week');
   const [customStart,   setCustomStart]   = useState('');
   const [customEnd,     setCustomEnd]     = useState('');

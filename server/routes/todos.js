@@ -1,6 +1,7 @@
 import express from 'express'
 import authMiddleware from '../middleware/auth.js'
 import Todo from '../models/Todo.js'
+import { getStudyDayString } from '../utils/dayBoundary.js'
 
 const router = express.Router()
 router.use(authMiddleware) // global middleware to protect all routes
@@ -41,14 +42,11 @@ router.put('/:id', async (req, res) => {
     const updates = { ...req.body }
     // Auto-set completedAt when marking done
     if (updates.done === true && !updates.completedAt) {
-      const now = new Date()
-      const h = now.getHours()
-      // 4am rule: before 4am counts as previous day
-      if (h < 4) now.setDate(now.getDate() - 1)
-      const y = now.getFullYear()
-      const m = String(now.getMonth() + 1).padStart(2, '0')
-      const d = String(now.getDate()).padStart(2, '0')
-      updates.completedAt = `${y}-${m}-${d}`
+      // Study-day rule (3am IST cutoff) — see server/utils/dayBoundary.js.
+      // Used to check `now.getHours() < 4` directly, which ran in the
+      // server's own timezone (usually UTC on most hosts) instead of IST —
+      // completely different cutoff moment than the client's.
+      updates.completedAt = getStudyDayString()
     }
     if (updates.done === false) {
       updates.completedAt = null

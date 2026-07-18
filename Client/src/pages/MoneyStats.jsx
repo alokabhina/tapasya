@@ -9,7 +9,7 @@ import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useMoney } from '@/hooks/useMoney'
 import { aggregateByCategory, aggregateTrend } from '@/utils/money'
-import { getDateString, getSundayWeekRange, getMonthStart, getTodayString } from '@/utils/time'
+import { getDateString, getSundayWeekRange, getMonthStart, getStudyDayString } from '@/utils/time'
 import MoneySummaryCards from '@/components/money/MoneySummaryCards'
 import MoneyCategoryChart from '@/components/money/MoneyCategoryChart'
 import MoneyTrendChart from '@/components/money/MoneyTrendChart'
@@ -17,7 +17,7 @@ import MoneyTrendChart from '@/components/money/MoneyTrendChart'
 const TABS = ['Week', 'Month', 'All Time']
 
 function computeRange(tab) {
-  const today = getTodayString()
+  const today = getStudyDayString()
   if (tab === 'Week') {
     const { start, end } = getSundayWeekRange(new Date())
     return { startDate: getDateString(start), endDate: getDateString(end) }

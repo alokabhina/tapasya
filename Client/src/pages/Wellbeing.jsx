@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { getSessions } from '@/api/sessions';
-import { getTodayString, getDateString, formatHours } from '@/utils/time';
+import { getStudyDayString, getDateString, parseDateString, formatHours } from '@/utils/time';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -30,8 +30,9 @@ function loadHistory() {
 
 function getLast7Days() {
   const days = [];
+  const todayStr = getStudyDayString();
   for (let i = 6; i >= 0; i--) {
-    const d = new Date();
+    const d = parseDateString(todayStr);
     d.setDate(d.getDate() - i);
     days.push({
       dateStr: getDateString(d),
@@ -71,7 +72,7 @@ export default function Wellbeing() {
 
   async function loadData() {
     setLoading(true);
-    const today   = getTodayString();
+    const today   = getStudyDayString();
     const history = loadHistory();
 
     // Restore today's screen time if saved earlier
@@ -107,7 +108,7 @@ export default function Wellbeing() {
   function handleSaveScreen() {
     const val = parseFloat(manualInput);
     if (isNaN(val) || val < 0) return;
-    const today = getTodayString();
+    const today = getStudyDayString();
     saveScreenTime(today, val);
     setScreenTimeToday(String(val));
 

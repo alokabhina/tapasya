@@ -34,31 +34,57 @@ export function getDateString(date) {
   return `${y}-${mo}-${day}`
 }
 
-// Aaj ki date "YYYY-MM-DD" string mein
+// Aaj ki date "YYYY-MM-DD" string mein — literal calendar midnight boundary.
+// Use this ONLY for genuine calendar-date things (exam countdowns, "days
+// since account created", etc). For "which day does this session/task/
+// transaction belong to", use getStudyDayString() instead — that's the
+// one that matches how the rest of the app buckets a day.
 export function getTodayString() {
   return getDateString(new Date())
 }
 
-// 4am-to-4am day string — agar abhi 4am se pehle hai to kal ki date hai "aaj"
-export function get4amDayString(now = new Date()) {
+// ── Logical "study day" boundary ─────────────────────────────────────────────
+// A day here doesn't reset at midnight — it resets at DAY_START_HOUR
+// (3am), so a 1am study session still counts as "yesterday". This is the
+// ONE place that cutoff is defined — every place in the app that needs
+// "which day does this moment belong to" should call getStudyDayString()
+// / getStudyDayWindow() below instead of reimplementing the < DAY_START_HOUR
+// check locally. (It used to be reimplemented in 4+ different places, at
+// 2 different cutoff hours, which is exactly the kind of drift that made
+// Home/Wellbeing/Stats disagree with each other about "today".)
+export const DAY_START_HOUR = 3
+
+// "YYYY-MM-DD" for the logical study day `now` belongs to
+export function getStudyDayString(now = new Date()) {
   const d = new Date(now)
-  if (d.getHours() < 4) {
+  if (d.getHours() < DAY_START_HOUR) {
     d.setDate(d.getDate() - 1)
   }
   return getDateString(d)
 }
 
-// Kisi date ke liye 4am window start (that day 4am) and end (next day 4am)
-export function get4amWindowForDate(dateStr) {
+// { start, end } Date objects for a given study-day's window
+// (that day's DAY_START_HOUR to next day's DAY_START_HOUR)
+export function getStudyDayWindow(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number)
-  const start = new Date(y, m - 1, d, 4, 0, 0, 0)
-  const end   = new Date(y, m - 1, d + 1, 4, 0, 0, 0)
+  const start = new Date(y, m - 1, d, DAY_START_HOUR, 0, 0, 0)
+  const end   = new Date(y, m - 1, d + 1, DAY_START_HOUR, 0, 0, 0)
   return { start, end }
 }
 
-// Kal ki date "YYYY-MM-DD" string mein (streak check ke liye)
+// Deprecated aliases — old name/hour, kept only so any import we missed
+// during the 4am→3am migration doesn't crash. New code should use
+// getStudyDayString()/getStudyDayWindow() above.
+export const get4amDayString = getStudyDayString
+export const get4amWindowForDate = getStudyDayWindow
+
+// Study-day se pehle wali date "YYYY-MM-DD" string mein (streak check,
+// "Yesterday" labels ke liye). Deliberately relative to getStudyDayString()
+// and not literal calendar-now — otherwise between midnight-3am this and
+// getStudyDayString() would land on the same date (today's "yesterday"
+// would equal today itself).
 export function getYesterdayString() {
-  const d = new Date()
+  const d = parseDateString(getStudyDayString())
   d.setDate(d.getDate() - 1)
   return getDateString(d)
 }
@@ -119,34 +145,37 @@ export function getNDaysFrom(startDateStr, n) {
   return days
 }
 
-// Session jo midnight cross kare use 2 sessions mein split karo
-export function midnightSplit(startTimeISO, endTimeISO) {
+// Session jo study-day boundary (DAY_START_HOUR, i.e. 3am) cross kare use
+// 2 sessions mein split karo — same rule as getStudyDayString(), so a
+// session running 11pm→2am stays whole (both ends are still "yesterday"),
+// while one running 1am→5am splits at 3am into a "yesterday" chunk and a
+// "today" chunk. (Used to split at literal midnight, which disagreed with
+// every other "which day is this" check in the app.)
+export function studyDaySplit(startTimeISO, endTimeISO) {
   const start = new Date(startTimeISO)
   const end = new Date(endTimeISO)
 
-  // Same day hai — split ki zaroorat nahi
-  if (getDateString(start) === getDateString(end)) {
-    return [{ startTime: startTimeISO, endTime: endTimeISO, date: getDateString(start) }]
+  const startDay = getStudyDayString(start)
+  const endDay   = getStudyDayString(end)
+
+  // Same logical day — split ki zaroorat nahi
+  if (startDay === endDay) {
+    return [{ startTime: startTimeISO, endTime: endTimeISO, date: startDay }]
   }
 
-  // Midnight point banao
-  const midnight = new Date(start)
-  midnight.setDate(midnight.getDate() + 1)
-  midnight.setHours(0, 0, 0, 0)
+  // First DAY_START_HOUR boundary strictly after `start`
+  const boundary = new Date(start)
+  boundary.setHours(DAY_START_HOUR, 0, 0, 0)
+  if (boundary <= start) boundary.setDate(boundary.getDate() + 1)
 
   return [
-    {
-      startTime: startTimeISO,
-      endTime: midnight.toISOString(),
-      date: getDateString(start),
-    },
-    {
-      startTime: midnight.toISOString(),
-      endTime: endTimeISO,
-      date: getDateString(end),
-    },
+    { startTime: startTimeISO, endTime: boundary.toISOString(), date: startDay },
+    { startTime: boundary.toISOString(), endTime: endTimeISO, date: endDay },
   ]
 }
+
+// Deprecated alias — old name, kept so nothing crashes if we missed an import
+export const midnightSplit = studyDaySplit
 
 // Timestamp se HH:MM format (scatter chart ke liye)
 export function getTimeOfDay(isoString) {

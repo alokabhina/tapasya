@@ -4,21 +4,23 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { uploadPhoto } from '../../api/storage';
+import { getStudyDayString, getYesterdayString } from '../../utils/time';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_PX    = 1200;
 const STORE_KEY = 'tapasya_photo_journal';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+// Was reimplementing the 4am-cutoff rule locally with its own separate bug
+// (toISOString().slice() converts to UTC first, silently shifting the date
+// near midnight) — now just defers to the one shared, correct definition.
 function getDateKey() {
-  const now = new Date();
-  if (now.getHours() < 4) now.setDate(now.getDate() - 1);
-  return now.toISOString().slice(0, 10); // YYYY-MM-DD
+  return getStudyDayString();
 }
 
 function formatDateLabel(dateKey) {
   const today     = getDateKey();
-  const yesterday = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+  const yesterday = getYesterdayString();
   if (dateKey === today)     return 'Today';
   if (dateKey === yesterday) return 'Yesterday';
   const d = new Date(dateKey + 'T12:00:00');

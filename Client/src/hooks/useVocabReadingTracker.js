@@ -8,7 +8,7 @@
 // jisse Stats page pe turant reflect ho jaaye, bina is page pe wapas aaye.
 
 import { useEffect, useRef } from 'react';
-import { get4amDayString } from '@/utils/time';
+import { getStudyDayString } from '@/utils/time';
 import { sendReadingHeartbeat } from '@/api/Vocab';
 
 const IDLE_LIMIT_MS = 20_000;   // 20 sec no-activity => timer pauses
@@ -44,7 +44,7 @@ export default function useVocabReadingTracker(enabled = true) {
       const seconds = pendingSecondsRef.current;
       if (seconds <= 0) return;
       pendingSecondsRef.current = 0;
-      sendReadingHeartbeat(get4amDayString(), seconds).catch(() => {
+      sendReadingHeartbeat(getStudyDayString(), seconds).catch(() => {
         // Fail ho jaaye to seconds wapas jod do, next flush pe retry ho jayega
         pendingSecondsRef.current += seconds;
       });

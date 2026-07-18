@@ -11,6 +11,7 @@ import UserGameProfile from '../models/UserGameProfile.js'
 import UserVocabProgress from '../models/UserVocabProgress.js'
 import UserVocabStreak from '../models/UserVocabStreak.js'
 import GroupMessage from '../models/GroupMessage.js'
+import { getStudyDayString } from '../utils/dayBoundary.js'
 
 const router = express.Router()
 
@@ -28,7 +29,7 @@ router.get('/overview', async (req, res) => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
     const newUsersThisWeek = await User.countDocuments({ createdAt: { $gte: sevenDaysAgo }, isGuest: { $ne: true } })
 
-    const todayStr = new Date().toISOString().slice(0, 10)
+    const todayStr = getStudyDayString()
     const activeTodayIds = await Session.distinct('userId', { date: todayStr })
 
     const totalSecondsAgg = await Session.aggregate([

@@ -5,6 +5,7 @@ import GameSession    from '../models/GameSession.js'
 import UserGameProfile from '../models/UserGameProfile.js'
 import { selectQuestions }            from '../utils/questionSelector.js'
 import { calcFinalScore, getLevel, getRank } from '../utils/xpCalculator.js'
+import { getStudyDayString, addDays } from '../utils/dayBoundary.js'
 
 const router = express.Router()
 router.use(authMiddleware)
@@ -12,7 +13,7 @@ router.use(authMiddleware)
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10)
+  return getStudyDayString()
 }
 
 /** Get or create the UserGameProfile for the current user */
@@ -129,7 +130,7 @@ router.post('/submit', async (req, res) => {
 
     // Update daily streak
     const today     = todayStr()
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const yesterday = addDays(today, -1)
     let dailyStreak = profile.dailyStreak || 0
     if (profile.lastGameDate === yesterday) dailyStreak++
     else if (profile.lastGameDate !== today) dailyStreak = 1

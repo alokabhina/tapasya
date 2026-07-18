@@ -7,6 +7,7 @@ import UserVocabProgress from '../models/UserVocabProgress.js'
 import UserVocabStreak from '../models/UserVocabStreak.js'
 import VocabReadingLog from '../models/VocabReadingLog.js'
 import authMiddleware from '../middleware/auth.js'
+import { getStudyDayWindow, getStudyDayString, addDays } from '../utils/dayBoundary.js'
 
 const router = express.Router()
 
@@ -38,7 +39,7 @@ router.get('/reading/stats', authMiddleware, async (req, res) => {
     const totalSeconds = logs.reduce((sum, l) => sum + l.seconds, 0)
     const todaySeconds = date ? (logs.find(l => l.date === date)?.seconds || 0) : 0
 
-    const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const sevenDaysAgo = addDays(getStudyDayString(), -6)
     const last7Days = logs.filter(l => l.date >= sevenDaysAgo)
     const weekSeconds = last7Days.reduce((sum, l) => sum + l.seconds, 0)
 
@@ -53,9 +54,7 @@ router.get('/reading/stats', authMiddleware, async (req, res) => {
     const dateSet = new Set(sortedAsc.map(l => l.date))
 
     function prevDateStr(d) {
-      const dt = new Date(d + 'T00:00:00')
-      dt.setDate(dt.getDate() - 1)
-      return dt.toISOString().slice(0, 10)
+      return addDays(d, -1)
     }
 
     // Longest streak — scan all logged dates
@@ -290,9 +289,9 @@ router.get('/quiz', authMiddleware, async (req, res) => {
     // Base word filter
     const wordFilter = {}
     if (pool === 'today') {
-      // Words added today (seed + manual)
-      const today = new Date(); today.setHours(0,0,0,0)
-      wordFilter.createdAt = { $gte: today }
+      // Words added today (seed + manual) — study-day window (3am IST)
+      const { start } = getStudyDayWindow(getStudyDayString())
+      wordFilter.createdAt = { $gte: start }
     }
     if (tag) wordFilter.tags = tag
 

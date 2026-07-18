@@ -7,7 +7,7 @@ import useSubjectStore from '@/store/subjectStore';
 import useUserStore from '@/store/userStore';
 import useTimerStore from '@/store/timerStore';
 import { useTimer } from '@/hooks/useTimer';
-import { formatDuration, formatHours, getTodayString } from '@/utils/time';
+import { formatDuration, formatHours, getStudyDayString } from '@/utils/time';
 import { getSubjects, addSubject, updateSubject, deleteSubject } from '@/api/subjects';
 import { getTodos, updateTodo } from '@/api/todos';
 import { getSessions } from '@/api/sessions';
@@ -236,7 +236,7 @@ function FocusFullscreen({ phase, remaining, duration, sessions, onStop }) {
 }
 
 function FocusMode({ subjects }) {
-  const today = getTodayString();
+  const today = getStudyDayString();
   const pomoState = loadPomoState();
   const [sessions, setSessions] = useState(pomoState.date === today ? pomoState.sessions : 0);
 
@@ -666,7 +666,7 @@ export default function Home() {
 
   // Load today's todos
   useEffect(() => {
-    const today = getTodayString();
+    const today = getStudyDayString();
     getTodos(today, today)
       .then((data) => setTodayTodos(data.slice(0, 6)))
       .catch(() => {});
@@ -696,7 +696,7 @@ export default function Home() {
       // they hit IndexedDB automatically when network is unavailable.
       const [rawSubjects, todaySessions] = await Promise.all([
         getSubjects(),
-        getSessions(getTodayString(), getTodayString()),
+        getSessions(getStudyDayString(), getStudyDayString()),
       ]);
       const todayMap = {};
       todaySessions.forEach((sess) => {
@@ -714,7 +714,7 @@ export default function Home() {
         const { getSubjectsOffline, getSessionsOffline } = await import('@/utils/offlineDB');
         const [cachedSubjects, cachedSessions] = await Promise.all([
           getSubjectsOffline(),
-          getSessionsOffline(getTodayString(), getTodayString()),
+          getSessionsOffline(getStudyDayString(), getStudyDayString()),
         ]);
         const todayMap = {};
         cachedSessions.forEach((s) => {

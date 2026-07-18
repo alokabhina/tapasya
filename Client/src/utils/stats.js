@@ -1,4 +1,4 @@
-import { getDateString, getLastNDays, getTimeOfDay, getNDaysFrom, getSundayWeekRange, get4amDayString } from './time'
+import { getDateString, getLastNDays, getTimeOfDay, getNDaysFrom, getSundayWeekRange, getStudyDayString } from './time'
 
 // Donut chart ke liye — subject wise total seconds
 export function aggregateBySubject(sessions) {
@@ -111,7 +111,7 @@ export function calculateStreak(sessions) {
   if (!sessions.length) return 0
   const uniqueDates = [...new Set(sessions.map((s) => s.date))].sort().reverse()
   let streak = 0
-  const today4am = get4amDayString()
+  const today4am = getStudyDayString()
   let current = today4am
 
   for (const dateStr of uniqueDates) {

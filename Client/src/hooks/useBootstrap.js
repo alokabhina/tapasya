@@ -12,7 +12,7 @@ import useUserStore from '@/store/userStore'
 import useSubjectStore from '@/store/subjectStore'
 import { getSubjects, addSubject } from '@/api/subjects'
 import { getSessions } from '@/api/sessions'
-import { getTodayString } from '@/utils/time'
+import { getStudyDayString } from '@/utils/time'
 import {
   saveSubjectsOffline, getSubjectsOffline,
   saveSessionsOffline, getSessionsOffline,
@@ -36,7 +36,7 @@ export function useBootstrap() {
 
   useEffect(() => {
     async function bootstrap() {
-      const today = getTodayString()
+      const today = getStudyDayString()
 
       // ── Phase 1: IndexedDB — todaySeconds calculate karke update karo ──────
       // Yeh ~5ms mein hota hai, aur subjects ke naam/colors already store mein hain.

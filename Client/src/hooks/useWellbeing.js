@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getTodayString } from '@/utils/time'
+import { getStudyDayString } from '@/utils/time'
 
 const STORAGE_KEY = 'tapasya_wellbeing'
 
@@ -15,7 +15,7 @@ export function useWellbeing() {
 
   async function loadWellbeingData() {
     setLoading(true)
-    const today = getTodayString()
+    const today = getStudyDayString()
 
     // Cache check karo pehle
     try {
@@ -49,12 +49,12 @@ export function useWellbeing() {
   // Manual screen time set karo (web fallback)
   function setManualScreenTime(minutes) {
     setScreenTime(minutes)
-    cacheData(getTodayString(), minutes, studyTime, false)
+    cacheData(getStudyDayString(), minutes, studyTime, false)
   }
 
   function setManualStudyTime(minutes) {
     setStudyTime(minutes)
-    cacheData(getTodayString(), screenTime, minutes, false)
+    cacheData(getStudyDayString(), screenTime, minutes, false)
   }
 
   function cacheData(date, screen, study, native) {

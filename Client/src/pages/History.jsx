@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getSessions, deleteSession } from '../api/sessions';
+import { getStudyDayString } from '../utils/time';
 import { getSessionsOffline } from '../utils/offlineDB';
 import { useUserStore } from '../store/userStore';
 import HistoryFilters from '../components/history/HistoryFilters';
@@ -62,7 +63,7 @@ export default function History() {
       // getSessionsOffline without dates returns everything — getSessions mirrors this
       let data;
       if (navigator.onLine) {
-        data = await getSessions('2020-01-01', new Date().toISOString().slice(0, 10));
+        data = await getSessions('2020-01-01', getStudyDayString());
       } else {
         // Offline: getSessionsOffline() with no params returns all cached sessions
         data = await getSessionsOffline();

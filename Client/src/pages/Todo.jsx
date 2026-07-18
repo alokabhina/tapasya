@@ -8,15 +8,8 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { getTodos, addTodo, updateTodo, deleteTodo } from "../api/todos";
 import { useUserStore } from "../store/userStore";
 import { useSubjectStore } from "../store/subjectStore";
-import { getDateString } from "../utils/time";
+import { getDateString, getStudyDayString } from "../utils/time";
 import PhotoJournal from "../components/todo/PhotoJournal";
-
-// ── 4am-to-4am logic ─────────────────────────────────────────────────────────
-function get4amDateString(now = new Date()) {
-  const d = new Date(now);
-  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
-  return getDateString(d);
-}
 
 function addDays(dateStr, n) {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -25,7 +18,7 @@ function addDays(dateStr, n) {
 }
 
 function formatDayLabel(dateStr) {
-  const today = get4amDateString();
+  const today = getStudyDayString();
   const yesterday = addDays(today, -1);
   if (dateStr === today) return "Today";
   if (dateStr === yesterday) return "Yesterday";
@@ -53,7 +46,7 @@ function daysLeft(deadline) { return Math.max(0, Math.ceil((new Date(deadline + 
 function groupByDate(tasks) {
   const groups = {};
   tasks.forEach((t) => {
-    const d = t.date || get4amDateString();
+    const d = t.date || getStudyDayString();
     if (!groups[d]) groups[d] = [];
     groups[d].push(t);
   });
@@ -88,7 +81,7 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
   const [subjectId, setSubjectId] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [estMins, setEstMins] = useState("");
-  const [taskDate, setTaskDate] = useState(defaultDate || get4amDateString());
+  const [taskDate, setTaskDate] = useState(defaultDate || getStudyDayString());
   const [adding, setAdding] = useState(false);
   const inputRef = useRef(null);
 
@@ -441,7 +434,7 @@ function TodayOverview({ todayTasks, streakDays }) {
 
 // ── History Section with Day Navigation ──────────────────────────────────────
 function HistorySection({ tasks, onToggle }) {
-  const todayStr = get4amDateString();
+  const todayStr = getStudyDayString();
   const [viewDate, setViewDate] = useState(todayStr);
   const [filterSubject, setFilterSubject] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all"); // 'all' | 'done' | 'undone'
@@ -570,7 +563,7 @@ const STAT_COLORS = ["#f97316","#a855f7","#3b82f6","#22c55e","#f59e0b","#ec4899"
 function TodoStats({ tasks }) {
   const [days, setDays] = useState(30);
 
-  const todayStr = get4amDateString();
+  const todayStr = getStudyDayString();
   const cutoffDate = addDays(todayStr, -(days - 1));
 
   const periodTasks = useMemo(() =>
@@ -779,7 +772,7 @@ export default function Todo() {
   const [addForDate, setAddForDate] = useState(null);
   const [goalModal, setGoalModal] = useState(null);
 
-  const todayStr = get4amDateString();
+  const todayStr = getStudyDayString();
 
   useEffect(() => {
     // Allow both logged-in users and guests (uid may be null for anonymous/guest)
@@ -804,12 +797,10 @@ export default function Todo() {
   const handleToggle = async (taskId, done) => {
     try {
       const newDone = !done;
-      // Compute completedAt locally (4am rule)
+      // Compute completedAt locally (study-day rule — see utils/time.js)
       let completedAt = null;
       if (newDone) {
-        const now = new Date();
-        if (now.getHours() < 4) now.setDate(now.getDate() - 1);
-        completedAt = getDateString(now);
+        completedAt = getStudyDayString();
       }
       await updateTodo(taskId, { done: newDone, completedAt });
       setTasks((prev) => prev.map((t) =>

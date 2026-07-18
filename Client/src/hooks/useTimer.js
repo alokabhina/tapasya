@@ -11,7 +11,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import useTimerStore from '@/store/timerStore'
 import useUserStore from '@/store/userStore'
 import { saveSession, addPendingSync, sendActiveHeartbeat, clearActiveSession } from '@/api/sessions'
-import { midnightSplit } from '@/utils/time'
+import { studyDaySplit } from '@/utils/time'
 import { sendHeartbeat, sendOffline } from '@/api/groups'
 
 // ── Singleton worker ──────────────────────────────────────────────────────────
@@ -347,7 +347,7 @@ export function useTimer() {
       return 0
     }
 
-    const splits    = midnightSplit(startTime, endTime)
+    const splits    = studyDaySplit(startTime, endTime)
     const wallTotal = Math.max(
       Math.round((new Date(endTime) - new Date(startTime)) / 1000),
       elapsed

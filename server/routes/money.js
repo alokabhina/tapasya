@@ -6,6 +6,7 @@ import express from 'express'
 import authMiddleware from '../middleware/auth.js'
 import Transaction from '../models/Transaction.js'
 import MoneyCategory from '../models/MoneyCategory.js'
+import { getStudyDayString } from '../utils/dayBoundary.js'
 
 const router = express.Router()
 router.use(authMiddleware)
@@ -76,7 +77,7 @@ router.post('/', async (req, res) => {
       amount,
       category: category.trim(),
       note: (note || '').trim(),
-      date: date || new Date().toISOString().slice(0, 10),
+      date: date || getStudyDayString(),
     })
 
     await rememberCategory(req.user.id, txn.category, type)
