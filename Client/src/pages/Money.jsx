@@ -5,16 +5,18 @@
 // what I just spent". Fully independent from the study Stats page/
 // useStats hook — no shared state, no shared data.
 //
-// [REDESIGN] This used to treat income and expense as two equally-common,
-// generic entry types with a 3-card income/expense/balance grid up top.
-// That's not how money actually works for a student — there's usually ONE
-// income event a month (pocket money), and then a stream of small
-// expenses against it. The page is now budget-first (MoneyBudgetCard:
-// "₹X left of ₹Y this month") with expense-logging as the primary action
-// — quick-add presets for repeat purchases, "+ Add" for everything else.
-// Income is still just a Transaction under the hood (type: 'income'), so
-// nothing about the data model or MoneyStats changed — only this page's
-// framing of it.
+// [LAYOUT] Header/budget-card/quick-add/filter-tabs are a fixed top
+// section (shrink-0); only the transaction list below scrolls, in its own
+// flex-1/overflow-y-auto region. Used to be one long scrolling page where
+// the budget card scrolled away with everything else — now it stays
+// visible while browsing the list, like a real finance app.
+//
+// [REDESIGN] Budget-first framing (MoneyBudgetCard: "₹X left of ₹Y this
+// month") instead of a generic income/expense/balance grid — that's how
+// money actually works for a student (one pocket-money income event, a
+// stream of small expenses against it). Quick Add is a toggle in the
+// header next to Stats (not a permanently-visible row) so it doesn't eat
+// vertical space when not in use.
 
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
@@ -57,6 +59,7 @@ export default function Money() {
   const [filter, setFilter] = useState('all') // all | income | expense
   const [formOpen, setFormOpen] = useState(false)
   const [editingTxn, setEditingTxn] = useState(null)
+  const [showQuickAdd, setShowQuickAdd] = useState(false)
 
   const filtered = filter === 'all' ? transactions : transactions.filter((t) => t.type === filter)
   const grouped = groupByDate(filtered)
@@ -80,68 +83,86 @@ export default function Money() {
   }
 
   return (
-    <div className="min-h-screen bg-[#07090f] text-white pb-28" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      <div className="max-w-3xl mx-auto px-4 sm:px-5">
-        {/* Header */}
-        <div className="pt-6 sm:pt-7 pb-5 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] text-slate-600 uppercase tracking-[0.2em] font-semibold mb-1">This month</p>
-            <h1
-              className="text-xl sm:text-2xl font-bold text-white tracking-tight"
-              style={{ fontFamily: "'Sora', sans-serif", letterSpacing: '-0.03em' }}
-            >
-              Money
-            </h1>
-          </div>
-          <Link
-            to="/money/stats"
-            className="mt-1 flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/25 rounded-full px-3 py-1.5 text-emerald-300 text-xs font-semibold shrink-0"
-          >
-            <i className="ti ti-chart-donut-3 text-sm" /> Stats
-          </Link>
-        </div>
+    <div className="h-full flex flex-col bg-[#07090f] text-white overflow-hidden" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+      <div className="max-w-3xl w-full mx-auto px-4 sm:px-5 flex flex-col h-full min-h-0">
 
-        {/* Budget card — the primary thing on this page */}
-        <div className="mb-5">
-          <MoneyBudgetCard income={totals.income} spent={totals.expense} onAddIncome={handleAddIncome} />
-        </div>
-
-        {/* Quick add — one-tap presets for repeat daily purchases */}
-        <div className="mb-6">
-          <QuickAddRow
-            presets={quickExpenses}
-            expenseCategories={expenseCategories}
-            onQuickAdd={quickAdd}
-            onSavePreset={savePreset}
-            onRemovePreset={removePreset}
-          />
-        </div>
-
-        {/* Filter tabs + Add button */}
-        <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex p-1 bg-slate-800/60 rounded-xl w-fit">
-            {['all', 'expense', 'income'].map((f) => (
+        {/* ── Fixed top section — never scrolls away ──────────────────── */}
+        <div className="shrink-0">
+          {/* Header */}
+          <div className="pt-6 sm:pt-7 pb-4 flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[11px] text-slate-600 uppercase tracking-[0.2em] font-semibold mb-1">This month</p>
+              <h1
+                className="text-xl sm:text-2xl font-bold text-white tracking-tight"
+                style={{ fontFamily: "'Sora', sans-serif", letterSpacing: '-0.03em' }}
+              >
+                Money
+              </h1>
+            </div>
+            <div className="flex items-center gap-2 mt-1 shrink-0">
               <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
-                  filter === f ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-500'
+                onClick={() => setShowQuickAdd((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors ${
+                  showQuickAdd
+                    ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                    : 'bg-slate-800/60 border-slate-700/60 text-slate-300'
                 }`}
               >
-                {f}
+                <i className="ti ti-bolt text-sm" /> Quick Add
               </button>
-            ))}
+              <Link
+                to="/money/stats"
+                className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/25 rounded-full px-3 py-1.5 text-emerald-300 text-xs font-semibold"
+              >
+                <i className="ti ti-chart-donut-3 text-sm" /> Stats
+              </Link>
+            </div>
           </div>
-          <button
-            onClick={openAdd}
-            className="flex items-center gap-1.5 bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl hover:bg-emerald-400 shrink-0"
-          >
-            <i className="ti ti-plus text-sm" /> Add
-          </button>
+
+          {/* Quick add — collapsed by default, toggled from the header button above */}
+          {showQuickAdd && (
+            <div className="mb-4">
+              <QuickAddRow
+                presets={quickExpenses}
+                expenseCategories={expenseCategories}
+                onQuickAdd={quickAdd}
+                onSavePreset={savePreset}
+                onRemovePreset={removePreset}
+              />
+            </div>
+          )}
+
+          {/* Budget card */}
+          <div className="mb-4">
+            <MoneyBudgetCard income={totals.income} spent={totals.expense} onAddIncome={handleAddIncome} />
+          </div>
+
+          {/* Filter tabs + Add button */}
+          <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex p-1 bg-slate-800/60 rounded-xl w-fit">
+              {['all', 'expense', 'income'].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
+                    filter === f ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-500'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={openAdd}
+              className="flex items-center gap-1.5 bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl hover:bg-emerald-400 shrink-0"
+            >
+              <i className="ti ti-plus text-sm" /> Add
+            </button>
+          </div>
         </div>
 
-        {/* List */}
-        <div>
+        {/* ── Scrollable list — the ONLY thing that scrolls on this page ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto pb-6">
           {loading ? (
             <p className="text-slate-600 text-sm text-center py-10">Loading...</p>
           ) : grouped.length === 0 ? (

@@ -28,17 +28,16 @@ export default function QuickAddRow({ presets, expenseCategories, onQuickAdd, on
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Quick add</p>
-        {presets.length > 0 && (
+      {presets.length > 0 && (
+        <div className="flex justify-end mb-1.5">
           <button
             onClick={() => setManaging((m) => !m)}
             className={`text-[11px] font-semibold ${managing ? 'text-emerald-400' : 'text-slate-600 hover:text-slate-400'}`}
           >
             {managing ? 'Done' : 'Edit'}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {presets.map((p) => (

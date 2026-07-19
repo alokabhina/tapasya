@@ -40,10 +40,27 @@ router.get('/categories', async (req, res) => {
   }
 })
 
+// Handful of daily-expense presets every student has — seeded once so the
+// Quick Add row isn't empty on day one. If the user later deletes all of
+// them, this quietly reseeds next time (not tracked as "seen before") —
+// harmless, since they're free to delete again; simpler than adding a
+// permanent "defaults dismissed" flag for a low-stakes feature.
+const DEFAULT_QUICK_EXPENSES = [
+  { label: 'Litti',   amount: 20, category: 'Food' },
+  { label: 'Namkeen', amount: 5,  category: 'Food' },
+  { label: 'Biscuit', amount: 10, category: 'Food' },
+  { label: 'Tea',     amount: 10, category: 'Food' },
+]
+
 // GET /api/money/quick — saved one-tap expense presets
 router.get('/quick', async (req, res) => {
   try {
-    const items = await QuickExpense.find({ userId: req.user.id }).sort({ order: 1, createdAt: 1 })
+    let items = await QuickExpense.find({ userId: req.user.id }).sort({ order: 1, createdAt: 1 })
+    if (items.length === 0) {
+      items = await QuickExpense.insertMany(
+        DEFAULT_QUICK_EXPENSES.map((d, i) => ({ userId: req.user.id, type: 'expense', order: i, ...d }))
+      )
+    }
     res.json(items)
   } catch (e) {
     res.status(500).json({ error: e.message })
