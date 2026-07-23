@@ -9,12 +9,25 @@ import useVocabReadingTracker from '@/hooks/useVocabReadingTracker';
 
 const SIZES = [10, 15, 20];
 
+// Word types a quiz can be restricted to — 'all' clears any type filter,
+// the rest can be multi-selected together (e.g. Idiom + Root Word at once).
+const TYPES = [
+  { value: 'all',       label: 'All Types' },
+  { value: 'synonym',   label: 'Synonym' },
+  { value: 'antonym',   label: 'Antonym' },
+  { value: 'one-word',  label: 'One-Word' },
+  { value: 'idiom',     label: 'Idiom' },
+  { value: 'root-word', label: 'Root Word' },
+  { value: 'general',   label: 'General' },
+];
+
 export default function VocabQuiz() {
   const navigate = useNavigate();
   useVocabReadingTracker(true); // quiz attempt karte waqt bhi reading time count ho
 
   const [size, setSize]       = useState(10);
   const [mode, setMode]       = useState('recognition'); // 'recognition' (word→meaning) | 'reverse' (meaning→word)
+  const [selectedTypes, setSelectedTypes] = useState(new Set()); // empty = 'all' types
   const [started, setStarted] = useState(false);
   const [words, setWords]     = useState([]);
   const [idx, setIdx]         = useState(0);
@@ -23,10 +36,21 @@ export default function VocabQuiz() {
   const [finished, setFinished] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
 
+  function toggleType(value) {
+    if (value === 'all') { setSelectedTypes(new Set()); return; }
+    setSelectedTypes((s) => {
+      const next = new Set(s);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  }
+
   const start = useCallback(async (n, wordIds) => {
     setLoading(true);
     try {
-      const data = await fetchQuiz({ n, mode, wordIds });
+      const wordType = selectedTypes.size ? [...selectedTypes] : undefined;
+      const data = await fetchQuiz({ n, mode, wordIds, wordType });
       if (!data.words?.length) {
         setWords([]);
       } else {
@@ -43,7 +67,7 @@ export default function VocabQuiz() {
     } finally {
       setLoading(false);
     }
-  }, [mode]);
+  }, [mode, selectedTypes]);
 
   const [selected, setSelected] = useState(null); // option string user picked
   const [answered, setAnswered] = useState(false);
@@ -97,6 +121,28 @@ export default function VocabQuiz() {
               Meaning → Word
             </button>
           </div>
+
+          {/* Type filter — pick one or more word types to quiz on, e.g. just Idioms */}
+          <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3">
+            {TYPES.map((t) => {
+              const active = t.value === 'all' ? selectedTypes.size === 0 : selectedTypes.has(t.value);
+              return (
+                <button
+                  key={t.value}
+                  onClick={() => toggleType(t.value)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors
+                    ${active ? 'bg-[#1f1b14] text-[#faf9f4] border-[#1f1b14]' : 'bg-[#fdfcf9] text-[#7a7460] border-[#e7e3d8] hover:bg-[#f1eee5]'}`}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          {selectedTypes.size > 0 && (
+            <p className="text-[10px] text-[#a8a290] mt-1.5">
+              Quizzing only: {[...selectedTypes].map((v) => TYPES.find((t) => t.value === v)?.label).join(', ')}
+            </p>
+          )}
 
           <div className="flex items-center justify-center gap-2 mt-5">
             {SIZES.map((s) => (
@@ -156,10 +202,21 @@ export default function VocabQuiz() {
     return (
       <div className="min-h-full bg-[#f3f1e9] flex items-center justify-center px-4 text-center">
         <div>
-          <p className="text-[#7a7460]">No words to quiz yet. Add some to your dictionary first.</p>
-          <button onClick={() => navigate('/vocab')} className="mt-3 text-sm text-[#1f1b14] underline">
-            Go to Vocab Master
-          </button>
+          <p className="text-[#7a7460]">
+            {selectedTypes.size > 0
+              ? "No words of this type yet. Try a different type filter or add some."
+              : 'No words to quiz yet. Add some to your dictionary first.'}
+          </p>
+          <div className="flex items-center justify-center gap-3 mt-3">
+            {selectedTypes.size > 0 && (
+              <button onClick={() => { setSelectedTypes(new Set()); setStarted(false); }} className="text-sm text-[#1f1b14] underline">
+                Clear type filter
+              </button>
+            )}
+            <button onClick={() => navigate('/vocab')} className="text-sm text-[#1f1b14] underline">
+              Go to Vocab Master
+            </button>
+          </div>
         </div>
       </div>
     );

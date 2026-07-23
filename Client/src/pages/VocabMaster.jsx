@@ -197,6 +197,14 @@ export default function VocabMaster() {
                 <i className={`ti ${darkMode ? 'ti-sun' : 'ti-moon'} text-[14px]`} />
               </button>
 
+              {/* Question Bank */}
+              <button
+                onClick={() => navigate('/vocab/questions')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${btnBg}`}
+              >
+                <i className="ti ti-notebook text-[12px]" /> Questions
+              </button>
+
               {/* Quiz */}
               <button
                 onClick={() => navigate('/vocab/quiz')}

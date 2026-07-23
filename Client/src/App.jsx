@@ -44,6 +44,8 @@ const VocabBlitz    = lazy(() => import('./pages/games/VocabBlitz'));
 // ── Vocab Master (personal dictionary + quiz) ────────────────────────────────
 const VocabMaster = lazy(() => import('./pages/VocabMaster'));
 const VocabQuiz    = lazy(() => import('./pages/VocabQuiz'));
+const QuestionBank     = lazy(() => import('./pages/QuestionBank'));
+const QuestionPractice = lazy(() => import('./pages/QuestionPractice'));
 const Syllabus     = lazy(() => import('./pages/Syllabus'));
 const SyllogismStr     = lazy(() => import('./pages/games/SyllogismStrike'));
 const SurvivalArena    = lazy(() => import('./pages/games/SurvivalArena'));
@@ -139,6 +141,8 @@ export default function App() {
             ['/money/stats',        <MoneyStats />],
             ['/vocab',              <VocabMaster />],
             ['/vocab/quiz',         <VocabQuiz />],
+            ['/vocab/questions',          <QuestionBank />],
+            ['/vocab/questions/practice', <QuestionPractice />],
             ['/syllabus',           <Syllabus />],
             // ── Practice Arena routes ─────────────────────────────────────
             ['/games',              <Games />],

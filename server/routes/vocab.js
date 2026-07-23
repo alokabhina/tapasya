@@ -6,6 +6,8 @@ import VocabWord from '../models/VocabWord.js'
 import UserVocabProgress from '../models/UserVocabProgress.js'
 import UserVocabStreak from '../models/UserVocabStreak.js'
 import VocabReadingLog from '../models/VocabReadingLog.js'
+import VocabQuestion from '../models/VocabQuestion.js'
+import UserVocabQuestionProgress from '../models/UserVocabQuestionProgress.js'
 import authMiddleware from '../middleware/auth.js'
 import { getStudyDayWindow, getStudyDayString, addDays } from '../utils/dayBoundary.js'
 
@@ -264,7 +266,7 @@ router.get('/words', authMiddleware, async (req, res) => {
 // ── GET /api/vocab/quiz — smart 80/20 word selection ─────────────────────────
 router.get('/quiz', authMiddleware, async (req, res) => {
   try {
-    const { n = 10, pool = 'all', tag, mode = 'recognition', wordIds } = req.query
+    const { n = 10, pool = 'all', tag, mode = 'recognition', wordIds, wordType } = req.query
     const count = Math.min(+n, 50)
     const now = new Date()
 
@@ -294,6 +296,13 @@ router.get('/quiz', authMiddleware, async (req, res) => {
       wordFilter.createdAt = { $gte: start }
     }
     if (tag) wordFilter.tags = tag
+
+    // wordType — optional, comma-separated (e.g. "idiom" or "idiom,root-word")
+    // so a quiz can be restricted to just idioms, just root words, etc.
+    if (wordType && wordType !== 'all') {
+      const types = String(wordType).split(',').map(s => s.trim()).filter(Boolean)
+      if (types.length) wordFilter.wordType = types.length > 1 ? { $in: types } : types[0]
+    }
 
     const allWords = await VocabWord.find(wordFilter).lean()
     if (!allWords.length) return res.json({ words: [] })
@@ -545,6 +554,292 @@ router.delete('/word/:id', authMiddleware, async (req, res) => {
 
     await VocabWord.findByIdAndDelete(req.params.id)
     await UserVocabProgress.deleteMany({ wordId: req.params.id })
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════════════════
+// QUESTION BANK — personal practice questions, separate from the
+// auto-generated word↔meaning quiz above. User pastes their own MCQ /
+// fill-in-the-blank (cloze) questions (from today's vocab reading, mock
+// tests, etc) and practices them with their own spaced-repetition
+// tracking (UserVocabQuestionProgress).
+// ════════════════════════════════════════════════════════════════════════
+
+const QUESTION_FORMATS = ['mcq', 'fill-blank']
+const VOCAB_TYPES = ['synonym', 'antonym', 'word-meaning', 'idiom', 'phrasal-verb', 'one-word', 'root-word', 'cloze', 'word-usage', 'general']
+const DIFFICULTIES = ['easy', 'medium', 'hard']
+
+// Normalizes one raw question object (from JSON upload or manual add) into
+// a valid VocabQuestion doc, or returns { error } if it can't be salvaged.
+// Both formats are MCQ-style: options[] + correctAnswer that must exactly
+// match one option. 'fill-blank' just means the question text has "___"
+// in it — the answering mechanics are identical to 'mcq'.
+function normalizeQuestion(raw, userId) {
+  const question = raw.question?.trim()
+  if (!question) return { error: 'missing question text' }
+
+  const format = QUESTION_FORMATS.includes(raw.format) ? raw.format : 'mcq'
+  const vocabType = VOCAB_TYPES.includes(raw.vocabType) ? raw.vocabType : 'general'
+  const difficulty = DIFFICULTIES.includes(raw.difficulty) ? raw.difficulty : 'medium'
+
+  const options = Array.isArray(raw.options) ? raw.options.map(o => String(o).trim()).filter(Boolean) : []
+  let correctAnswer = raw.correctAnswer?.toString().trim() || ''
+  if (options.length < 2) return { error: `"${question.slice(0, 40)}…" needs at least 2 options` }
+  if (!correctAnswer) return { error: `"${question.slice(0, 40)}…" missing correctAnswer` }
+  // exact match required; if casing/whitespace drifted slightly, snap to the matching option
+  const match = options.find(o => o.toLowerCase() === correctAnswer.toLowerCase())
+  if (!match) return { error: `"${question.slice(0, 40)}…" correctAnswer doesn't match any option` }
+  correctAnswer = match
+
+  const studyDate = /^\d{4}-\d{2}-\d{2}$/.test(raw.studyDate || '') ? raw.studyDate : getStudyDayString()
+
+  return {
+    doc: {
+      question, format, options, correctAnswer,
+      explanation: raw.explanation?.trim() || '',
+      passage: raw.passage?.trim() || '',
+      vocabType, difficulty,
+      relatedWord: raw.relatedWord?.trim() || '',
+      studyDate,
+      tags: Array.isArray(raw.tags) ? raw.tags : [],
+      source: raw.source === 'manual' ? 'manual' : 'json-upload',
+      addedBy: userId,
+    }
+  }
+}
+
+// ── POST /api/vocab/questions/upload — paste ChatGPT JSON array of questions ──
+router.post('/questions/upload', authMiddleware, async (req, res) => {
+  try {
+    const items = req.body
+    if (!Array.isArray(items) || !items.length)
+      return res.status(400).json({ error: 'Send an array of questions' })
+
+    const docs = [], errors = []
+    for (const raw of items) {
+      const { doc, error } = normalizeQuestion(raw, req.user.id)
+      if (error) errors.push(error)
+      else docs.push(doc)
+    }
+
+    const inserted = docs.length ? await VocabQuestion.insertMany(docs, { ordered: false }) : []
+    res.json({ inserted: inserted.length, skipped: errors.length, errors: errors.slice(0, 10) })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── POST /api/vocab/questions/add — single manual add ────────────────────────
+router.post('/questions/add', authMiddleware, async (req, res) => {
+  try {
+    const { doc, error } = normalizeQuestion({ ...req.body, source: 'manual' }, req.user.id)
+    if (error) return res.status(400).json({ error })
+    const created = await VocabQuestion.create(doc)
+    res.status(201).json(created)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── GET /api/vocab/questions — browse/manage the bank (paginated, filterable) ──
+router.get('/questions', authMiddleware, async (req, res) => {
+  try {
+    const { search, format, vocabType, difficulty, studyDate, mine, page = 1, limit = 30 } = req.query
+    const filter = {}
+    if (search) filter.question = { $regex: search, $options: 'i' }
+    if (format && format !== 'all') {
+      const list = String(format).split(',').map(s => s.trim()).filter(Boolean)
+      filter.format = list.length > 1 ? { $in: list } : list[0]
+    }
+    if (vocabType && vocabType !== 'all') {
+      const list = String(vocabType).split(',').map(s => s.trim()).filter(Boolean)
+      filter.vocabType = list.length > 1 ? { $in: list } : list[0]
+    }
+    if (difficulty && difficulty !== 'all') filter.difficulty = difficulty
+    if (studyDate === 'today') filter.studyDate = getStudyDayString()
+    else if (studyDate && /^\d{4}-\d{2}-\d{2}$/.test(studyDate)) filter.studyDate = studyDate
+    if (mine === 'true') filter.addedBy = req.user.id
+
+    const total = await VocabQuestion.countDocuments(filter)
+    const questions = await VocabQuestion.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((+page - 1) * +limit)
+      .limit(+limit)
+      .lean()
+
+    res.json({ questions, total, page: +page, pages: Math.max(1, Math.ceil(total / +limit)) })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── GET /api/vocab/questions/stats — bank overview for the manage page ───────
+router.get('/questions/stats', authMiddleware, async (req, res) => {
+  try {
+    const [total, byFormatAgg, progressDocs] = await Promise.all([
+      VocabQuestion.countDocuments(),
+      VocabQuestion.aggregate([{ $group: { _id: '$format', count: { $sum: 1 } } }]),
+      UserVocabQuestionProgress.find({ userId: req.user.id }).lean(),
+    ])
+    const byFormat = Object.fromEntries(byFormatAgg.map(g => [g._id, g.count]))
+    const seen = progressDocs.filter(p => p.seenCount > 0).length
+    const mastered = progressDocs.filter(p => p.masteryScore >= 80).length
+    const weak = progressDocs.filter(p => p.wrongCount > 0 && p.masteryScore < 80).length
+
+    res.json({ total, byFormat, seen, mastered, weak, unseen: total - seen })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── GET /api/vocab/questions/practice — smart due-based selection for a session ──
+// Same 80/20 due/unseen-priority logic as /quiz, but over VocabQuestion pool.
+router.get('/questions/practice', authMiddleware, async (req, res) => {
+  try {
+    const { n = 10, format, vocabType, difficulty, studyDate, questionIds } = req.query
+    const count = Math.min(+n, 50)
+    const now = new Date()
+    const shuffle = arr => [...arr].sort(() => Math.random() - 0.5)
+
+    // Shuffles option order fresh each time (correctAnswer stays intact) —
+    // both formats are MCQ-style now so this applies uniformly.
+    function present(list) {
+      return list.map(q => ({ ...q, options: shuffle(q.options) }))
+    }
+
+    // Custom practice: user picked specific question ids
+    if (questionIds) {
+      const ids = String(questionIds).split(',').map(s => s.trim()).filter(Boolean)
+      const questions = await VocabQuestion.find({ _id: { $in: ids } }).lean()
+      return res.json({ questions: present(shuffle(questions)).slice(0, count) })
+    }
+
+    const filter = {}
+    if (format && format !== 'all') {
+      const list = String(format).split(',').map(s => s.trim()).filter(Boolean)
+      filter.format = list.length > 1 ? { $in: list } : list[0]
+    }
+    if (vocabType && vocabType !== 'all') {
+      const list = String(vocabType).split(',').map(s => s.trim()).filter(Boolean)
+      filter.vocabType = list.length > 1 ? { $in: list } : list[0]
+    }
+    if (difficulty && difficulty !== 'all') filter.difficulty = difficulty
+    if (studyDate === 'today') filter.studyDate = getStudyDayString()
+    else if (studyDate && /^\d{4}-\d{2}-\d{2}$/.test(studyDate)) filter.studyDate = studyDate
+
+    const allQuestions = await VocabQuestion.find(filter).lean()
+    if (!allQuestions.length) return res.json({ questions: [] })
+
+    const progressList = await UserVocabQuestionProgress.find({
+      userId: req.user.id, questionId: { $in: allQuestions.map(q => q._id) }
+    }).lean()
+    const progressMap = {}
+    progressList.forEach(p => { progressMap[p.questionId.toString()] = p })
+
+    const unseen = [], dueNow = [], notDue = []
+    allQuestions.forEach(q => {
+      const p = progressMap[q._id.toString()]
+      if (!p || p.seenCount === 0) { unseen.push(q); return }
+      const due = p.nextReviewDate ? new Date(p.nextReviewDate) : null
+      if (!due || due <= now || p.wrongCount > 0) dueNow.push(q)
+      else notDue.push(q)
+    })
+
+    const prioritySlots = Math.ceil(count * 0.8)
+    const reviewSlots = count - prioritySlots
+
+    let selected = shuffle([...unseen, ...dueNow]).slice(0, prioritySlots)
+    if (selected.length < prioritySlots) {
+      selected.push(...shuffle(notDue).slice(0, prioritySlots - selected.length))
+    }
+    const reviewPool = shuffle(notDue).filter(q => !selected.find(s => s._id.toString() === q._id.toString()))
+    selected.push(...reviewPool.slice(0, reviewSlots))
+    if (selected.length < count) {
+      const remaining = shuffle([...unseen, ...dueNow, ...notDue])
+        .filter(q => !selected.find(s => s._id.toString() === q._id.toString()))
+      selected.push(...remaining.slice(0, count - selected.length))
+    }
+
+    res.json({ questions: present(shuffle(selected.slice(0, count))) })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── POST /api/vocab/questions/progress — save a practice answer ──────────────
+router.post('/questions/progress', authMiddleware, async (req, res) => {
+  try {
+    const { questionId, correct } = req.body
+    if (!questionId) return res.status(400).json({ error: 'questionId required' })
+
+    const today = new Date().toISOString().split('T')[0]
+    const existing = await UserVocabQuestionProgress.findOne({ userId: req.user.id, questionId })
+
+    let repetitions = existing?.repetitions || 0
+    let easeFactor = existing?.easeFactor || 2.5
+    let intervalDays = existing?.intervalDays || 0
+    let masteryScore = existing?.masteryScore || 0
+
+    if (correct) {
+      repetitions += 1
+      if (repetitions === 1) intervalDays = 1
+      else if (repetitions === 2) intervalDays = 6
+      else intervalDays = Math.round(intervalDays * easeFactor)
+      easeFactor = Math.max(1.3, easeFactor + 0.1)
+      masteryScore = Math.min(100, masteryScore + 5)
+    } else {
+      repetitions = 0
+      intervalDays = 1
+      easeFactor = Math.max(1.3, easeFactor - 0.2)
+      masteryScore = Math.max(0, masteryScore - 10)
+    }
+
+    const nextReviewDate = new Date()
+    nextReviewDate.setDate(nextReviewDate.getDate() + intervalDays)
+
+    const p = await UserVocabQuestionProgress.findOneAndUpdate(
+      { userId: req.user.id, questionId },
+      {
+        $inc: { seenCount: 1, wrongCount: correct ? 0 : 1 },
+        $set: {
+          lastSeenAt: new Date(), lastSeenDate: today,
+          repetitions, easeFactor, intervalDays, nextReviewDate, masteryScore,
+        },
+      },
+      { upsert: true, new: true }
+    )
+
+    // Reuse the same daily streak/target as word revision — one combined
+    // streak instead of two separate counters competing for attention.
+    let streak = await UserVocabStreak.findOne({ userId: req.user.id })
+    if (!streak) streak = new UserVocabStreak({ userId: req.user.id })
+    if (streak.lastActiveDate !== today) {
+      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
+      const yStr = yesterday.toISOString().split('T')[0]
+      streak.currentStreak = streak.lastActiveDate === yStr ? streak.currentStreak + 1 : 1
+      streak.todayCount = 0
+      streak.lastActiveDate = today
+    }
+    streak.todayCount += 1
+    streak.longestStreak = Math.max(streak.longestStreak, streak.currentStreak)
+    await streak.save()
+
+    res.json({ ok: true, progress: p, streak })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── DELETE /api/vocab/questions/:id ───────────────────────────────────────────
+router.delete('/questions/:id', authMiddleware, async (req, res) => {
+  try {
+    const q = await VocabQuestion.findById(req.params.id)
+    if (!q) return res.status(404).json({ error: 'Question not found' })
+    await VocabQuestion.findByIdAndDelete(req.params.id)
+    await UserVocabQuestionProgress.deleteMany({ questionId: req.params.id })
     res.json({ ok: true })
   } catch (e) {
     res.status(500).json({ error: e.message })

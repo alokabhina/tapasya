@@ -31,9 +31,11 @@ export async function deleteWord(id) {
 // ── GET /api/vocab/quiz — smart due-date based word selection ────────────────
 // mode: 'recognition' (word → guess meaning, default) | 'reverse' (meaning → guess word)
 // wordIds: optional array of specific word _ids for a custom quiz (skips smart selection)
-export async function fetchQuiz({ n = 10, pool = 'all', tag, mode = 'recognition', wordIds } = {}) {
+// wordType: optional array of types to restrict the quiz to (e.g. ['idiom'], ['idiom','root-word'])
+export async function fetchQuiz({ n = 10, pool = 'all', tag, mode = 'recognition', wordIds, wordType } = {}) {
   const params = { n, pool, tag, mode }
   if (wordIds?.length) params.wordIds = wordIds.join(',')
+  if (wordType?.length) params.wordType = wordType.join(',')
   const res = await api.get('/vocab/quiz', { params })
   return res.data // { words[] }
 }
