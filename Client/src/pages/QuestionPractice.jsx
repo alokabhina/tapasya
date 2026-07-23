@@ -202,7 +202,7 @@ export default function QuestionPractice() {
           <p className="text-[#7a7460] text-sm mt-1.5">{results.correct} / {questions.length} correct ({pct}%)</p>
           <div className="flex gap-2 mt-5">
             <button onClick={() => setStarted(false)} className="flex-1 py-2.5 rounded-xl bg-[#fdfcf9] border border-[#e7e3d8] text-[#1f1b14] text-sm font-medium hover:bg-[#f1eee5]">
-              Practice again
+              Practice againn
             </button>
             <button onClick={() => navigate('/vocab/questions')} className="flex-1 py-2.5 rounded-xl bg-[#1f1b14] text-[#faf9f4] text-sm font-medium hover:bg-[#34301f]">
               Question Bank
