@@ -5,7 +5,7 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
 
 const TYPE_LABEL = {
-  synonym: 'Synonym', antonym: 'Antonym', 'one-word': 'One-Word', idiom: 'Idiom', general: 'General',
+  synonym: 'Synonym', antonym: 'Antonym', 'one-word': 'One-Word', idiom: 'Idiom', 'root-word': 'Root Word', general: 'General',
 };
 const DIFF_DOT  = { easy: 'bg-emerald-500', medium: 'bg-amber-500', hard: 'bg-rose-500' };
 const DIFF_TEXT = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };

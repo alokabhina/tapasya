@@ -33,10 +33,11 @@ export async function fetchQuestionStats() {
 // format/vocabType: optional arrays to restrict the session (e.g. ['fill-blank'], ['idiom','root-word'])
 // studyDate: 'all' | 'today' | 'YYYY-MM-DD'
 // questionIds: optional array of specific _ids for a custom session (skips smart selection)
-export async function fetchQuestionPractice({ n = 10, format, vocabType, difficulty = 'all', studyDate = 'all', questionIds } = {}) {
-  const params = { n, difficulty, studyDate }
+export async function fetchQuestionPractice({ n = 10, format, vocabType, difficulty, studyDate = 'all', questionIds } = {}) {
+  const params = { n, studyDate }
   if (format?.length) params.format = format.join(',')
   if (vocabType?.length) params.vocabType = vocabType.join(',')
+  params.difficulty = difficulty?.length ? difficulty.join(',') : 'all'
   if (questionIds?.length) params.questionIds = questionIds.join(',')
   const res = await api.get('/vocab/questions/practice', { params })
   return res.data // { questions[] }

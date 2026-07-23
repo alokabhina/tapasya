@@ -3,9 +3,9 @@
 // render as option buttons (fill-blank just shows a sentence with a blank
 // instead of a direct question). Same paper aesthetic as VocabQuiz.
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchQuestionPractice, saveQuestionProgress } from '@/api/QuestionBank';
+import { fetchQuestionPractice, saveQuestionProgress, fetchQuestionStats } from '@/api/QuestionBank';
 
 const SIZES = [10, 15, 20];
 
@@ -27,13 +27,45 @@ const TYPES = [
   { value: 'general',      label: 'General' },
 ];
 
+const DIFFICULTIES = [
+  { value: 'easy',   label: 'Easy' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'hard',   label: 'Hard' },
+];
+
 export default function QuestionPractice() {
   const navigate = useNavigate();
 
   const [size, setSize] = useState(10);
-  const [selectedFormats, setSelectedFormats] = useState(new Set()); // empty = all
-  const [selectedTypes, setSelectedTypes] = useState(new Set());     // empty = all
+  const [selectedFormats, setSelectedFormats] = useState(new Set());     // empty = all
+  const [selectedTypes, setSelectedTypes] = useState(new Set());         // empty = all
+  const [selectedDifficulties, setSelectedDifficulties] = useState(new Set()); // empty = all
   const [studyDate, setStudyDate] = useState('all'); // 'all' | 'today'
+
+  // Bank overview — used to only show filter chips that actually have
+  // questions behind them (no point offering "Antonym" if there are zero).
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchQuestionStats()
+      .then(setStats)
+      .catch(() => setStats({ total: 0, byFormat: {}, byVocabType: {}, byDifficulty: {} }))
+      .finally(() => setStatsLoading(false));
+  }, []);
+
+  const availableFormats = useMemo(
+    () => FORMATS.filter((f) => (stats?.byFormat?.[f.value] || 0) > 0),
+    [stats]
+  );
+  const availableTypes = useMemo(
+    () => TYPES.filter((t) => (stats?.byVocabType?.[t.value] || 0) > 0),
+    [stats]
+  );
+  const availableDifficulties = useMemo(
+    () => DIFFICULTIES.filter((d) => (stats?.byDifficulty?.[d.value] || 0) > 0),
+    [stats]
+  );
 
   const [started, setStarted] = useState(false);
   const [questions, setQuestions] = useState([]);
@@ -54,6 +86,7 @@ export default function QuestionPractice() {
   }
   const toggleFormat = toggle(setSelectedFormats);
   const toggleType = toggle(setSelectedTypes);
+  const toggleDifficulty = toggle(setSelectedDifficulties);
 
   const start = useCallback(async (n) => {
     setLoading(true);
@@ -62,6 +95,7 @@ export default function QuestionPractice() {
         n,
         format: selectedFormats.size ? [...selectedFormats] : undefined,
         vocabType: selectedTypes.size ? [...selectedTypes] : undefined,
+        difficulty: selectedDifficulties.size ? [...selectedDifficulties] : undefined,
         studyDate,
       });
       if (!data.questions?.length) {
@@ -79,7 +113,7 @@ export default function QuestionPractice() {
     } finally {
       setLoading(false);
     }
-  }, [selectedFormats, selectedTypes, studyDate]);
+  }, [selectedFormats, selectedTypes, selectedDifficulties, studyDate]);
 
   const current = questions[idx];
 
@@ -112,29 +146,61 @@ export default function QuestionPractice() {
             Practice your own question bank — mcq &amp; fill-blank/cloze, mixed together.
           </p>
 
-          {/* Format filter */}
-          <p className="text-[10px] uppercase tracking-wide text-[#a8a290] mt-4 mb-1.5">Formats</p>
-          <div className="flex flex-wrap items-center justify-center gap-1.5">
-            {FORMATS.map((f) => (
-              <button key={f.value} onClick={() => toggleFormat(f.value)}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors
-                  ${selectedFormats.has(f.value) ? 'bg-[#1f1b14] text-[#faf9f4] border-[#1f1b14]' : 'bg-[#fdfcf9] text-[#7a7460] border-[#e7e3d8] hover:bg-[#f1eee5]'}`}>
-                {f.label}
-              </button>
-            ))}
-          </div>
+          {statsLoading ? (
+            <p className="text-xs text-[#a8a290] mt-4">Loading your question bank…</p>
+          ) : !stats?.total ? (
+            <p className="text-xs text-[#a8a290] mt-4">Your question bank is empty — add some questions first.</p>
+          ) : (
+            <>
+              {/* Format filter — only formats that actually have questions */}
+              {availableFormats.length > 0 && (
+                <>
+                  <p className="text-[10px] uppercase tracking-wide text-[#a8a290] mt-4 mb-1.5">Formats</p>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    {availableFormats.map((f) => (
+                      <button key={f.value} onClick={() => toggleFormat(f.value)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors
+                          ${selectedFormats.has(f.value) ? 'bg-[#1f1b14] text-[#faf9f4] border-[#1f1b14]' : 'bg-[#fdfcf9] text-[#7a7460] border-[#e7e3d8] hover:bg-[#f1eee5]'}`}>
+                        {f.label} <span className="opacity-60">({stats.byFormat[f.value]})</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
 
-          {/* Type filter */}
-          <p className="text-[10px] uppercase tracking-wide text-[#a8a290] mt-3 mb-1.5">Types</p>
-          <div className="flex flex-wrap items-center justify-center gap-1.5">
-            {TYPES.map((t) => (
-              <button key={t.value} onClick={() => toggleType(t.value)}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors
-                  ${selectedTypes.has(t.value) ? 'bg-[#1f1b14] text-[#faf9f4] border-[#1f1b14]' : 'bg-[#fdfcf9] text-[#7a7460] border-[#e7e3d8] hover:bg-[#f1eee5]'}`}>
-                {t.label}
-              </button>
-            ))}
-          </div>
+              {/* Type filter — only vocab types that actually have questions */}
+              {availableTypes.length > 0 && (
+                <>
+                  <p className="text-[10px] uppercase tracking-wide text-[#a8a290] mt-3 mb-1.5">Types</p>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    {availableTypes.map((t) => (
+                      <button key={t.value} onClick={() => toggleType(t.value)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors
+                          ${selectedTypes.has(t.value) ? 'bg-[#1f1b14] text-[#faf9f4] border-[#1f1b14]' : 'bg-[#fdfcf9] text-[#7a7460] border-[#e7e3d8] hover:bg-[#f1eee5]'}`}>
+                        {t.label} <span className="opacity-60">({stats.byVocabType[t.value]})</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Difficulty filter — only difficulties that actually have questions */}
+              {availableDifficulties.length > 0 && (
+                <>
+                  <p className="text-[10px] uppercase tracking-wide text-[#a8a290] mt-3 mb-1.5">Difficulty</p>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    {availableDifficulties.map((d) => (
+                      <button key={d.value} onClick={() => toggleDifficulty(d.value)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors
+                          ${selectedDifficulties.has(d.value) ? 'bg-[#1f1b14] text-[#faf9f4] border-[#1f1b14]' : 'bg-[#fdfcf9] text-[#7a7460] border-[#e7e3d8] hover:bg-[#f1eee5]'}`}>
+                        {d.label} <span className="opacity-60">({stats.byDifficulty[d.value]})</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
 
           {/* Study date */}
           <div className="flex items-center justify-center gap-1.5 mt-4 bg-[#fdfcf9] border border-[#e7e3d8] rounded-full p-1">
@@ -159,7 +225,7 @@ export default function QuestionPractice() {
             ))}
           </div>
 
-          <button onClick={() => start(size)} disabled={loading}
+          <button onClick={() => start(size)} disabled={loading || statsLoading || !stats?.total}
             className="w-full mt-5 py-3 rounded-xl bg-[#1f1b14] text-[#faf9f4] text-sm font-medium hover:bg-[#34301f] disabled:opacity-50">
             {loading ? 'Preparing…' : 'Start Practice'}
           </button>
@@ -179,7 +245,7 @@ export default function QuestionPractice() {
         <div>
           <p className="text-[#7a7460]">No questions match this filter yet.</p>
           <div className="flex items-center justify-center gap-3 mt-3">
-            <button onClick={() => { setSelectedFormats(new Set()); setSelectedTypes(new Set()); setStudyDate('all'); setStarted(false); }} className="text-sm text-[#1f1b14] underline">
+            <button onClick={() => { setSelectedFormats(new Set()); setSelectedTypes(new Set()); setSelectedDifficulties(new Set()); setStudyDate('all'); setStarted(false); }} className="text-sm text-[#1f1b14] underline">
               Clear filters
             </button>
             <button onClick={() => navigate('/vocab/questions')} className="text-sm text-[#1f1b14] underline">
@@ -202,7 +268,7 @@ export default function QuestionPractice() {
           <p className="text-[#7a7460] text-sm mt-1.5">{results.correct} / {questions.length} correct ({pct}%)</p>
           <div className="flex gap-2 mt-5">
             <button onClick={() => setStarted(false)} className="flex-1 py-2.5 rounded-xl bg-[#fdfcf9] border border-[#e7e3d8] text-[#1f1b14] text-sm font-medium hover:bg-[#f1eee5]">
-              Practice againn
+              Practice again
             </button>
             <button onClick={() => navigate('/vocab/questions')} className="flex-1 py-2.5 rounded-xl bg-[#1f1b14] text-[#faf9f4] text-sm font-medium hover:bg-[#34301f]">
               Question Bank

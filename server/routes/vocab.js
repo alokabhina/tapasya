@@ -679,17 +679,25 @@ router.get('/questions', authMiddleware, async (req, res) => {
 // ── GET /api/vocab/questions/stats — bank overview for the manage page ───────
 router.get('/questions/stats', authMiddleware, async (req, res) => {
   try {
-    const [total, byFormatAgg, progressDocs] = await Promise.all([
+    const [total, byFormatAgg, byVocabTypeAgg, byDifficultyAgg, progressDocs] = await Promise.all([
       VocabQuestion.countDocuments(),
       VocabQuestion.aggregate([{ $group: { _id: '$format', count: { $sum: 1 } } }]),
+      VocabQuestion.aggregate([{ $group: { _id: '$vocabType', count: { $sum: 1 } } }]),
+      VocabQuestion.aggregate([{ $group: { _id: '$difficulty', count: { $sum: 1 } } }]),
       UserVocabQuestionProgress.find({ userId: req.user.id }).lean(),
     ])
     const byFormat = Object.fromEntries(byFormatAgg.map(g => [g._id, g.count]))
+    // FIX: these two were missing before — practice screen had no way to know
+    // which types/difficulties actually have questions in the bank, so it
+    // showed every possible chip even for types with 0 questions (e.g.
+    // "Antonym" would show as selectable even with nothing behind it).
+    const byVocabType = Object.fromEntries(byVocabTypeAgg.map(g => [g._id, g.count]))
+    const byDifficulty = Object.fromEntries(byDifficultyAgg.map(g => [g._id, g.count]))
     const seen = progressDocs.filter(p => p.seenCount > 0).length
     const mastered = progressDocs.filter(p => p.masteryScore >= 80).length
     const weak = progressDocs.filter(p => p.wrongCount > 0 && p.masteryScore < 80).length
 
-    res.json({ total, byFormat, seen, mastered, weak, unseen: total - seen })
+    res.json({ total, byFormat, byVocabType, byDifficulty, seen, mastered, weak, unseen: total - seen })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -726,7 +734,10 @@ router.get('/questions/practice', authMiddleware, async (req, res) => {
       const list = String(vocabType).split(',').map(s => s.trim()).filter(Boolean)
       filter.vocabType = list.length > 1 ? { $in: list } : list[0]
     }
-    if (difficulty && difficulty !== 'all') filter.difficulty = difficulty
+    if (difficulty && difficulty !== 'all') {
+      const list = String(difficulty).split(',').map(s => s.trim()).filter(Boolean)
+      filter.difficulty = list.length > 1 ? { $in: list } : list[0]
+    }
     if (studyDate === 'today') filter.studyDate = getStudyDayString()
     else if (studyDate && /^\d{4}-\d{2}-\d{2}$/.test(studyDate)) filter.studyDate = studyDate
 
