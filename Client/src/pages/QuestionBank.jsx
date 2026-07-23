@@ -41,6 +41,13 @@ const DATE_FILTERS = [
   { value: 'today', label: "Today's" },
 ];
 
+const MASTERY_FILTERS = [
+  { value: 'all',      label: 'All' },
+  { value: 'mastered', label: '✓ Done' },
+  { value: 'weak',     label: '⚡ Weak' },
+  { value: 'unseen',   label: '◌ New' },
+];
+
 const FORMAT_LABEL = { mcq: 'MCQ', 'fill-blank': 'Fill Blank' };
 const FORMAT_ICON  = { mcq: 'ti-list-check', 'fill-blank': 'ti-pencil' };
 
@@ -57,6 +64,7 @@ export default function QuestionBank() {
   const [vocabType, setVocabType] = useState('all');
   const [difficulty, setDifficulty] = useState('all');
   const [studyDate, setStudyDate] = useState('all');
+  const [masteryFilter, setMasteryFilter] = useState('all');
   const [stats, setStats]         = useState(null);
 
   const [showAdd, setShowAdd]     = useState(false);
@@ -65,7 +73,7 @@ export default function QuestionBank() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchQuestions({ search, format, vocabType, difficulty, studyDate, page: 1, limit: 30 });
+      const data = await fetchQuestions({ search, format, vocabType, difficulty, studyDate, masteryFilter, page: 1, limit: 30 });
       setQuestions(data.questions);
       setTotal(data.total);
       setPages(data.pages || 1);
@@ -75,7 +83,7 @@ export default function QuestionBank() {
     } finally {
       setLoading(false);
     }
-  }, [search, format, vocabType, difficulty, studyDate]);
+  }, [search, format, vocabType, difficulty, studyDate, masteryFilter]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { fetchQuestionStats().then(setStats).catch(() => {}); }, [questions.length]); // eslint-disable-line
@@ -84,7 +92,7 @@ export default function QuestionBank() {
     if (page >= pages) return;
     try {
       const nextPage = page + 1;
-      const data = await fetchQuestions({ search, format, vocabType, difficulty, studyDate, page: nextPage, limit: 30 });
+      const data = await fetchQuestions({ search, format, vocabType, difficulty, studyDate, masteryFilter, page: nextPage, limit: 30 });
       setQuestions((q) => [...q, ...data.questions]);
       setPage(nextPage);
     } catch (e) { console.error(e); }
@@ -158,6 +166,10 @@ export default function QuestionBank() {
           {/* Filter row */}
           <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto whitespace-nowrap pb-0.5
                           [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {MASTERY_FILTERS.map((f) => (
+              <Chip key={f.value} active={masteryFilter === f.value} onClick={() => setMasteryFilter(f.value)}>{f.label}</Chip>
+            ))}
+            <span className="w-px h-3.5 bg-[#e7e3d8] shrink-0" />
             {FORMAT_FILTERS.map((f) => (
               <Chip key={f.value} active={format === f.value} onClick={() => setFormat(f.value)}>{f.label}</Chip>
             ))}
@@ -221,6 +233,20 @@ export default function QuestionBank() {
                     ))}
                   </div>
                   {q.explanation && <p className="mt-1 text-[11px] text-[#a8a290] italic">{q.explanation}</p>}
+                  {q.progress?.seenCount > 0 && (
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <div className="w-12 h-1 rounded-full bg-[#ece8db] overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            q.progress.masteryScore >= 80 ? 'bg-emerald-500'
+                              : q.progress.masteryScore >= 40 ? 'bg-amber-500' : 'bg-rose-400'
+                          }`}
+                          style={{ width: `${q.progress.masteryScore}%` }}
+                        />
+                      </div>
+                      <span className="text-[9.5px] text-[#9c9580]">{q.progress.masteryScore}% mastered · seen {q.progress.seenCount}×{q.progress.wrongCount > 0 ? `, missed ${q.progress.wrongCount}×` : ''}</span>
+                    </div>
+                  )}
                 </div>
               ))}
               {page < pages && (

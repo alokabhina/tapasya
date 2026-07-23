@@ -33,6 +33,13 @@ const DIFFICULTIES = [
   { value: 'hard',   label: 'Hard' },
 ];
 
+const MASTERY_FILTERS = [
+  { value: 'all',      label: 'All' },
+  { value: 'weak',     label: '⚡ Weak only' },
+  { value: 'unseen',   label: '◌ New only' },
+  { value: 'mastered', label: '✓ Review mastered' },
+];
+
 export default function QuestionPractice() {
   const navigate = useNavigate();
 
@@ -40,6 +47,7 @@ export default function QuestionPractice() {
   const [selectedFormats, setSelectedFormats] = useState(new Set());     // empty = all
   const [selectedTypes, setSelectedTypes] = useState(new Set());         // empty = all
   const [selectedDifficulties, setSelectedDifficulties] = useState(new Set()); // empty = all
+  const [masteryFilter, setMasteryFilter] = useState('all'); // 'all' | 'weak' | 'unseen' | 'mastered'
   const [studyDate, setStudyDate] = useState('all'); // 'all' | 'today'
 
   // Bank overview — used to only show filter chips that actually have
@@ -72,6 +80,7 @@ export default function QuestionPractice() {
   const [idx, setIdx] = useState(0);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState({ correct: 0, wrong: 0 });
+  const [mistakes, setMistakes] = useState([]); // wrong answers this session, for the end-of-session review
   const [finished, setFinished] = useState(false);
 
   const [selected, setSelected] = useState(null);
@@ -96,6 +105,7 @@ export default function QuestionPractice() {
         format: selectedFormats.size ? [...selectedFormats] : undefined,
         vocabType: selectedTypes.size ? [...selectedTypes] : undefined,
         difficulty: selectedDifficulties.size ? [...selectedDifficulties] : undefined,
+        masteryFilter,
         studyDate,
       });
       if (!data.questions?.length) {
@@ -105,6 +115,7 @@ export default function QuestionPractice() {
         setIdx(0);
         setSelected(null); setAnswered(false);
         setResults({ correct: 0, wrong: 0 });
+        setMistakes([]);
         setFinished(false);
         setStarted(true);
       }
@@ -113,7 +124,7 @@ export default function QuestionPractice() {
     } finally {
       setLoading(false);
     }
-  }, [selectedFormats, selectedTypes, selectedDifficulties, studyDate]);
+  }, [selectedFormats, selectedTypes, selectedDifficulties, masteryFilter, studyDate]);
 
   const current = questions[idx];
 
@@ -123,6 +134,13 @@ export default function QuestionPractice() {
     setSelected(option);
     setAnswered(true);
     setResults((r) => ({ ...r, correct: r.correct + (correct ? 1 : 0), wrong: r.wrong + (correct ? 0 : 1) }));
+    if (!correct) {
+      setMistakes((m) => [...m, {
+        question: current.question, passage: current.passage,
+        picked: option, correctAnswer: current.correctAnswer,
+        explanation: current.explanation, vocabType: current.vocabType,
+      }]);
+    }
     saveQuestionProgress(current._id, correct).catch(() => {});
   }
 
@@ -202,6 +220,18 @@ export default function QuestionPractice() {
             </>
           )}
 
+          {/* Mastery filter — target just your weak spots, or drill new ones */}
+          <p className="text-[10px] uppercase tracking-wide text-[#a8a290] mt-4 mb-1.5">Focus</p>
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            {MASTERY_FILTERS.map((f) => (
+              <button key={f.value} onClick={() => setMasteryFilter(f.value)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors
+                  ${masteryFilter === f.value ? 'bg-[#1f1b14] text-[#faf9f4] border-[#1f1b14]' : 'bg-[#fdfcf9] text-[#7a7460] border-[#e7e3d8] hover:bg-[#f1eee5]'}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+
           {/* Study date */}
           <div className="flex items-center justify-center gap-1.5 mt-4 bg-[#fdfcf9] border border-[#e7e3d8] rounded-full p-1">
             <button onClick={() => setStudyDate('all')}
@@ -245,7 +275,7 @@ export default function QuestionPractice() {
         <div>
           <p className="text-[#7a7460]">No questions match this filter yet.</p>
           <div className="flex items-center justify-center gap-3 mt-3">
-            <button onClick={() => { setSelectedFormats(new Set()); setSelectedTypes(new Set()); setSelectedDifficulties(new Set()); setStudyDate('all'); setStarted(false); }} className="text-sm text-[#1f1b14] underline">
+            <button onClick={() => { setSelectedFormats(new Set()); setSelectedTypes(new Set()); setSelectedDifficulties(new Set()); setMasteryFilter('all'); setStudyDate('all'); setStarted(false); }} className="text-sm text-[#1f1b14] underline">
               Clear filters
             </button>
             <button onClick={() => navigate('/vocab/questions')} className="text-sm text-[#1f1b14] underline">
@@ -261,19 +291,45 @@ export default function QuestionPractice() {
   if (finished) {
     const pct = Math.round((results.correct / questions.length) * 100);
     return (
-      <div className="min-h-full bg-[#f3f1e9] flex items-center justify-center px-4">
-        <div className="w-full max-w-sm bg-[#faf9f4] border border-[#e7e3d8] rounded-2xl p-7 text-center shadow-sm">
-          <i className={`ti ${pct >= 70 ? 'ti-trophy' : 'ti-refresh'} text-[36px] text-[#9c9580]`} />
-          <h1 className="font-serif text-2xl text-[#1f1b14] mt-2">Practice complete</h1>
-          <p className="text-[#7a7460] text-sm mt-1.5">{results.correct} / {questions.length} correct ({pct}%)</p>
-          <div className="flex gap-2 mt-5">
-            <button onClick={() => setStarted(false)} className="flex-1 py-2.5 rounded-xl bg-[#fdfcf9] border border-[#e7e3d8] text-[#1f1b14] text-sm font-medium hover:bg-[#f1eee5]">
-              Practice again
-            </button>
-            <button onClick={() => navigate('/vocab/questions')} className="flex-1 py-2.5 rounded-xl bg-[#1f1b14] text-[#faf9f4] text-sm font-medium hover:bg-[#34301f]">
-              Question Bank
-            </button>
+      <div className="min-h-full bg-[#f3f1e9] flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-sm">
+          <div className="bg-[#faf9f4] border border-[#e7e3d8] rounded-2xl p-7 text-center shadow-sm">
+            <i className={`ti ${pct >= 70 ? 'ti-trophy' : 'ti-refresh'} text-[36px] text-[#9c9580]`} />
+            <h1 className="font-serif text-2xl text-[#1f1b14] mt-2">Practice complete</h1>
+            <p className="text-[#7a7460] text-sm mt-1.5">{results.correct} / {questions.length} correct ({pct}%)</p>
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setStarted(false)} className="flex-1 py-2.5 rounded-xl bg-[#fdfcf9] border border-[#e7e3d8] text-[#1f1b14] text-sm font-medium hover:bg-[#f1eee5]">
+                Practice again
+              </button>
+              <button onClick={() => navigate('/vocab/questions')} className="flex-1 py-2.5 rounded-xl bg-[#1f1b14] text-[#faf9f4] text-sm font-medium hover:bg-[#34301f]">
+                Question Bank
+              </button>
+            </div>
           </div>
+
+          {/* Review mistakes — re-reading the correct answer + why right after
+              a miss (testing effect + immediate feedback) is what actually
+              makes it stick, vs the explanation flashing by once mid-session. */}
+          {mistakes.length > 0 && (
+            <div className="mt-4 bg-[#faf9f4] border border-[#e7e3d8] rounded-2xl p-5">
+              <p className="text-[11px] uppercase tracking-wide text-[#a8a290] mb-3">
+                Review your {mistakes.length} mistake{mistakes.length === 1 ? '' : 's'}
+              </p>
+              <div className="space-y-3">
+                {mistakes.map((m, i) => (
+                  <div key={i} className="border-t border-[#e7e3d8] pt-3 first:border-t-0 first:pt-0">
+                    {m.passage && <p className="text-[11px] text-[#9c9580] mb-1">{m.passage}</p>}
+                    <p className="font-serif text-[#1f1b14] text-sm leading-snug">{m.question}</p>
+                    <p className="text-[12px] mt-1">
+                      <span className="text-rose-500">You picked: {m.picked}</span>
+                    </p>
+                    <p className="text-[12px] text-emerald-600">Correct: {m.correctAnswer}</p>
+                    {m.explanation && <p className="text-[11px] text-[#a8a290] italic mt-1">{m.explanation}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

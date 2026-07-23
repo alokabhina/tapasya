@@ -380,22 +380,32 @@ router.get('/quiz', authMiddleware, async (req, res) => {
 })
 
 // ── Build 4-option MCQ. mode='recognition' → word shown, guess meaning (default).
-//    mode='reverse' → meaning shown, guess the word (harder, tests recall). ──
+//    mode='reverse' → meaning shown, guess the word (harder, tests recall).
+// Distractors are biased toward the same wordType/difficulty as the target
+// word first — e.g. a "synonym"-type hard word gets other synonym-type words
+// as wrong options where possible. Random cross-type distractors (an idiom's
+// meaning sitting next to a one-word-substitution word) tend to be obviously
+// wrong on sight, which makes the quiz too easy to guess without real recall. ──
 function buildOptions(selectedWords, allWordsPool, mode) {
   const shuffle = arr => [...arr].sort(() => Math.random() - 0.5)
+
+  function pickDistractors(target, pool, keyFn) {
+    const others = pool.filter(w => keyFn(w) !== keyFn(target))
+    const sameType = shuffle(others.filter(w => w.wordType === target.wordType))
+    const sameDifficulty = shuffle(others.filter(w => w.wordType !== target.wordType && w.difficulty === target.difficulty))
+    const rest = shuffle(others.filter(w => w.wordType !== target.wordType && w.difficulty !== target.difficulty))
+    return [...sameType, ...sameDifficulty, ...rest].slice(0, 3)
+  }
+
   if (mode === 'reverse') {
-    const wordPool = allWordsPool.map(w => w.word).filter(Boolean)
     return selectedWords.map(w => {
-      const distractorPool = wordPool.filter(x => x !== w.word)
-      const distractors = shuffle(distractorPool).slice(0, 3)
+      const distractors = pickDistractors(w, allWordsPool, x => x.word).map(x => x.word)
       const options = shuffle([w.word, ...distractors])
       return { ...w, mode: 'reverse', options }
     })
   }
-  const meaningPool = allWordsPool.map(w => w.meaning).filter(Boolean)
   return selectedWords.map(w => {
-    const distractorPool = meaningPool.filter(m => m !== w.meaning)
-    const distractors = shuffle(distractorPool).slice(0, 3)
+    const distractors = pickDistractors(w, allWordsPool, x => x.meaning).map(x => x.meaning)
     const options = shuffle([w.meaning, ...distractors])
     return { ...w, mode: 'recognition', options }
   })
@@ -647,7 +657,7 @@ router.post('/questions/add', authMiddleware, async (req, res) => {
 // ── GET /api/vocab/questions — browse/manage the bank (paginated, filterable) ──
 router.get('/questions', authMiddleware, async (req, res) => {
   try {
-    const { search, format, vocabType, difficulty, studyDate, mine, page = 1, limit = 30 } = req.query
+    const { search, format, vocabType, difficulty, studyDate, mine, masteryFilter, page = 1, limit = 30 } = req.query
     const filter = {}
     if (search) filter.question = { $regex: search, $options: 'i' }
     if (format && format !== 'all') {
@@ -663,6 +673,26 @@ router.get('/questions', authMiddleware, async (req, res) => {
     else if (studyDate && /^\d{4}-\d{2}-\d{2}$/.test(studyDate)) filter.studyDate = studyDate
     if (mine === 'true') filter.addedBy = req.user.id
 
+    // NEW: Mastered/Weak/Unseen quick-filter — mirrors the same chips on the
+    // Vocab Master dictionary page. Without this there was no way to pull up
+    // just the questions you keep getting wrong.
+    if (masteryFilter === 'mastered') {
+      const ids = await UserVocabQuestionProgress.find({
+        userId: req.user.id, masteryScore: { $gte: 80 }
+      }).select('questionId').lean()
+      filter._id = { $in: ids.map(p => p.questionId) }
+    } else if (masteryFilter === 'weak') {
+      const ids = await UserVocabQuestionProgress.find({
+        userId: req.user.id, wrongCount: { $gt: 0 }, masteryScore: { $lt: 80 }
+      }).select('questionId').lean()
+      filter._id = { $in: ids.map(p => p.questionId) }
+    } else if (masteryFilter === 'unseen') {
+      const seenIds = await UserVocabQuestionProgress.find({
+        userId: req.user.id, seenCount: { $gt: 0 }
+      }).select('questionId').lean()
+      filter._id = { $nin: seenIds.map(p => p.questionId) }
+    }
+
     const total = await VocabQuestion.countDocuments(filter)
     const questions = await VocabQuestion.find(filter)
       .sort({ createdAt: -1 })
@@ -670,7 +700,16 @@ router.get('/questions', authMiddleware, async (req, res) => {
       .limit(+limit)
       .lean()
 
-    res.json({ questions, total, page: +page, pages: Math.max(1, Math.ceil(total / +limit)) })
+    // NEW: attach each question's own progress (seenCount/masteryScore) so
+    // the list can show a mastery badge per card, same as the dictionary.
+    const progressList = await UserVocabQuestionProgress.find({
+      userId: req.user.id, questionId: { $in: questions.map(q => q._id) }
+    }).lean()
+    const progressMap = {}
+    progressList.forEach(p => { progressMap[p.questionId.toString()] = p })
+    const enriched = questions.map(q => ({ ...q, progress: progressMap[q._id.toString()] || null }))
+
+    res.json({ questions: enriched, total, page: +page, pages: Math.max(1, Math.ceil(total / +limit)) })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -707,7 +746,7 @@ router.get('/questions/stats', authMiddleware, async (req, res) => {
 // Same 80/20 due/unseen-priority logic as /quiz, but over VocabQuestion pool.
 router.get('/questions/practice', authMiddleware, async (req, res) => {
   try {
-    const { n = 10, format, vocabType, difficulty, studyDate, questionIds } = req.query
+    const { n = 10, format, vocabType, difficulty, studyDate, questionIds, masteryFilter } = req.query
     const count = Math.min(+n, 50)
     const now = new Date()
     const shuffle = arr => [...arr].sort(() => Math.random() - 0.5)
@@ -749,6 +788,20 @@ router.get('/questions/practice', authMiddleware, async (req, res) => {
     }).lean()
     const progressMap = {}
     progressList.forEach(p => { progressMap[p.questionId.toString()] = p })
+
+    // NEW: explicit "practice just my weak/mastered/unseen questions" mode —
+    // bypasses the default 80/20 due-priority mix and just draws straight
+    // from that bucket, so a targeted drill session is possible.
+    if (masteryFilter && masteryFilter !== 'all') {
+      const pool = allQuestions.filter(q => {
+        const p = progressMap[q._id.toString()]
+        if (masteryFilter === 'unseen') return !p || p.seenCount === 0
+        if (masteryFilter === 'weak') return p && p.wrongCount > 0 && p.masteryScore < 80
+        if (masteryFilter === 'mastered') return p && p.masteryScore >= 80
+        return true
+      })
+      return res.json({ questions: present(shuffle(pool).slice(0, count)) })
+    }
 
     const unseen = [], dueNow = [], notDue = []
     allQuestions.forEach(q => {

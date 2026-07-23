@@ -18,8 +18,8 @@ export async function addQuestion(payload) {
 }
 
 // ── GET /api/vocab/questions — browse/manage the bank (paginated, filterable) ──
-export async function fetchQuestions({ search = '', format = 'all', vocabType = 'all', difficulty = 'all', studyDate = 'all', mine = false, page = 1, limit = 30 } = {}) {
-  const res = await api.get('/vocab/questions', { params: { search, format, vocabType, difficulty, studyDate, mine, page, limit } })
+export async function fetchQuestions({ search = '', format = 'all', vocabType = 'all', difficulty = 'all', studyDate = 'all', masteryFilter = 'all', mine = false, page = 1, limit = 30 } = {}) {
+  const res = await api.get('/vocab/questions', { params: { search, format, vocabType, difficulty, studyDate, masteryFilter, mine, page, limit } })
   return res.data // { questions[], total, page, pages }
 }
 
@@ -33,8 +33,8 @@ export async function fetchQuestionStats() {
 // format/vocabType: optional arrays to restrict the session (e.g. ['fill-blank'], ['idiom','root-word'])
 // studyDate: 'all' | 'today' | 'YYYY-MM-DD'
 // questionIds: optional array of specific _ids for a custom session (skips smart selection)
-export async function fetchQuestionPractice({ n = 10, format, vocabType, difficulty, studyDate = 'all', questionIds } = {}) {
-  const params = { n, studyDate }
+export async function fetchQuestionPractice({ n = 10, format, vocabType, difficulty, studyDate = 'all', masteryFilter = 'all', questionIds } = {}) {
+  const params = { n, studyDate, masteryFilter }
   if (format?.length) params.format = format.join(',')
   if (vocabType?.length) params.vocabType = vocabType.join(',')
   params.difficulty = difficulty?.length ? difficulty.join(',') : 'all'

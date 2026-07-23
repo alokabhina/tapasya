@@ -33,6 +33,7 @@ export default function VocabQuiz() {
   const [idx, setIdx]         = useState(0);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState({ correct: 0, wrong: 0 });
+  const [mistakes, setMistakes] = useState([]); // wrong answers this session, for end-of-quiz review
   const [finished, setFinished] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
 
@@ -59,6 +60,7 @@ export default function VocabQuiz() {
         setSelected(null);
         setAnswered(false);
         setResults({ correct: 0, wrong: 0 });
+        setMistakes([]);
         setFinished(false);
         setStarted(true);
       }
@@ -81,6 +83,12 @@ export default function VocabQuiz() {
     setSelected(option);
     setAnswered(true);
     setResults((r) => ({ ...r, correct: r.correct + (correct ? 1 : 0), wrong: r.wrong + (correct ? 0 : 1) }));
+    if (!correct) {
+      setMistakes((m) => [...m, {
+        word: current.word, meaning: current.meaning, mode: current.mode,
+        picked: option, correctAnswer, example: current.example,
+      }]);
+    }
     saveProgress(current._id, correct).catch(() => {});
   }
 
@@ -225,27 +233,51 @@ export default function VocabQuiz() {
   if (finished) {
     const pct = Math.round((results.correct / words.length) * 100);
     return (
-      <div className="min-h-full bg-[#f3f1e9] flex items-center justify-center px-4">
-        <div className="w-full max-w-sm bg-[#faf9f4] border border-[#e7e3d8] rounded-2xl p-7 text-center shadow-sm">
-          <i className={`ti ${pct >= 70 ? 'ti-trophy' : 'ti-refresh'} text-[36px] text-[#9c9580]`} />
-          <h1 className="font-serif text-2xl text-[#1f1b14] mt-2">Quiz complete</h1>
-          <p className="text-[#7a7460] text-sm mt-1.5">
-            {results.correct} / {words.length} correct ({pct}%)
-          </p>
-          <div className="flex gap-2 mt-5">
-            <button
-              onClick={() => setStarted(false)}
-              className="flex-1 py-2.5 rounded-xl bg-[#fdfcf9] border border-[#e7e3d8] text-[#1f1b14] text-sm font-medium hover:bg-[#f1eee5]"
-            >
-              Quiz again
-            </button>
-            <button
-              onClick={() => navigate('/vocab')}
-              className="flex-1 py-2.5 rounded-xl bg-[#1f1b14] text-[#faf9f4] text-sm font-medium hover:bg-[#34301f]"
-            >
-              Dictionary
-            </button>
+      <div className="min-h-full bg-[#f3f1e9] flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-sm">
+          <div className="bg-[#faf9f4] border border-[#e7e3d8] rounded-2xl p-7 text-center shadow-sm">
+            <i className={`ti ${pct >= 70 ? 'ti-trophy' : 'ti-refresh'} text-[36px] text-[#9c9580]`} />
+            <h1 className="font-serif text-2xl text-[#1f1b14] mt-2">Quiz complete</h1>
+            <p className="text-[#7a7460] text-sm mt-1.5">
+              {results.correct} / {words.length} correct ({pct}%)
+            </p>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setStarted(false)}
+                className="flex-1 py-2.5 rounded-xl bg-[#fdfcf9] border border-[#e7e3d8] text-[#1f1b14] text-sm font-medium hover:bg-[#f1eee5]"
+              >
+                Quiz again
+              </button>
+              <button
+                onClick={() => navigate('/vocab')}
+                className="flex-1 py-2.5 rounded-xl bg-[#1f1b14] text-[#faf9f4] text-sm font-medium hover:bg-[#34301f]"
+              >
+                Dictionary
+              </button>
+            </div>
           </div>
+
+          {/* Review mistakes — seeing the right word/meaning again right after
+              a miss is what actually cements it, vs it flashing by once. */}
+          {mistakes.length > 0 && (
+            <div className="mt-4 bg-[#faf9f4] border border-[#e7e3d8] rounded-2xl p-5">
+              <p className="text-[11px] uppercase tracking-wide text-[#a8a290] mb-3">
+                Review your {mistakes.length} mistake{mistakes.length === 1 ? '' : 's'}
+              </p>
+              <div className="space-y-3">
+                {mistakes.map((m, i) => (
+                  <div key={i} className="border-t border-[#e7e3d8] pt-3 first:border-t-0 first:pt-0">
+                    <p className="font-serif text-[#1f1b14] text-sm">
+                      {m.word} <span className="text-[#a8a290] font-sans text-xs">— {m.meaning}</span>
+                    </p>
+                    <p className="text-[12px] mt-1 text-rose-500">You picked: {m.picked}</p>
+                    <p className="text-[12px] text-emerald-600">Correct: {m.correctAnswer}</p>
+                    {m.example && <p className="text-[11px] text-[#a8a290] italic mt-1">"{m.example}"</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
