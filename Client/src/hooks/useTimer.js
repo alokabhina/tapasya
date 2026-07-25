@@ -10,8 +10,11 @@
 import { useEffect, useRef, useCallback } from 'react'
 import useTimerStore from '@/store/timerStore'
 import useUserStore from '@/store/userStore'
+import useBreakReminderStore from '@/store/breakReminderStore'
+import useBreakLogStore from '@/store/breakLogStore'
+import { saveBreak } from '@/api/breaks'
 import { saveSession, addPendingSync, sendActiveHeartbeat, clearActiveSession } from '@/api/sessions'
-import { studyDaySplit } from '@/utils/time'
+import { studyDaySplit, getStudyDayString } from '@/utils/time'
 import { sendHeartbeat, sendOffline } from '@/api/groups'
 
 // ── Singleton worker ──────────────────────────────────────────────────────────
@@ -284,11 +287,32 @@ export function useTimer() {
     lastCheckpointElapsed.current = 0
   }
 
+  // ── auto-end a running manual break the instant study starts ───────────────
+  // If the user forgot to tap "End break" (e.g. was on lunch, then just hit
+  // Start Study), the break is closed out and saved right here — no dangling
+  // break left running in the background, no manual step required.
+  function autoEndRunningBreak() {
+    const b = useBreakLogStore.getState()
+    if (!b.isBreakRunning || !b.breakStartTime) return
+    const endTime = new Date().toISOString()
+    const duration = Math.floor((new Date(endTime) - new Date(b.breakStartTime)) / 1000)
+    b.stopBreak() // clear immediately so the UI reflects it right away
+    if (duration >= 5) {
+      saveBreak({
+        type: b.breakType, label: b.breakLabel,
+        startTime: b.breakStartTime, endTime, duration,
+        date: getStudyDayString(),
+      }).catch(() => {})
+    }
+  }
+
   // ── start ──────────────────────────────────────────────────────────────────
   const start = useCallback((subject) => {
     _workerRunning = true
     _saveInProgress = false
     store.start(subject)
+    useBreakReminderStore.getState().clearReminder() // ← next-session nudge, if any, dismisses immediately
+    autoEndRunningBreak()                             // ← running manual break (e.g. lunch), if any, auto-saves now
     getWorker().postMessage({ type: 'START', payload: { elapsed: 0 } })
     startCheckpoint(subject)
     startHeartbeat()
@@ -346,6 +370,10 @@ export function useTimer() {
       _saveInProgress = false
       return 0
     }
+
+    // Real session just ended — start the 5-min "next session" nudge on Home.
+    // Pure UI reminder, no DB write, nothing here touches session data below.
+    useBreakReminderStore.getState().startReminder()
 
     const splits    = studyDaySplit(startTime, endTime)
     const wallTotal = Math.max(

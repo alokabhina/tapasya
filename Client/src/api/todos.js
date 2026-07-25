@@ -4,6 +4,13 @@ import api from './client'
 import { putTodoOffline, getTodosOffline, deleteTodoOffline, saveTodosOffline } from '@/utils/offlineDB'
 import { queueAddTodo, queueUpdateTodo, queueDeleteTodo } from '@/utils/syncQueue'
 
+// Home.jsx (and any other mounted page) listens for this to refresh its
+// todo widgets — without it, a todo added on /todo wouldn't show up on
+// Home's card until a full page reload, since Home only fetched once on mount.
+function notifyTodosChanged() {
+  window.dispatchEvent(new CustomEvent('tapasya:todos-changed'))
+}
+
 // ── GET todos ─────────────────────────────────────────────────────────────────
 export async function getTodos(startDate, endDate) {
   if (navigator.onLine) {
@@ -35,6 +42,7 @@ export async function addTodo(data) {
 
   // Offline-first: save immediately
   await putTodoOffline(local)
+  notifyTodosChanged()
 
   if (navigator.onLine) {
     try {
@@ -59,6 +67,7 @@ export async function updateTodo(id, data) {
   const allOffline = await getTodosOffline()
   const updated = allOffline.map(t => String(t.id) === String(id) ? { ...t, ...data } : t)
   await saveTodosOffline(updated)
+  notifyTodosChanged()
 
   if (navigator.onLine) {
     try {
@@ -77,6 +86,7 @@ export async function updateTodo(id, data) {
 // ── DELETE todo ───────────────────────────────────────────────────────────────
 export async function deleteTodo(id) {
   await deleteTodoOffline(String(id))
+  notifyTodosChanged()
 
   if (navigator.onLine) {
     try {

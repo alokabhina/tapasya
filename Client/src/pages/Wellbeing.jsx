@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { getSessions } from '@/api/sessions';
+import { fetchBreakStats, fetchBreaks, deleteBreak } from '@/api/breaks';
 import { getStudyDayString, getDateString, parseDateString, formatHours } from '@/utils/time';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -59,6 +60,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Wellbeing() {
+  const [tab, setTab] = useState('screen'); // 'screen' | 'breaks'
   const [screenTimeToday, setScreenTimeToday] = useState('');
   const [studyTimeToday, setStudyTimeToday]   = useState(0); // auto from sessions
   const [chartData, setChartData]             = useState([]);
@@ -133,6 +135,22 @@ export default function Wellbeing() {
         <p className="text-sm text-slate-400">Screen time vs study time balance</p>
       </div>
 
+      {/* Tab switcher */}
+      <div className="flex gap-2 mb-6 bg-[#1e293b] p-1 rounded-xl border border-slate-700/50 w-fit">
+        {[{ v: 'screen', l: 'Screen Time', i: 'ti-device-mobile' }, { v: 'breaks', l: 'Breaks', i: 'ti-coffee' }].map((t) => (
+          <button
+            key={t.v}
+            onClick={() => setTab(t.v)}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors
+                        ${tab === t.v ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            <i className={`ti ${t.i} text-sm`} /> {t.l}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'screen' && (
+      <>
       {/* Today cards */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         {/* Screen time — manual */}
@@ -274,6 +292,165 @@ export default function Wellbeing() {
           ))}
         </div>
       </div>
+      </>
+      )}
+
+      {tab === 'breaks' && <BreaksTab />}
     </div>
+  );
+}
+
+// ── Breaks tab — completely separate data source (fetchBreakStats/fetchBreaks),
+// never touches getSessions or anything study-related. ─────────────────────
+function BreaksTab() {
+  const [stats, setStats]     = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [s, h] = await Promise.all([fetchBreakStats(), fetchBreaks({ range: '30d', limit: 15 })]);
+      setStats(s);
+      setHistory(h.breaks || []);
+    } catch (e) {
+      console.error('[Breaks] load failed', e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(id) {
+    setHistory((h) => h.filter((b) => b._id !== id));
+    try { await deleteBreak(id); } catch (e) { console.error(e); load(); }
+  }
+
+  const fmtMin = (sec) => `${Math.round(sec / 60)}m`;
+  const TYPE_META = {
+    lunch:  { icon: 'ti-soup',     label: 'Lunch', color: '#f97316' },
+    walk:   { icon: 'ti-walk',     label: 'Walk',  color: '#22c55e' },
+    nap:    { icon: 'ti-bed',      label: 'Nap',   color: '#818cf8' },
+    rest:   { icon: 'ti-armchair', label: 'Rest',  color: '#38bdf8' },
+    custom: { icon: 'ti-dots',     label: 'Custom', color: '#e879f9' },
+  };
+
+  if (loading) {
+    return (
+      <div className="h-40 flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const dayChart = Object.entries(stats?.byDay || {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, sec]) => ({ day: date.slice(5), minutes: Math.round(sec / 60) }));
+
+  return (
+    <>
+      {/* Today cards */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="bg-[#1e293b] rounded-xl p-4 border border-slate-700/50">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+              <i className="ti ti-coffee text-emerald-400 text-sm" />
+            </div>
+            <span className="text-xs text-slate-400">Today's Breaks</span>
+          </div>
+          <p className="text-2xl font-bold text-emerald-400">
+            {fmtMin(stats?.todayTotal || 0)}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">{stats?.todayCount || 0} break{stats?.todayCount === 1 ? '' : 's'}</p>
+        </div>
+        <div className="bg-[#1e293b] rounded-xl p-4 border border-slate-700/50">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 rounded-lg bg-sky-500/20 flex items-center justify-center">
+              <i className="ti ti-calendar-stats text-sky-400 text-sm" />
+            </div>
+            <span className="text-xs text-slate-400">This Week</span>
+          </div>
+          <p className="text-2xl font-bold text-sky-400">
+            {fmtMin(Object.values(stats?.byDay || {}).reduce((a, b) => a + b, 0))}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">last 7 days</p>
+        </div>
+      </div>
+
+      {/* 7-day trend */}
+      <div className="bg-[#1e293b] rounded-xl p-4 mb-6 border border-slate-700/50">
+        <h2 className="text-sm font-medium text-white mb-4">Break Time — Last 7 Days</h2>
+        {dayChart.length === 0 ? (
+          <p className="text-xs text-slate-500 text-center py-8">Koi break record nahi hai abhi</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={dayChart} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+              <XAxis dataKey="day" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} unit="m" />
+              <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+                <div className="bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs">
+                  <p className="text-slate-300">{label}: <span className="text-emerald-400 font-medium">{payload[0].value}m</span></p>
+                </div>
+              ) : null} cursor={{ fill: '#0f172a40' }} />
+              <Bar dataKey="minutes" fill="#22c55e" radius={[3, 3, 0, 0]} fillOpacity={0.85} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Type breakdown */}
+      {stats?.byType && Object.keys(stats.byType).length > 0 && (
+        <div className="bg-[#1e293b] rounded-xl p-4 mb-6 border border-slate-700/50">
+          <h2 className="text-sm font-medium text-white mb-3">By Type (7 days)</h2>
+          <div className="space-y-2.5">
+            {Object.entries(stats.byType).map(([type, d]) => {
+              const meta = TYPE_META[type] || TYPE_META.rest;
+              return (
+                <div key={type} className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${meta.color}22` }}>
+                    <i className={`ti ${meta.icon} text-sm`} style={{ color: meta.color }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-300">{meta.label}</p>
+                  </div>
+                  <p className="text-xs text-slate-400">{fmtMin(d.totalDuration)} · {d.count}×</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Recent history */}
+      <div className="bg-[#1e293b] rounded-xl p-4 border border-slate-700/50">
+        <h2 className="text-sm font-medium text-white mb-3">Recent Breaks</h2>
+        {history.length === 0 ? (
+          <p className="text-xs text-slate-500 text-center py-6">Abhi tak koi break log nahi hui</p>
+        ) : (
+          <div className="space-y-2">
+            {history.map((b) => {
+              const meta = TYPE_META[b.type] || TYPE_META.rest;
+              return (
+                <div key={b._id} className="flex items-center gap-3 py-1.5">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${meta.color}22` }}>
+                    <i className={`ti ${meta.icon} text-sm`} style={{ color: meta.color }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-300">{b.type === 'custom' ? b.label || 'Custom' : meta.label}</p>
+                    <p className="text-[10px] text-slate-500">{b.date}</p>
+                  </div>
+                  <p className="text-xs text-slate-400">{fmtMin(b.duration)}</p>
+                  <button onClick={() => handleDelete(b._id)} className="text-slate-600 hover:text-rose-400">
+                    <i className="ti ti-trash text-xs" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

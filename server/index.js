@@ -16,6 +16,7 @@ import syllabusRoutes  from './routes/syllabus.js'
 import pushRoutes, { cronRouter as pushCronRouter } from './routes/push.js'
 import adminRoutes    from './routes/admin.js'
 import moneyRoutes    from './routes/money.js'
+import breakRoutes    from './routes/breaks.js'
 import { checkAndFetchVocab } from './utils/opentdbFetcher.js'
 
 dotenv.config()
@@ -47,6 +48,7 @@ app.use('/api/push',      pushRoutes)
 app.use('/api/cron/push', pushCronRouter)
 app.use('/api/admin',     adminRoutes)
 app.use('/api/money',     moneyRoutes)
+app.use('/api/breaks',    breakRoutes)
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ ok: true }))

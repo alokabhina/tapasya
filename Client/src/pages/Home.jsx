@@ -16,6 +16,10 @@ import { saveFocusSession } from '@/utils/focusHistory';
 import { checkCrossDeviceConflict } from '@/hooks/useCrossDeviceGuard';
 import { useSmartNotifications } from '@/hooks/useSmartNotifications';
 import ExamCountdown, { ExamCountdownMobile, useExams } from '@/components/home/ExamCountdown';
+import BreakReminderChip from '@/components/home/BreakReminderChip';
+import BreakLogButton from '@/components/home/BreakLogButton';
+import GoalRing from '@/components/home/GoalRing';
+import TodoRing from '@/components/home/TodoRing';
 import { fetchWordOfDay } from '@/api/Vocab';
 
 // ── Aesthetic background styles for cards ─────────────────────────────────────
@@ -648,6 +652,22 @@ export default function Home() {
   const quote = getTodayQuote();
   const [wordOfDay, setWordOfDay] = useState(null);
 
+  // ── Responsive ring size for the Study Time card (mobile-first) ──────────
+  const [ringSize, setRingSize] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 380 ? 68
+      : typeof window !== 'undefined' && window.innerWidth < 640 ? 78
+      : 96
+  );
+  useEffect(() => {
+    const updateRingSize = () => {
+      const w = window.innerWidth;
+      setRingSize(w < 380 ? 68 : w < 640 ? 78 : 96);
+    };
+    updateRingSize();
+    window.addEventListener('resize', updateRingSize);
+    return () => window.removeEventListener('resize', updateRingSize);
+  }, []);
+
   useEffect(() => {
     fetchWordOfDay().then((d) => setWordOfDay(d.word)).catch(() => {});
   }, []);
@@ -668,8 +688,19 @@ export default function Home() {
   useEffect(() => {
     const today = getStudyDayString();
     getTodos(today, today)
-      .then((data) => setTodayTodos(data.slice(0, 6)))
+      .then((data) => setTodayTodos(data))
       .catch(() => {});
+  }, []);
+
+  // Re-fetch whenever a todo is added/updated/deleted anywhere in the app —
+  // fixes todos added on /todo not showing up here without a full reload.
+  useEffect(() => {
+    function onTodosChanged() {
+      const today = getStudyDayString();
+      getTodos(today, today).then(setTodayTodos).catch(() => {});
+    }
+    window.addEventListener('tapasya:todos-changed', onTodosChanged);
+    return () => window.removeEventListener('tapasya:todos-changed', onTodosChanged);
   }, []);
 
   // Auto-refresh home stats when a timer session is saved
@@ -809,6 +840,7 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+            <BreakLogButton />
             <button
               onClick={async () => { await reloadSubjects(); }}
               disabled={refreshing}
@@ -846,8 +878,8 @@ export default function Home() {
           </div>
 
           {/* Study Time Card — aesthetic background */}
-          <div className="relative rounded-2xl overflow-hidden mb-5 border border-slate-800/50">
-            <div className="absolute inset-0" style={{ background: TIMER_BG }} />
+          <div className="relative rounded-2xl mb-5 border border-slate-800/50" style={{ isolation: 'isolate' }}>
+            <div className="absolute inset-0 rounded-2xl overflow-hidden" style={{ background: TIMER_BG }} />
             {/* Subtle star-like dots */}
             <div className="absolute inset-0 overflow-hidden">
               {[...Array(8)].map((_, i) => (
@@ -855,17 +887,21 @@ export default function Home() {
                   style={{ top: `${10 + i * 11}%`, left: `${5 + i * 12}%` }} />
               ))}
             </div>
-            <div className="relative p-5">
-              <p className="text-xs text-slate-400 font-medium uppercase tracking-widest mb-2">Total Study Time Today</p>
-              <p className="text-5xl font-bold text-orange-400 font-mono tracking-tight mb-4">{formatDuration(todayTotal)}</p>
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="text-slate-400">Daily Goal</span>
-                <span className="text-orange-400 font-medium">{formatHours(todayTotal)} of {formatHours(dailyGoalSeconds)}</span>
+            <div className="relative p-4 sm:p-5">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-3">
+                <div className="min-w-0 text-center sm:text-left">
+                  <p className="text-xs text-slate-400 font-medium uppercase tracking-widest mb-2">Total Study Time Today</p>
+                  <p className="text-4xl sm:text-5xl font-bold text-orange-400 font-mono tracking-tight break-all sm:break-normal">{formatDuration(todayTotal)}</p>
+                  <p className="text-[11px] text-slate-500 mt-2">
+                    Goal: <span className="text-orange-400 font-medium">{formatHours(todayTotal)} / {formatHours(dailyGoalSeconds)}</span>
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-3 shrink-0">
+                  <BreakReminderChip size={ringSize} />
+                  <TodoRing todos={todayTodos} size={ringSize} />
+                  <GoalRing todayTotal={todayTotal} dailyGoalSeconds={dailyGoalSeconds} goalPct={goalPct} size={ringSize} />
+                </div>
               </div>
-              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-orange-500 to-orange-300 rounded-full transition-all duration-700" style={{ width: `${goalPct}%` }} />
-              </div>
-              <p className="text-right text-[10px] text-slate-500 mt-1">{Math.round(goalPct)}%</p>
             </div>
           </div>
 
@@ -961,7 +997,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="space-y-2">
-              {todayTodos.map((todo) => (
+              {todayTodos.slice(0, 6).map((todo) => (
                 <button key={todo.id || todo._id} onClick={() => toggleTodo(todo)} className="flex items-center gap-2.5 w-full text-left group">
                   <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors
                     ${todo.done ? 'bg-purple-500 border-purple-500' : 'border-slate-600 group-hover:border-purple-400'}`}>
