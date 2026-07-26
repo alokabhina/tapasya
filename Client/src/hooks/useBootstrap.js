@@ -12,7 +12,10 @@ import useUserStore from '@/store/userStore'
 import useSubjectStore from '@/store/subjectStore'
 import { getSubjects, addSubject } from '@/api/subjects'
 import { getSessions } from '@/api/sessions'
+import { fetchMyGroups } from '@/api/groups'
 import { getStudyDayString } from '@/utils/time'
+import { calculateStreak } from '@/utils/stats'
+import { useBadges } from './useBadges'
 import {
   saveSubjectsOffline, getSubjectsOffline,
   saveSessionsOffline, getSessionsOffline,
@@ -26,8 +29,9 @@ const DEFAULT_SUBJECTS = [
 ]
 
 export function useBootstrap() {
-  const { uid } = useUserStore()
+  const { uid, setStreak, setTotalHours } = useUserStore()
   const { subjects: storedSubjects, setSubjects } = useSubjectStore()
+  const { checkAndUnlock } = useBadges()
 
   // ── Phase 0 happens automatically ──────────────────────────────────────────
   // Zustand persist middleware ne already localStorage se subjects load kar diye.
@@ -106,6 +110,42 @@ export function useBootstrap() {
     bootstrap()
     // uid change pe re-run karo (login/logout)
     // offline mein bhi run karo — Phase 1 kaam karega
+  }, [uid])
+
+  // ── Phase 3: Streak + total-hours + badge unlocking — GLOBAL ──────────────
+  // ✅ FIX: pehle ye sirf Stats.jsx page khulne par calculate hota tha (useStats
+  // hook wahi ek jagah call hoti thi). Isliye Home page ya kahin aur streak
+  // hamesha purana/stale dikhta tha jab tak user Stats page na khole.
+  // Ab yaha App-level pe ek hi baar mount hota hai (login ke baad) aur har
+  // session save hone ke baad bhi (tapasya:session-saved event) re-run hota hai
+  // — isse streak hamesha up-to-date rehta hai, aur badges bhi turant check/
+  // unlock ho jaate hain jaise hi koi condition poori hoti hai.
+  useEffect(() => {
+    if (!uid || !navigator.onLine) return
+
+    async function refreshAggregates() {
+      try {
+        const allSessions = await getSessions('2020-01-01', getStudyDayString())
+        const streak   = calculateStreak(allSessions)
+        const totalHrs = allSessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 3600
+        setStreak(streak)
+        setTotalHours(totalHrs)
+
+        let groupsJoined = 0
+        try {
+          const groups = await fetchMyGroups()
+          groupsJoined = groups?.length || 0
+        } catch (_) { /* groups fetch optional — badge check still works without it */ }
+
+        await checkAndUnlock(allSessions, { groupsJoined })
+      } catch (err) {
+        console.warn('[Bootstrap] Streak/badge refresh failed:', err.message)
+      }
+    }
+
+    refreshAggregates()
+    window.addEventListener('tapasya:session-saved', refreshAggregates)
+    return () => window.removeEventListener('tapasya:session-saved', refreshAggregates)
   }, [uid])
 }
 

@@ -64,7 +64,7 @@ export default function BreakLogButton() {
       {/* Small always-visible trigger — deliberately tiny */}
       <button
         onClick={openOverlay}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-medium
+        className={`flex items-center gap-1.5 h-9 px-3 rounded-full border text-xs font-medium shrink-0
                     ${isBreakRunning
                       ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
                       : 'bg-slate-800/60 border-slate-700 text-slate-300'}`}

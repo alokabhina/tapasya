@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useBadges } from '../hooks/useBadges';
-import BadgeGrid from '../components/achievements/BadgeGrid';
+import BadgeGrid, { ALL_BADGES } from '../components/achievements/BadgeGrid';
 import BadgeCard from '../components/achievements/BadgeCard';
 import LevelBadge from '../components/achievements/LevelBadge';
 import { useUserStore } from '../store/userStore';
@@ -13,8 +13,11 @@ export default function Achievements() {
   const { badges } = useBadges();
   const totalHoursAllTime = useUserStore((s) => s.totalHoursAllTime) || 0;
 
-  const unlockedCount = badges.filter((b) => b.unlockedAt).length;
-  const totalCount    = badges.length;
+  // ✅ FIX: `badges` unlocked-badge objects ki list hai ({ badgeId, unlockedAt }),
+  //    total possible badges nahi — pehle yaha badges.length hi totalCount ban jata
+  //    tha (so 0/0 ya galat % dikhta tha). Total ab ALL_BADGES (poori list) se aata hai.
+  const unlockedCount = badges.length;
+  const totalCount    = ALL_BADGES.length;
   const pct           = Math.round((unlockedCount / Math.max(totalCount, 1)) * 100);
 
   return (

@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
-// ✅ FIX: '@/firebase/badges' → '@/api/badges' (firebase folder exist hi nahi karta)
 import { getBadges, unlockBadge } from '@/api/badges'
 import { checkAllBadges, BADGE_DEFINITIONS } from '@/utils/badges'
 import useUserStore from '@/store/userStore'
 
 export function useBadges() {
-  const { uid, streakDays, totalHoursAllTime } = useUserStore()
+  const { uid, streakDays, totalHoursAllTime, dailyGoalSeconds } = useUserStore()
+  // ✅ FIX: badges ab poore objects rakhta hai ({ badgeId, unlockedAt, ... })
+  //    pehle yaha sirf id-strings store hoti thi jisse BadgeGrid/BadgeCard/
+  //    Achievements — sabka `b.badgeId` / `b.unlockedAt` access undefined aata tha
+  //    aur koi bhi badge "unlocked" kabhi dikhta hi nahi tha.
   const [badges, setBadges] = useState([])
   const [newUnlocks, setNewUnlocks] = useState([])
   const [loading, setLoading] = useState(true)
@@ -19,7 +22,7 @@ export function useBadges() {
     setLoading(true)
     try {
       const data = await getBadges()
-      setBadges(data.map((b) => b.badgeId))
+      setBadges(data) // full objects, not just ids
     } catch (err) {
       console.error('Badge fetch error:', err)
     } finally {
@@ -27,19 +30,32 @@ export function useBadges() {
     }
   }
 
-  async function checkAndUnlock(sessions) {
+  // sessions: poori (all-time) sessions list — badge conditions (100hrs, streak, etc) ke liye zaroori
+  // extraStats (optional): { groupsJoined } jaisi cheezein jo userStore mein nahi hain
+  async function checkAndUnlock(sessions, extraStats = {}) {
     if (!uid) return []
-    const userStats = { streak: streakDays, totalHours: totalHoursAllTime }
-    const newBadgeIds = checkAllBadges(sessions, userStats, badges)
+    const userStats = {
+      streak: streakDays,
+      totalHours: totalHoursAllTime,
+      dailyGoalSeconds,
+      ...extraStats,
+    }
+    const alreadyUnlockedIds = badges.map((b) => b.badgeId)
+    const newBadgeIds = checkAllBadges(sessions, userStats, alreadyUnlockedIds)
     if (!newBadgeIds.length) return []
 
     const actuallyUnlocked = []
     for (const badgeId of newBadgeIds) {
       try {
         const result = await unlockBadge(uid, badgeId)
-        if (result) {
-          actuallyUnlocked.push(badgeId)
-          setBadges((prev) => [...prev, badgeId])
+        // server: { newUnlock, badge } ya { alreadyUnlocked, badge }
+        if (result?.badge) {
+          if (result.newUnlock) {
+            actuallyUnlocked.push(badgeId)
+          }
+          setBadges((prev) =>
+            prev.some((b) => b.badgeId === badgeId) ? prev : [...prev, result.badge]
+          )
         }
       } catch (err) {
         console.error('Badge unlock error:', err)
@@ -54,9 +70,10 @@ export function useBadges() {
   }
 
   function getBadgesWithStatus() {
+    const unlockedIds = new Set(badges.map((b) => b.badgeId))
     return BADGE_DEFINITIONS.map((def) => ({
       ...def,
-      isUnlocked: badges.includes(def.id),
+      isUnlocked: unlockedIds.has(def.id),
     }))
   }
 

@@ -109,19 +109,31 @@ export function getHeatmapData(sessions) {
 
 export function calculateStreak(sessions) {
   if (!sessions.length) return 0
-  const uniqueDates = [...new Set(sessions.map((s) => s.date))].sort().reverse()
-  let streak = 0
-  const today4am = getStudyDayString()
-  let current = today4am
+  const dateSet = new Set(sessions.map((s) => s.date))
+  const today = getStudyDayString()
+  const [ty, tm, td] = today.split('-').map(Number)
+  const yesterday = getDateString(new Date(ty, tm - 1, td - 1))
 
-  for (const dateStr of uniqueDates) {
-    if (dateStr === current) {
-      streak++
-      const [y, m, d] = current.split('-').map(Number)
-      current = getDateString(new Date(y, m - 1, d - 1))
-    } else if (dateStr < current) {
-      break
-    }
+  // ✅ FIX: pehle yaha hamesha "today" se count start hota tha — agar user ne
+  // aaj abhi tak session start nahi ki (lekin kal tak lagatar padha tha), to
+  // pehla hi comparison fail hoke streak turant 0 dikha deta tha. Ab agar aaj
+  // ka session nahi hai to bhi "yesterday" se streak zinda maana jata hai
+  // (aaj ka din abhi khatam nahi hua), aur sirf tabhi 0 hota hai jab kal bhi
+  // koi session na ho.
+  let current
+  if (dateSet.has(today)) {
+    current = today
+  } else if (dateSet.has(yesterday)) {
+    current = yesterday
+  } else {
+    return 0
+  }
+
+  let streak = 0
+  while (dateSet.has(current)) {
+    streak++
+    const [y, m, d] = current.split('-').map(Number)
+    current = getDateString(new Date(y, m - 1, d - 1))
   }
   return streak
 }

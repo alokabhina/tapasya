@@ -21,6 +21,8 @@ import BreakLogButton from '@/components/home/BreakLogButton';
 import GoalRing from '@/components/home/GoalRing';
 import TodoRing from '@/components/home/TodoRing';
 import { fetchWordOfDay } from '@/api/Vocab';
+import { useBadges } from '@/hooks/useBadges';
+import { getBadgeProgress, getBadgeById } from '@/utils/badges';
 
 // ── Aesthetic background styles for cards ─────────────────────────────────────
 const CARD_BACKGROUNDS = [
@@ -629,8 +631,35 @@ export default function Home() {
   const displayName      = useUserStore((s) => s.displayName);
   const dailyGoalSeconds = useUserStore((s) => s.dailyGoalSeconds);
   const streakDays       = useUserStore((s) => s.streakDays);
+  const totalHoursAllTime = useUserStore((s) => s.totalHoursAllTime);
   const { start, stop }  = useTimer();
   const navigate         = useNavigate();
+  const { badges: earnedBadges, getBadgesWithStatus, refetch: refetchBadges } = useBadges();
+
+  // ── Badge teaser: latest earned badge + nearest badge to unlock ──────────
+  const latestEarnedBadge = earnedBadges.length
+    ? getBadgeById(
+        [...earnedBadges].sort(
+          (a, b) => new Date(b.unlockedAt || b.createdAt || 0) - new Date(a.unlockedAt || a.createdAt || 0)
+        )[0].badgeId
+      )
+    : null;
+
+  const nextBadgeTeaser = (() => {
+    const locked = getBadgesWithStatus().filter((b) => !b.isUnlocked);
+    if (!locked.length) return null;
+    const userStatsForProgress = { streak: streakDays, totalHours: totalHoursAllTime };
+    const withProgress = locked.map((b) => ({
+      ...b,
+      progress: getBadgeProgress(b.id, [], userStatsForProgress),
+    }));
+    withProgress.sort((a, b) => {
+      const pa = a.progress ? a.progress.current / a.progress.target : 0;
+      const pb = b.progress ? b.progress.current / b.progress.target : 0;
+      return pb - pa; // sabse zyada progress wala (unlock ke sabse paas) sabse pehle
+    });
+    return withProgress[0];
+  })();
 
   const exams = useExams();
   const [showExamPanel, setShowExamPanel] = useState(false);
@@ -708,6 +737,9 @@ export default function Home() {
     function onSessionSaved() {
       // Small delay so DB write completes before we read
       setTimeout(() => reloadSubjects(), 400);
+      // Badge unlocking itself happens globally in useBootstrap; here we just
+      // re-pull the latest unlocked list so the Home teaser stays current.
+      setTimeout(() => refetchBadges(), 1200);
     }
     window.addEventListener('tapasya:session-saved', onSessionSaved);
     return () => window.removeEventListener('tapasya:session-saved', onSessionSaved);
@@ -830,16 +862,18 @@ export default function Home() {
         <div className="p-4 md:p-5 max-w-4xl pb-2 md:pb-5">
 
           {/* Header */}
-          <div className="flex items-start justify-between mb-4">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-white">{greeting}, {firstName} 👋</h1>
-              <p className="text-slate-400 text-sm mt-1">Small steps today, big results tomorrow.</p>
+          <div className="flex flex-col-reverse sm:flex-row sm:items-start sm:justify-between gap-3 mb-3 sm:mb-4">
+            <div className="min-w-0 pl-1.5 pr-1">
+              <h1 className="text-[1.7rem] sm:text-3xl font-bold text-white leading-tight tracking-tight">
+                {greeting}, {firstName} <span className="inline-block">👋</span>
+              </h1>
+              <p className="text-slate-400 text-[13px] sm:text-sm mt-1.5 leading-snug tracking-wide">Small steps today, big results tomorrow.</p>
               {/* Mobile Exam Countdown Strip — right below greeting */}
-              <div className="xl:hidden mt-2">
+              <div className="xl:hidden mt-2.5">
                 <ExamCountdownMobile exams={exams} onOpenPanel={() => setShowExamPanel(true)} />
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center sm:justify-end gap-3">
             <BreakLogButton />
             <button
               onClick={async () => { await reloadSubjects(); }}
@@ -1031,6 +1065,59 @@ export default function Home() {
               </div>
               <i className="ti ti-chevron-right text-orange-400/50 ml-auto" />
             </div>
+          </div>
+        )}
+
+        {/* Badges teaser — latest earned + next to unlock */}
+        {(latestEarnedBadge || nextBadgeTeaser) && (
+          <div
+            className="rounded-2xl p-3.5 border border-slate-800 bg-[#141d2e] space-y-3 cursor-pointer hover:border-slate-700 transition-colors"
+            onClick={() => navigate('/achievements')}
+          >
+            {latestEarnedBadge && (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/15 flex items-center justify-center text-xl shrink-0">
+                  {latestEarnedBadge.icon}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-purple-300 text-[11px] font-medium">Latest Badge</p>
+                  <p className="text-white text-sm font-semibold truncate">{latestEarnedBadge.name}</p>
+                </div>
+                <i className="ti ti-chevron-right text-slate-500 ml-auto shrink-0" />
+              </div>
+            )}
+
+            {nextBadgeTeaser && (
+              <div className={latestEarnedBadge ? 'pt-3 border-t border-slate-800/70' : ''}>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-xl opacity-50 shrink-0">
+                    {nextBadgeTeaser.icon}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-slate-400 text-[11px] font-medium">Next Badge to Unlock</p>
+                    <p className="text-white text-sm font-semibold truncate">{nextBadgeTeaser.name}</p>
+                  </div>
+                </div>
+                {nextBadgeTeaser.progress ? (
+                  <>
+                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-orange-600 to-orange-400 rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min(100, (nextBadgeTeaser.progress.current / nextBadgeTeaser.progress.target) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1.5">
+                      {Math.round(nextBadgeTeaser.progress.current * 10) / 10}/{nextBadgeTeaser.progress.target}{' '}
+                      {nextBadgeTeaser.progress.unit} · {nextBadgeTeaser.description}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[11px] text-slate-500">{nextBadgeTeaser.description}</p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

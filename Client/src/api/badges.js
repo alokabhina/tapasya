@@ -8,8 +8,11 @@ export async function getBadges() {
 }
 
 // Badge unlock karo (server idempotent hai — duplicate ignore karega)
+// Return: { newUnlock: bool, badge: { _id, badgeId, unlockedAt, ... } }
 export async function unlockBadge(uid, badgeId) {
   const { data } = await api.post('/badges/unlock', { badgeId })
-  if (data.alreadyUnlocked) return null
-  return data.badge.badgeId
+  return {
+    newUnlock: !!data.newUnlock,
+    badge: data.badge,
+  }
 }

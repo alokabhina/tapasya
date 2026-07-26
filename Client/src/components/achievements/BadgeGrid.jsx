@@ -6,6 +6,9 @@ import { useState } from 'react';
 import { useBadges } from '../../hooks/useBadges';
 import BadgeCard from './BadgeCard';
 
+// NOTE: In sync with `BADGE_DEFINITIONS` ids in src/utils/badges.js —
+// dono jagah IDs match hone chahiye warna unlock DB mein save hoke bhi
+// yaha "locked" hi dikhta rahega.
 export const ALL_BADGES = [
   { id: 'first_session',    icon: '🔥', name: 'First Flame',      description: 'Complete your first study session',           condition: 'Complete 1 session',           category: 'Milestone' },
   { id: 'five_hours_day',   icon: '⚡', name: 'Power Day',        description: 'Study 5+ hours in a single day',              condition: '5 hours in one day',           category: 'Intensity' },
