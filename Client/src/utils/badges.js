@@ -1,6 +1,6 @@
 import { getDateString, getStudyDayString } from './time'
 
-// Saare badge definitions — id, name, description, condition check fn
+// Saare badge definitions — id, name, description, category, condition check fn
 // NOTE: ye IDs BadgeGrid.jsx / BadgeCard.jsx ke ALL_BADGES se exactly match
 // hone chahiye, warna unlock DB mein save hone ke baad bhi UI mein "locked"
 // hi dikhta rahega (pehle yehi bug tha — IDs mismatch the).
@@ -10,6 +10,7 @@ export const BADGE_DEFINITIONS = [
     name: 'पहला कदम',
     description: 'Pehli study session complete ki',
     icon: '🎯',
+    category: 'Milestone',
     check: (sessions) => sessions.length >= 1,
   },
   {
@@ -17,6 +18,7 @@ export const BADGE_DEFINITIONS = [
     name: 'Panchsheel',
     description: 'Ek din mein 5+ hours padha',
     icon: '⚡',
+    category: 'Intensity',
     check: (sessions) => {
       const byDay = {}
       sessions.forEach((s) => {
@@ -30,20 +32,26 @@ export const BADGE_DEFINITIONS = [
     name: 'Saptah Yoddha',
     description: '7 consecutive days study kiya',
     icon: '📅',
-    check: (sessions, userStats) => (userStats?.streak || 0) >= 7,
+    category: 'Streak',
+    // ✅ maxStreak use karta hai (current nahi) — isse agar streak kabhi bhi
+    // 7+ tak pahunchi thi (chahe ab tooti hui ho), badge permanently unlock
+    // rehta hai. Purane users ke liye retroactive credit ke liye zaroori.
+    check: (sessions, userStats) => (userStats?.maxStreak || 0) >= 7,
   },
   {
     id: 'streak_30',
     name: 'Maas Maharathi',
     description: '30 consecutive days study kiya',
     icon: '🏆',
-    check: (sessions, userStats) => (userStats?.streak || 0) >= 30,
+    category: 'Streak',
+    check: (sessions, userStats) => (userStats?.maxStreak || 0) >= 30,
   },
   {
     id: 'hours_100',
     name: 'Shataka',
     description: 'Total 100 hours study complete',
     icon: '💯',
+    category: 'Milestone',
     check: (sessions) => {
       const total = sessions.reduce((sum, s) => sum + s.duration, 0)
       return total >= 100 * 3600
@@ -54,6 +62,7 @@ export const BADGE_DEFINITIONS = [
     name: 'Ratri Yoddha',
     description: 'Midnight ke baad bhi padha (12AM - 2AM)',
     icon: '🌙',
+    category: 'Habit',
     check: (sessions) =>
       sessions.some((s) => {
         const start = new Date(s.startTime?.toDate?.() || s.startTime)
@@ -66,6 +75,7 @@ export const BADGE_DEFINITIONS = [
     name: 'Brahma Muhurta',
     description: '6AM se pehle study shuru kiya',
     icon: '🌅',
+    category: 'Habit',
     check: (sessions) =>
       sessions.some((s) => {
         const start = new Date(s.startTime?.toDate?.() || s.startTime)
@@ -77,6 +87,7 @@ export const BADGE_DEFINITIONS = [
     name: 'Panch Shataka',
     description: 'Total 500 hours study complete',
     icon: '⭐',
+    category: 'Milestone',
     check: (sessions) => {
       const total = sessions.reduce((sum, s) => sum + s.duration, 0)
       return total >= 500 * 3600
@@ -87,6 +98,7 @@ export const BADGE_DEFINITIONS = [
     name: 'Panchamrit',
     description: '5 alag subjects mein session kiya',
     icon: '📚',
+    category: 'Diversity',
     check: (sessions) => {
       const ids = new Set(sessions.map((s) => s.subjectId))
       return ids.size >= 5
@@ -97,6 +109,7 @@ export const BADGE_DEFINITIONS = [
     name: 'Perfect Week',
     description: 'Daily goal lagataar 7 din poora kiya',
     icon: '✨',
+    category: 'Streak',
     check: (sessions, userStats) => {
       const goal = userStats?.dailyGoalSeconds
       if (!goal) return false
@@ -116,6 +129,7 @@ export const BADGE_DEFINITIONS = [
     name: 'Tapasya Legend',
     description: 'Total 1000 hours — rarest achievement',
     icon: '👑',
+    category: 'Milestone',
     check: (sessions) => {
       const total = sessions.reduce((sum, s) => sum + s.duration, 0)
       return total >= 1000 * 3600
@@ -126,7 +140,45 @@ export const BADGE_DEFINITIONS = [
     name: 'Together We Rise',
     description: 'Koi study group join kiya',
     icon: '🤝',
+    category: 'Social',
     check: (sessions, userStats) => (userStats?.groupsJoined || 0) >= 1,
+  },
+  // ── NEW: Consistency category ─────────────────────────────────────────────
+  {
+    id: 'weekend_warrior',
+    name: 'Weekend Warrior',
+    description: 'Ek hi weekend (Sat + Sun) dono din padha',
+    icon: '🎪',
+    category: 'Consistency',
+    check: (sessions) => {
+      const dates = new Set(sessions.map((s) => s.date))
+      for (const d of dates) {
+        const dow = new Date(d).getUTCDay() // 0=Sun ... 6=Sat
+        if (dow === 6) {
+          const sunStr = new Date(new Date(d).getTime() + 86400000).toISOString().slice(0, 10)
+          if (dates.has(sunStr)) return true
+        }
+      }
+      return false
+    },
+  },
+  {
+    id: 'comeback_kid',
+    name: 'Comeback Kid',
+    description: '3+ din break ke baad wapas 3 din lagatar padha',
+    icon: '💪',
+    category: 'Consistency',
+    check: (sessions) => {
+      const dates = [...new Set(sessions.map((s) => s.date))].sort()
+      for (let i = 1; i < dates.length - 2; i++) {
+        const gapDays = Math.round((new Date(dates[i]) - new Date(dates[i - 1])) / 86400000)
+        if (gapDays < 4) continue // kam se kam 3 poore din ka break chahiye
+        const g1 = Math.round((new Date(dates[i + 1]) - new Date(dates[i])) / 86400000)
+        const g2 = Math.round((new Date(dates[i + 2]) - new Date(dates[i + 1])) / 86400000)
+        if (g1 === 1 && g2 === 1) return true
+      }
+      return false
+    },
   },
 ]
 
@@ -162,7 +214,7 @@ export function getBadgeProgress(badgeId, sessions = [], userStats = {}) {
   const subjectCount = sessions.length
     ? new Set(sessions.map((s) => s.subjectId)).size
     : (userStats?.subjectCount || 0)
-  const streak = userStats?.streak || 0
+  const streak = userStats?.maxStreak || userStats?.streak || 0
 
   switch (badgeId) {
     case 'first_session':
@@ -180,6 +232,6 @@ export function getBadgeProgress(badgeId, sessions = [], userStats = {}) {
     case 'five_subjects':
       return { current: Math.min(subjectCount, 5), target: 5, unit: 'subjects' }
     default:
-      return null // condition-based badges (midnight/early-bird/etc) — no numeric progress
+      return null // condition-based badges (midnight/early-bird/weekend/comeback/etc) — no numeric progress
   }
 }

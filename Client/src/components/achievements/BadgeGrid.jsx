@@ -22,6 +22,8 @@ export const ALL_BADGES = [
   { id: 'perfect_week',     icon: '✨', name: 'Perfect Week',     description: 'Hit your daily goal every day for 7 days',    condition: '7 consecutive goal days',      category: 'Streak' },
   { id: 'hours_1000',       icon: '👑', name: 'Tapasya Legend',   description: '1000 hours — the rarest achievement',         condition: '1000 total hours',             category: 'Milestone' },
   { id: 'group_join',       icon: '🤝', name: 'Together We Rise', description: 'Join a study group',                          condition: 'Join any study group',         category: 'Social' },
+  { id: 'weekend_warrior',  icon: '🎪', name: 'Weekend Warrior',  description: 'Study on both Saturday & Sunday of the same weekend', condition: 'Sessions on Sat + Sun',  category: 'Consistency' },
+  { id: 'comeback_kid',     icon: '💪', name: 'Comeback Kid',     description: 'Return after a 3+ day break and study 3 days straight', condition: '3-day break, then 3-day streak', category: 'Consistency' },
 ];
 
 // Glow color per badge (accent)
@@ -38,6 +40,8 @@ const BADGE_COLORS = {
   perfect_week:     '#ec4899',
   hours_1000:       '#f97316',
   group_join:       '#22c55e',
+  weekend_warrior:  '#d946ef',
+  comeback_kid:     '#14b8a6',
 };
 
 export default function BadgeGrid() {

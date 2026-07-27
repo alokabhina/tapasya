@@ -13,6 +13,7 @@ const useUserStore = create(
       theme: 'dark',
       bgImageUrl: null,
       streakDays: 0,
+      maxStreakDays: 0,
       totalHoursAllTime: 0,
       // groupId removed — users can now join/create unlimited groups
 
@@ -45,6 +46,7 @@ const useUserStore = create(
       setBgImage: (url) => set({ bgImageUrl: url }),
 
       setStreak: (days) => set({ streakDays: days }),
+      setMaxStreak: (days) => set({ maxStreakDays: days }),
 
       setTotalHours: (hours) => set({ totalHoursAllTime: hours }),
 

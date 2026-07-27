@@ -14,7 +14,7 @@ import { getSubjects, addSubject } from '@/api/subjects'
 import { getSessions } from '@/api/sessions'
 import { fetchMyGroups } from '@/api/groups'
 import { getStudyDayString } from '@/utils/time'
-import { calculateStreak } from '@/utils/stats'
+import { calculateStreak, calculateMaxStreak } from '@/utils/stats'
 import { useBadges } from './useBadges'
 import {
   saveSubjectsOffline, getSubjectsOffline,
@@ -29,7 +29,7 @@ const DEFAULT_SUBJECTS = [
 ]
 
 export function useBootstrap() {
-  const { uid, setStreak, setTotalHours } = useUserStore()
+  const { uid, setStreak, setMaxStreak, setTotalHours } = useUserStore()
   const { subjects: storedSubjects, setSubjects } = useSubjectStore()
   const { checkAndUnlock } = useBadges()
 
@@ -126,9 +126,11 @@ export function useBootstrap() {
     async function refreshAggregates() {
       try {
         const allSessions = await getSessions('2020-01-01', getStudyDayString())
-        const streak   = calculateStreak(allSessions)
-        const totalHrs = allSessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 3600
+        const streak    = calculateStreak(allSessions)
+        const maxStreak = calculateMaxStreak(allSessions)
+        const totalHrs  = allSessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 3600
         setStreak(streak)
+        setMaxStreak(maxStreak)
         setTotalHours(totalHrs)
 
         let groupsJoined = 0
@@ -137,7 +139,7 @@ export function useBootstrap() {
           groupsJoined = groups?.length || 0
         } catch (_) { /* groups fetch optional — badge check still works without it */ }
 
-        await checkAndUnlock(allSessions, { groupsJoined })
+        await checkAndUnlock(allSessions, { groupsJoined, maxStreak })
       } catch (err) {
         console.warn('[Bootstrap] Streak/badge refresh failed:', err.message)
       }

@@ -138,6 +138,23 @@ export function calculateStreak(sessions) {
   return streak
 }
 
+// Sabse lambi streak jo user ne KABHI BHI achieve ki thi (chahe ab tooti ho).
+// Streak-badges (streak_7/streak_30) isi se check hote hain — taaki agar
+// kabhi 10-din ki streak thi jo baad mein toot gayi, to badge phir bhi
+// permanently unlocked rahe (current streak jaisa "abhi 7+ hai" nahi).
+export function calculateMaxStreak(sessions) {
+  if (!sessions.length) return 0
+  const dates = [...new Set(sessions.map((s) => s.date))].sort()
+  let max = 1
+  let current = 1
+  for (let i = 1; i < dates.length; i++) {
+    const gapDays = Math.round((new Date(dates[i]) - new Date(dates[i - 1])) / 86400000)
+    current = gapDays === 1 ? current + 1 : 1
+    if (current > max) max = current
+  }
+  return max
+}
+
 export function getUniqueSubjects(sessions) {
   const map = {}
   sessions.forEach((s) => {

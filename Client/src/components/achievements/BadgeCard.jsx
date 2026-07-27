@@ -17,6 +17,8 @@ const BADGE_COLORS = {
   perfect_week:     '#ec4899',
   hours_1000:       '#f97316',
   group_join:       '#22c55e',
+  weekend_warrior:  '#d946ef',
+  comeback_kid:     '#14b8a6',
 };
 
 function formatUnlockDate(ts) {

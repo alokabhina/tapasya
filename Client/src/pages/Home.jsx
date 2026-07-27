@@ -631,6 +631,7 @@ export default function Home() {
   const displayName      = useUserStore((s) => s.displayName);
   const dailyGoalSeconds = useUserStore((s) => s.dailyGoalSeconds);
   const streakDays       = useUserStore((s) => s.streakDays);
+  const maxStreakDays    = useUserStore((s) => s.maxStreakDays);
   const totalHoursAllTime = useUserStore((s) => s.totalHoursAllTime);
   const { start, stop }  = useTimer();
   const navigate         = useNavigate();
@@ -648,7 +649,7 @@ export default function Home() {
   const nextBadgeTeaser = (() => {
     const locked = getBadgesWithStatus().filter((b) => !b.isUnlocked);
     if (!locked.length) return null;
-    const userStatsForProgress = { streak: streakDays, totalHours: totalHoursAllTime };
+    const userStatsForProgress = { streak: streakDays, maxStreak: maxStreakDays, totalHours: totalHoursAllTime };
     const withProgress = locked.map((b) => ({
       ...b,
       progress: getBadgeProgress(b.id, [], userStatsForProgress),

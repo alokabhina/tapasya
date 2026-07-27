@@ -4,7 +4,7 @@
 // - Monthly: month stats + hourly activity heatmap (kis time padh raha)
 // - Timer fix: elapsed-based duration (stop periods excluded)
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   AreaChart, Area, BarChart as ReBarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -15,6 +15,11 @@ import { aggregateForDay, aggregateByDateList, aggregateWeeklySunSat, getHourlyP
 import { getFocusHistory, getFocusStats } from '@/utils/focusHistory';
 import { fetchReadingStats } from '@/api/Vocab';
 import { exportStatsPDF, exportStatsCSV } from '@/utils/export';
+import { useBadges } from '@/hooks/useBadges';
+import { ALL_BADGES } from '@/components/achievements/BadgeGrid';
+import useUserStore from '@/store/userStore';
+import { useExams } from '@/components/home/ExamCountdown';
+import { generateSummaryReport } from '@/utils/generateSummaryReport';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -748,6 +753,22 @@ export default function Stats() {
   const [refreshKey,    setRefreshKey]    = useState(0);
   const [vocabStats,    setVocabStats]    = useState(null);
   const [vocabLoading,  setVocabLoading]  = useState(false);
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const themePickerRef = useRef(null);
+
+  useEffect(() => {
+    if (!showThemePicker) return;
+    function handleClickOutside(e) {
+      if (themePickerRef.current && !themePickerRef.current.contains(e.target)) {
+        setShowThemePicker(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showThemePicker]);
+  const [summaryBusy,     setSummaryBusy]     = useState(false);
+  const [summaryProgress, setSummaryProgress] = useState('');
+  const customPhotoInputRef = useRef(null);
 
   // Navigation dates per mode
   const [dayNav,   setDayNav]   = useState(today4am);            // YYYY-MM-DD
@@ -827,6 +848,18 @@ export default function Stats() {
   }), [activeTab, startDate, endDate]);
 
   const { donutData, loading, totalSeconds, sessions } = useStats(period, refreshKey);
+  const { badges: earnedBadges } = useBadges();
+  const displayName = useUserStore((s) => s.displayName) || 'Aspirant';
+  const exams = useExams();
+  const upcomingExams = (exams || [])
+    .filter((e) => {
+      if (!e.examDate) return false
+      const today = new Date(); today.setHours(0,0,0,0)
+      const ex = new Date(e.examDate); ex.setHours(0,0,0,0)
+      return ex >= today
+    })
+    .sort((a, b) => new Date(a.examDate) - new Date(b.examDate))
+  const primaryExam = upcomingExams[0]; // ✅ FIX: sirf upcoming exam — pehle koi bhi (past bhi) le leta tha, isse "-17 days left" jaisa bug aata tha
 
   // ── Daily view data ──────────────────────────────────────────────────────
   const daySubjects = useMemo(() => activeTab === 'Day' ? aggregateForDay(sessions || [], dayNav) : [], [sessions, dayNav, activeTab]);
@@ -885,6 +918,53 @@ export default function Stats() {
     try { exportStatsCSV({sessions:sessions||[],focusRecords,donutData:donutData||[],barData:weekBarData}); } finally { setExporting(''); }
   }
 
+  async function handleGenerateSummary(theme, customImageDataUrl = null) {
+    setShowThemePicker(false);
+    setSummaryBusy(true);
+    let examDaysLeft = null;
+    if (primaryExam?.examDate) {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const ex = new Date(primaryExam.examDate); ex.setHours(0,0,0,0);
+      examDaysLeft = Math.ceil((ex - today) / 86400000);
+    }
+    try {
+      await generateSummaryReport({
+        userName: displayName,
+        examName: primaryExam?.name || '',
+        examDaysLeft,
+        theme,
+        customImageDataUrl,
+        onProgress: setSummaryProgress,
+      });
+    } catch (err) {
+      console.error('Summary report failed:', err);
+      alert('Report generate karne mein dikkat aayi. Dobara try karo.');
+    } finally {
+      setSummaryBusy(false);
+      setSummaryProgress('');
+    }
+  }
+
+  function handleCustomPhotoPick() {
+    customPhotoInputRef.current?.click();
+  }
+
+  function handleCustomPhotoSelected(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // reset so selecting the same file again still fires onChange
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      handleGenerateSummary('custom', reader.result);
+    };
+    reader.onerror = () => alert('Photo read karne mein dikkat aayi. Dobara try karo.');
+    reader.readAsDataURL(file);
+  }
+
   const isToday = activeTab === 'Day' && dayNav === today4am;
 
   return (
@@ -901,7 +981,7 @@ export default function Stats() {
               </div>
               <p className="text-slate-500 text-xs pl-3">Track your learning journey</p>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div ref={themePickerRef} className="flex items-center gap-1.5 relative">
               <button onClick={handleExportCSV} disabled={!!exporting||loading}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#111827] ring-1 ring-slate-700/50 text-slate-400 hover:text-green-400 hover:ring-green-500/40 text-xs font-semibold transition-all disabled:opacity-40">
                 <i className={`ti ${exporting==='csv'?'ti-loader-2 animate-spin':'ti-table-export'} text-sm`}/> Excel
@@ -910,6 +990,51 @@ export default function Stats() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#111827] ring-1 ring-slate-700/50 text-slate-400 hover:text-red-400 hover:ring-red-500/40 text-xs font-semibold transition-all disabled:opacity-40">
                 <i className={`ti ${exporting==='pdf'?'ti-loader-2 animate-spin':'ti-file-type-pdf'} text-sm`}/> PDF
               </button>
+
+              {/* ✨ Generate Summary — animated colorful PDF report */}
+              <button
+                onClick={() => setShowThemePicker((v) => !v)}
+                disabled={summaryBusy}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 bg-[length:200%_auto] hover:bg-[position:100%_0] text-white text-xs font-bold shadow-lg shadow-orange-500/30 transition-all duration-500 disabled:opacity-60"
+              >
+                <i className={`ti ${summaryBusy ? 'ti-loader-2 animate-spin' : 'ti-sparkles'} text-sm`}/>
+                {summaryBusy ? (summaryProgress || 'Generating…') : 'Generate Summary'}
+              </button>
+
+              {showThemePicker && !summaryBusy && (
+                <div className="absolute right-0 top-full mt-2 z-30 bg-[#0d1117] ring-1 ring-slate-700/60 rounded-2xl p-3 shadow-2xl w-64">
+                  <p className="text-[11px] text-slate-400 font-semibold mb-2.5 px-1">Apna report character choose karo</p>
+                  <div className="flex gap-2.5">
+                    <button onClick={() => handleGenerateSummary('boy')}
+                      className="flex-1 group rounded-xl overflow-hidden ring-1 ring-slate-700/60 hover:ring-red-500/60 transition-all bg-[#141414]">
+                      <img src="/report-characters/boy.png" alt="Mastermind" className="w-full h-28 object-cover object-top" />
+                      <div className="py-1.5 text-[11px] font-bold text-red-400 group-hover:text-red-300">Mastermind</div>
+                    </button>
+                    <button onClick={() => handleGenerateSummary('girl')}
+                      className="flex-1 group rounded-xl overflow-hidden ring-1 ring-slate-700/60 hover:ring-pink-500/60 transition-all bg-[#141414]">
+                      <img src="/report-characters/girl.png" alt="Street Icon" className="w-full h-28 object-cover object-top" />
+                      <div className="py-1.5 text-[11px] font-bold text-pink-400 group-hover:text-pink-300">Street Icon</div>
+                    </button>
+                  </div>
+                  <button onClick={handleCustomPhotoPick}
+                    className="mt-2.5 w-full flex items-center gap-2.5 rounded-xl ring-1 ring-slate-700/60 hover:ring-sky-500/60 transition-all bg-[#141414] p-2.5 group">
+                    <div className="w-9 h-9 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0 group-hover:bg-sky-500/20">
+                      <i className="ti ti-camera-plus text-sky-400 text-base" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-[11px] font-bold text-sky-400 group-hover:text-sky-300">Upload Your Photo</div>
+                      <div className="text-[10px] text-slate-500">Apni pic se personalized report</div>
+                    </div>
+                  </button>
+                  <input
+                    ref={customPhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCustomPhotoSelected}
+                    className="hidden"
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -978,11 +1103,12 @@ export default function Stats() {
             ) : (
               <>
                 {/* Metric Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
                   <MetricCard icon="ti-clock"       label="Total Time" value={formatDuration(totalSeconds||0)} accent="orange" />
                   <MetricCard icon="ti-trending-up" label={activeTab==='Day'?'Sessions':'Daily Avg'} value={activeTab==='Day'?String(sessions?.length||0):`${dailyAvg}h`} sub={activeTab==='Day'?'today':'per day'} accent="blue" />
                   <MetricCard icon="ti-books"       label="Subjects"   value={donutData?.length||0}  sub="studied"   accent="green" />
                   <MetricCard icon="ti-player-play" label="Sessions"   value={sessions?.length||0}   sub="completed" accent="purple" />
+                  <MetricCard icon="ti-trophy"      label="Badges"     value={`${earnedBadges.length}/${ALL_BADGES.length}`} sub="unlocked" accent="orange" />
                 </div>
 
                 {/* ─ DAY VIEW ─ */}

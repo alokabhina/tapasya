@@ -9,6 +9,7 @@ import { useTimerStore } from '../../store/timerStore';
 import { formatHours } from '../../utils/time';
 import StreakBadge from '../ui/StreakBadge';
 import Avatar from '../ui/Avatar';
+import BadgeCountPill from '../achievements/BadgeCountPill';
 
 const NAV_ITEMS = [
   { to: '/',             icon: 'ti-layout-dashboard', label: 'Overview' },
@@ -154,10 +155,12 @@ export default function Sidebar() {
                 />
 
                 {!collapsed && (
-                  <span className="truncate font-medium">
+                  <span className="truncate font-medium flex-1">
                     {label}
                   </span>
                 )}
+
+                {!collapsed && to === '/achievements' && <BadgeCountPill />}
               </>
             )}
           </NavLink>

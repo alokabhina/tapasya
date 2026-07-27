@@ -6,6 +6,7 @@ import api from "../api/client";
 import Avatar from "../components/ui/Avatar";
 import StreakBadge from "../components/ui/StreakBadge";
 import LevelBadge from "../components/achievements/LevelBadge";
+import BadgeCountPill from "../components/achievements/BadgeCountPill";
 
 // Preset face avatars
 const EMOJI_AVATARS = [
@@ -262,7 +263,7 @@ export default function Profile() {
 
         <div>
           <p className="text-xs text-slate-500 mb-3 uppercase tracking-wider font-medium">Your Stats</p>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {stats.map((s, i) => (
               <div key={i} className="bg-[#1e293b] rounded-xl p-3 border border-slate-700/50 text-center">
                 <div className={`w-8 h-8 rounded-lg ${s.bg} flex items-center justify-center mx-auto mb-2`}>
@@ -272,6 +273,7 @@ export default function Profile() {
                 <p className="text-xs text-slate-500 mt-0.5">{s.label}</p>
               </div>
             ))}
+            <BadgeCountPill variant="stat" />
           </div>
         </div>
 
@@ -289,6 +291,7 @@ export default function Profile() {
                     <i className={`ti ${link.icon} ${link.color} text-sm`} />
                   </div>
                   <span className="text-sm text-slate-200 font-medium">{link.label}</span>
+                  {link.path === '/achievements' && <BadgeCountPill />}
                 </div>
                 <i className="ti ti-chevron-right text-slate-600 group-hover:text-slate-400 transition-colors text-sm" />
               </button>
