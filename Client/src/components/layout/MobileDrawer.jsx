@@ -12,7 +12,7 @@ const SECONDARY_NAV = [
   { to: '/stats',        icon: 'ti-chart-bar', label: 'Stats',            desc: 'Study performance & insights' },
   { to: '/syllabus',     icon: 'ti-books',     label: 'Syllabus',         desc: 'Track topics & progress'     },
   { to: '/games',        icon: 'ti-sword',     label: 'Games',            desc: 'Practice Arena'              },
-  { to: '/speedmath',    icon: 'ti-bolt',      label: 'Speed Math',       desc: 'Tables, squares, cubes & %'  },
+  { to: '/money',        icon: 'ti-wallet',    label: 'Money',            desc: 'Budget & expenses'           },
   { to: '/profile',      icon: 'ti-user',      label: 'Profile',          desc: 'Your account'                },
   { to: '/calendar',     icon: 'ti-calendar',  label: 'Calendar',         desc: 'Study heatmap & schedule'    },
   { to: '/history',      icon: 'ti-history',   label: 'History',          desc: 'Past sessions & records'     },
@@ -48,24 +48,27 @@ export default function MobileDrawer({ open, onClose }) {
         `}
       />
 
-      {/* Drawer panel — slides up from bottom */}
+      {/* Drawer panel — slides up from bottom. Capped height + internal scroll so it
+          never spills past the top of small phone screens; header stays put while the
+          nav list scrolls underneath it. */}
       <div
         className={`
           fixed left-0 right-0 bottom-0 z-[70] md:hidden
           bg-[#0c1526] border-t border-slate-700/60
           rounded-t-2xl shadow-2xl shadow-black/60
+          flex flex-col
           transition-transform duration-300 ease-out
           ${open ? 'translate-y-0' : 'translate-y-full'}
         `}
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 72px)' }}
+        style={{ maxHeight: 'calc(85dvh)' }}
       >
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-slate-600" />
         </div>
 
         {/* User info header */}
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-800/60">
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-800/60 shrink-0">
           <Avatar src={photoURL} name={displayName || user?.email} size={36} />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-100 truncate">
@@ -81,8 +84,11 @@ export default function MobileDrawer({ open, onClose }) {
           </button>
         </div>
 
-        {/* Secondary nav items */}
-        <div className="px-3 py-3 flex flex-col gap-1">
+        {/* Secondary nav items — scrollable region */}
+        <div
+          className="px-3 py-3 flex flex-col gap-1 overflow-y-auto overscroll-contain"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 72px)' }}
+        >
           {SECONDARY_NAV.map(({ to, icon, label, desc }) => (
             <NavLink
               key={to}
