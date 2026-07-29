@@ -10,6 +10,7 @@ import badgeRoutes   from './routes/badges.js'
 import groupRoutes   from './routes/groups.js'
 import uploadRoutes  from './routes/upload.js'
 import gameRoutes    from './routes/games.js'
+import speedMathRoutes from './routes/speedmath.js'
 import examRoutes    from './routes/exams.js'
 import vocabRoutes     from './routes/vocab.js'
 import syllabusRoutes  from './routes/syllabus.js'
@@ -41,6 +42,7 @@ app.use('/api/badges',   badgeRoutes)
 app.use('/api/groups',   groupRoutes)
 app.use('/api/upload',   uploadRoutes)
 app.use('/api/games',    gameRoutes)
+app.use('/api/speedmath', speedMathRoutes)
 app.use('/api/exams',   examRoutes)
 app.use('/api/vocab',     vocabRoutes)
 app.use('/api/syllabus',  syllabusRoutes)

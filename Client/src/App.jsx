@@ -41,6 +41,14 @@ const CalcClimb     = lazy(() => import('./pages/games/CalculationClimb'));
 const SeriesRush    = lazy(() => import('./pages/games/NumberSeriesRush'));
 const VocabBlitz    = lazy(() => import('./pages/games/VocabBlitz'));
 
+// ── Speed Math (Tables/Squares/Cubes/%-Fraction) — separate from Practice Arena ─
+const SpeedMath          = lazy(() => import('./pages/SpeedMath'));
+const SpeedMathReference = lazy(() => import('./pages/SpeedMathReference'));
+const SpeedMathConfig    = lazy(() => import('./pages/SpeedMathConfig'));
+const SpeedMathPlay      = lazy(() => import('./pages/SpeedMathPlay'));
+const SpeedMathResult    = lazy(() => import('./pages/SpeedMathResult'));
+const SpeedMathStats     = lazy(() => import('./pages/SpeedMathStats'));
+
 // ── Vocab Master (personal dictionary + quiz) ────────────────────────────────
 const VocabMaster = lazy(() => import('./pages/VocabMaster'));
 const VocabQuiz    = lazy(() => import('./pages/VocabQuiz'));
@@ -153,6 +161,13 @@ export default function App() {
             ['/games/syllogism',    <SyllogismStr />],
             ['/games/survival',     <SurvivalArena />],
             ['/games/grammar',      <GrammarGladiator />],
+            // ── Speed Math routes (separate from Practice Arena) ───────────
+            ['/speedmath',                 <SpeedMath />],
+            ['/speedmath/learn/:module',   <SpeedMathReference />],
+            ['/speedmath/config/:module',  <SpeedMathConfig />],
+            ['/speedmath/play',            <SpeedMathPlay />],
+            ['/speedmath/result',          <SpeedMathResult />],
+            ['/speedmath/stats',           <SpeedMathStats />],
           ].map(([path, page]) => (
             <Route
               key={path}

@@ -44,7 +44,7 @@ export const REPORT_THEMES = {
   },
   boy: {
     name: 'Mastermind',
-    charImg: '/report-characters/boy.png',
+    charImg: '/report-characters/status_boy.png',
     charTransparent: false, // boy image ka apna dark bg hai, blend ho jata hai
     objectPosition: 'top center',
     // Layered radial depth: dark red → burgundy → black + warm glow

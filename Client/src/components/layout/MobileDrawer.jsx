@@ -12,6 +12,7 @@ const SECONDARY_NAV = [
   { to: '/stats',        icon: 'ti-chart-bar', label: 'Stats',            desc: 'Study performance & insights' },
   { to: '/syllabus',     icon: 'ti-books',     label: 'Syllabus',         desc: 'Track topics & progress'     },
   { to: '/games',        icon: 'ti-sword',     label: 'Games',            desc: 'Practice Arena'              },
+  { to: '/speedmath',    icon: 'ti-bolt',      label: 'Speed Math',       desc: 'Tables, squares, cubes & %'  },
   { to: '/profile',      icon: 'ti-user',      label: 'Profile',          desc: 'Your account'                },
   { to: '/calendar',     icon: 'ti-calendar',  label: 'Calendar',         desc: 'Study heatmap & schedule'    },
   { to: '/history',      icon: 'ti-history',   label: 'History',          desc: 'Past sessions & records'     },

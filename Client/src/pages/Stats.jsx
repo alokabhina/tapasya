@@ -20,6 +20,7 @@ import { ALL_BADGES } from '@/components/achievements/BadgeGrid';
 import useUserStore from '@/store/userStore';
 import { useExams } from '@/components/home/ExamCountdown';
 import { generateSummaryReport } from '@/utils/generateSummaryReport';
+import StatusStory from '@/components/status/StatusStory';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -768,6 +769,7 @@ export default function Stats() {
   }, [showThemePicker]);
   const [summaryBusy,     setSummaryBusy]     = useState(false);
   const [summaryProgress, setSummaryProgress] = useState('');
+  const [showStatus,      setShowStatus]      = useState(false);
   const customPhotoInputRef = useRef(null);
 
   // Navigation dates per mode
@@ -989,6 +991,18 @@ export default function Stats() {
               <button onClick={handleExportPDF} disabled={!!exporting||loading}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#111827] ring-1 ring-slate-700/50 text-slate-400 hover:text-red-400 hover:ring-red-500/40 text-xs font-semibold transition-all disabled:opacity-40">
                 <i className={`ti ${exporting==='pdf'?'ti-loader-2 animate-spin':'ti-file-type-pdf'} text-sm`}/> PDF
+              </button>
+
+              {/* 📸 Status — single-page animated WhatsApp/Insta-shareable snap.
+                  Loading state ab button ke andar hi dikhta hai (Generate Summary jaisa) —
+                  koi alag full-screen "generating…" popup nahi aata. */}
+              <button
+                onClick={() => setShowStatus(true)}
+                disabled={showStatus}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#111827] ring-1 ring-slate-700/50 text-slate-400 hover:text-orange-400 hover:ring-orange-500/40 text-xs font-semibold transition-all disabled:opacity-60"
+              >
+                <i className={`ti ${showStatus ? 'ti-loader-2 animate-spin' : 'ti-flame'} text-sm`} />
+                {showStatus ? 'Generating…' : 'Status'}
               </button>
 
               {/* ✨ Generate Summary — animated colorful PDF report */}
@@ -1402,6 +1416,21 @@ export default function Stats() {
         )}
 
       </div>
+
+      {showStatus && (
+        <StatusStory
+          userName={displayName}
+          period={activeTab === 'Custom' ? 'Day' : activeTab}
+          startDate={startDate}
+          endDate={endDate}
+          sessions={sessions || []}
+          totalSeconds={totalSeconds || 0}
+          focusSeconds={focusStats.totalFocusSeconds}
+          subjectData={donutData || []}
+          onClose={() => setShowStatus(false)}
+          onError={() => alert('Status image generate karne mein dikkat aayi. Dobara try karo.')}
+        />
+      )}
     </div>
   );
 }

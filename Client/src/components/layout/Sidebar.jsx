@@ -14,6 +14,7 @@ import BadgeCountPill from '../achievements/BadgeCountPill';
 const NAV_ITEMS = [
   { to: '/',             icon: 'ti-layout-dashboard', label: 'Overview' },
   { to: '/games',        icon: 'ti-sword',            label: 'Practice Arena' },  // NEW
+  { to: '/speedmath',    icon: 'ti-bolt',              label: 'Speed Math' },      // NEW — Tables/Squares/Cubes/%-Fraction
   { to: '/stats',        icon: 'ti-chart-bar',        label: 'Stats' },
   { to: '/calendar',     icon: 'ti-calendar',         label: 'Calendar' },
   { to: '/todo',         icon: 'ti-checkbox',         label: 'Todo' },
