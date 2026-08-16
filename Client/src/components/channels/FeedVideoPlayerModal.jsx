@@ -3,8 +3,11 @@
 // right here, no watchlist/progress tracking involved (that only applies
 // to items the user has explicitly added to their watchlist).
 import { useEffect } from 'react'
+import { useAutoLandscapeFullscreen } from '@/hooks/useAutoLandscapeFullscreen'
 
 export default function FeedVideoPlayerModal({ video, onClose }) {
+  useAutoLandscapeFullscreen()
+
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose?.() }
     if (video) document.addEventListener('keydown', onKey)

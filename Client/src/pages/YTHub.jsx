@@ -311,8 +311,10 @@ export default function YTHub() {
           ) : (
             <ChannelFeedGrid
               feed={feed}
+              folders={folders}
               onPlay={setPlayingFeedVideo}
               onAddedToWatchlist={() => pushToast('Added to watchlist', 'success')}
+              onFolderCreated={(f) => setFolders((prev) => [...prev, f])}
             />
           )}
         </>

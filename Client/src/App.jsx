@@ -12,6 +12,7 @@ import PageLoader from './components/layout/PageLoader';
 import Sidebar    from './components/layout/Sidebar';
 import BottomNav  from './components/layout/BottomNav';
 import MiniPlayer from './components/layout/MiniPlayer';
+import WhatsNewModal from './components/whatsnew/WhatsNewModal';
 
 // Pages (lazy imports for code-splitting)
 import { lazy, Suspense } from 'react';
@@ -100,6 +101,7 @@ function AppShell({ children }) {
         </Suspense>
       </main>
       <BottomNav />
+      <WhatsNewModal />
     </div>
   );
 }

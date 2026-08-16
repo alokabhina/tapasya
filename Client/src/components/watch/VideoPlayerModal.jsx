@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { updateWatchProgress, toggleWatchComplete } from '@/api/watch'
+import { useAutoLandscapeFullscreen } from '@/hooks/useAutoLandscapeFullscreen'
 
 const PROGRESS_SAVE_INTERVAL_MS = 15000
 
@@ -15,6 +16,8 @@ export default function VideoPlayerModal({ item, queue = [], onClose, onComplete
   const lastSavedRef = useRef(0)
   const intervalRef = useRef(null)
   const [ready, setReady] = useState(false)
+
+  useAutoLandscapeFullscreen()
 
   useEffect(() => {
     if (!item) return
