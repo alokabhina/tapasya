@@ -11,7 +11,8 @@ import Avatar from '../ui/Avatar';
 const SECONDARY_NAV = [
   { to: '/stats',        icon: 'ti-chart-bar', label: 'Stats',            desc: 'Study performance & insights' },
   { to: '/syllabus',     icon: 'ti-books',     label: 'Syllabus',         desc: 'Track topics & progress'     },
-  { to: '/games',        icon: 'ti-sword',     label: 'Games',            desc: 'Practice Arena'              },
+  { to: '/yt-hub',       icon: 'ti-brand-youtube', label: 'YT Study Pathsala', desc: 'Subject-wise video watchlist' },
+  // { to: '/games',     icon: 'ti-sword',     label: 'Games',            desc: 'Practice Arena'              }, // OUTDATED — removed from nav, feature deprecated
   { to: '/money',        icon: 'ti-wallet',    label: 'Money',            desc: 'Budget & expenses'           },
   { to: '/profile',      icon: 'ti-user',      label: 'Profile',          desc: 'Your account'                },
   { to: '/calendar',     icon: 'ti-calendar',  label: 'Calendar',         desc: 'Study heatmap & schedule'    },

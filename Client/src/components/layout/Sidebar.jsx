@@ -13,13 +13,14 @@ import BadgeCountPill from '../achievements/BadgeCountPill';
 
 const NAV_ITEMS = [
   { to: '/',             icon: 'ti-layout-dashboard', label: 'Overview' },
-  { to: '/games',        icon: 'ti-sword',            label: 'Practice Arena' },  // NEW
+  // { to: '/games',     icon: 'ti-sword',            label: 'Practice Arena' },  // OUTDATED — removed from nav, feature deprecated
   { to: '/speedmath',    icon: 'ti-bolt',              label: 'Speed Math' },      // NEW — Tables/Squares/Cubes/%-Fraction
   { to: '/stats',        icon: 'ti-chart-bar',        label: 'Stats' },
   { to: '/calendar',     icon: 'ti-calendar',         label: 'Calendar' },
   { to: '/todo',         icon: 'ti-checkbox',         label: 'Todo' },
   { to: '/syllabus',     icon: 'ti-books',            label: 'Syllabus' },
   { to: '/vocab',        icon: 'ti-book-2',           label: 'Vocab Master' },
+  { to: '/yt-hub',       icon: 'ti-brand-youtube',    label: 'YT Study Pathsala' },
   { to: '/history',      icon: 'ti-history',          label: 'History' },
   { to: '/achievements', icon: 'ti-trophy',           label: 'Achievements' },
   { to: '/group',        icon: 'ti-users',            label: 'Study Group' },

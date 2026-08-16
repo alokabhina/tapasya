@@ -49,6 +49,9 @@ const SpeedMathPlay      = lazy(() => import('./pages/SpeedMathPlay'));
 const SpeedMathResult    = lazy(() => import('./pages/SpeedMathResult'));
 const SpeedMathStats     = lazy(() => import('./pages/SpeedMathStats'));
 
+// ── YT Study Hub (personal YouTube watchlist) ───────────────────────────────
+const YTHub = lazy(() => import('./pages/YTHub'));
+
 // ── Vocab Master (personal dictionary + quiz) ────────────────────────────────
 const VocabMaster = lazy(() => import('./pages/VocabMaster'));
 const VocabQuiz    = lazy(() => import('./pages/VocabQuiz'));
@@ -152,6 +155,7 @@ export default function App() {
             ['/vocab/questions',          <QuestionBank />],
             ['/vocab/questions/practice', <QuestionPractice />],
             ['/syllabus',           <Syllabus />],
+            ['/yt-hub',             <YTHub />],
             // ── Practice Arena routes ─────────────────────────────────────
             ['/games',              <Games />],
             ['/games/stats',        <GameStats />],
