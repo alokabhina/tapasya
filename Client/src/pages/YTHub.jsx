@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   getWatchList, getWatchStats, toggleWatchComplete, deleteWatchItem, bulkDeleteWatchItems,
 } from '@/api/watch'
+import { addTodo } from '@/api/todos'
+import { getStudyDayString } from '@/utils/time'
 import { getFolders } from '@/api/folders'
 import { getMySubscriptions, unsubscribeChannel, getChannelFeed } from '@/api/channels'
 import WatchStatsWidget from '@/components/watch/WatchStatsWidget'
@@ -80,6 +82,29 @@ export default function YTHub() {
     setItems((prev) => prev.filter((i) => i._id !== item._id))
     getWatchStats().then(setStats).catch(() => {})
     pushToast('Video removed', 'info')
+  }
+
+  // Quick "Add as Todo" from a watchlist video's menu — creates today's
+  // task pre-filled with the video title, linked so completing either one
+  // syncs the other (see server routes/todos.js + routes/watch.js).
+  async function handleAddTodo(item) {
+    try {
+      await addTodo({
+        text: item.title,
+        date: getStudyDayString(),
+        priority: 'Medium',
+        done: false,
+        linkedWatchItem: {
+          itemId: item._id,
+          youtubeId: item.youtubeId,
+          title: item.title,
+          thumbnail: item.thumbnail,
+        },
+      })
+      pushToast('Todo add ho gaya — Todo tab mein dekho', 'success')
+    } catch {
+      pushToast('Todo add nahi ho paya', 'error')
+    }
   }
 
   function toggleSelect(item) {
@@ -269,6 +294,7 @@ export default function YTHub() {
               onToggleComplete={handleToggleComplete}
               onShare={setSharingItem}
               onDelete={handleDelete}
+              onAddTodo={handleAddTodo}
               selectMode={selectMode}
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}

@@ -22,7 +22,14 @@ export default function VideoPlayerModal({ item, queue = [], onClose, onComplete
   useEffect(() => {
     if (!item) return
     setReady(false)
-    lastSavedRef.current = 0
+    // Resume from where the user left off — but only for a video that
+    // isn't already marked complete (a finished video should replay from
+    // the start). Back up a couple seconds so we don't drop the last bit
+    // of context the user actually saw.
+    const resumeAt = (!item.completed && item.watchedSeconds > 5)
+      ? Math.max(0, Math.floor(item.watchedSeconds) - 2)
+      : 0
+    lastSavedRef.current = resumeAt
 
     function createPlayer() {
       playerRef.current = new window.YT.Player(containerRef.current, {
@@ -32,6 +39,7 @@ export default function VideoPlayerModal({ item, queue = [], onClose, onComplete
           rel: 0,           // limits related videos to same channel — no random suggestions
           fs: 1,
           playsinline: 1,
+          start: resumeAt,
         },
         events: {
           onReady: () => setReady(true),

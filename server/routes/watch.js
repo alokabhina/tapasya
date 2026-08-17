@@ -7,6 +7,7 @@ import authMiddleware from '../middleware/auth.js'
 import WatchItem from '../models/WatchItem.js'
 import WatchFolder from '../models/WatchFolder.js'
 import WatchLog from '../models/WatchLog.js'
+import Todo from '../models/Todo.js'
 import { parseYoutubeUrl, fetchVideoMeta, fetchPlaylistMeta, fetchPlaylistItems } from '../utils/youtube.js'
 import { getStudyDayString } from '../utils/dayBoundary.js'
 
@@ -110,6 +111,15 @@ router.patch('/:id/complete', async (req, res) => {
       { new: true }
     )
     if (!item) return res.status(404).json({ error: 'Not found' })
+
+    // Two-way sync: mirror onto any todo(s) linked to this video (see
+    // routes/todos.js for the other direction). Best-effort — a sync
+    // failure here shouldn't fail the watch-item update itself.
+    Todo.updateMany(
+      { userId: req.user.id, 'linkedWatchItem.itemId': item._id },
+      { done: completed, completedAt: completed ? getStudyDayString() : null }
+    ).catch(() => {})
+
     res.json(item)
   } catch (e) {
     res.status(500).json({ error: e.message })

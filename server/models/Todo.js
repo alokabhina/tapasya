@@ -12,6 +12,15 @@ const todoSchema = new mongoose.Schema({
   priority:        { type: String, enum: ['High', 'Medium', 'Low'], default: 'Medium' },
   estMins:         Number,
   completedAt:     String,
+  // Optional link to a YT Study Pathsala watchlist video. When set, marking
+  // this todo done/undone also flips the linked WatchItem's `completed`
+  // flag (and vice versa — see routes/todos.js and routes/watch.js).
+  linkedWatchItem: {
+    itemId:    { type: mongoose.Schema.Types.ObjectId, ref: 'WatchItem', default: null },
+    youtubeId: String,
+    title:     String,
+    thumbnail: String,
+  },
 }, { timestamps: true })
 todoSchema.index({ userId: 1, date: 1 })
 export default mongoose.model('Todo', todoSchema)

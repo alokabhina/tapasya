@@ -11,6 +11,17 @@ export async function getWatchList({ folderId, completed } = {}) {
   return res.data // WatchItem[]
 }
 
+// Most recently watched video with some progress on it — used by the
+// home page "Continue Watching" card. Client-side pick since the list is
+// small and this needs no new backend endpoint: any item with
+// watchedSeconds > 0, most recently updated first.
+export async function getRecentWatchItem() {
+  const items = await getWatchList()
+  const withProgress = items.filter((i) => (i.watchedSeconds || 0) > 0)
+  if (!withProgress.length) return null
+  return withProgress.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0]
+}
+
 export async function toggleWatchComplete(id, completed) {
   const res = await api.patch(`/watch/${id}/complete`, { completed })
   return res.data

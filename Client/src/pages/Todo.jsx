@@ -6,10 +6,12 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { getTodos, addTodo, updateTodo, deleteTodo } from "../api/todos";
+import { getWatchList } from "../api/watch";
 import { useUserStore } from "../store/userStore";
 import { useSubjectStore } from "../store/subjectStore";
 import { getDateString, getStudyDayString } from "../utils/time";
 import PhotoJournal from "../components/todo/PhotoJournal";
+import VideoPlayerModal from "../components/watch/VideoPlayerModal";
 
 function addDays(dateStr, n) {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -83,9 +85,31 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
   const [estMins, setEstMins] = useState("");
   const [taskDate, setTaskDate] = useState(defaultDate || getStudyDayString());
   const [adding, setAdding] = useState(false);
+  const [videoPickerOpen, setVideoPickerOpen] = useState(false);
+  const [videoOptions, setVideoOptions] = useState([]);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [linkedVideo, setLinkedVideo] = useState(null); // { itemId, youtubeId, title, thumbnail }
   const inputRef = useRef(null);
 
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
+
+  async function handleOpenVideoPicker() {
+    const next = !videoPickerOpen;
+    setVideoPickerOpen(next);
+    if (next && videoOptions.length === 0) {
+      setVideoLoading(true);
+      try {
+        const items = await getWatchList({ completed: false });
+        setVideoOptions(items);
+      } catch { setVideoOptions([]); }
+      finally { setVideoLoading(false); }
+    }
+  }
+
+  function pickVideo(v) {
+    setLinkedVideo({ itemId: v._id, youtubeId: v.youtubeId, title: v.title, thumbnail: v.thumbnail });
+    setVideoPickerOpen(false);
+  }
 
   async function handleAdd() {
     if (!text.trim() || adding) return;
@@ -100,9 +124,10 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
       estMins: parseInt(estMins) || null,
       done: false,
       date: taskDate,
+      linkedWatchItem: linkedVideo || null,
     });
     setAdding(false);
-    setText(""); setEstMins("");
+    setText(""); setEstMins(""); setLinkedVideo(null);
     inputRef.current?.focus();
   }
 
@@ -171,6 +196,47 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
               })}
             </div>
           )}
+
+          {/* Optional: attach a watchlist video — completing this task also
+              marks the video watched, and vice versa (see Watch tab). */}
+          <div className="mb-4">
+            {linkedVideo ? (
+              <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30">
+                {linkedVideo.thumbnail
+                  ? <img src={linkedVideo.thumbnail} alt="" className="w-10 h-7 rounded object-cover shrink-0" />
+                  : <div className="w-10 h-7 rounded bg-slate-800 flex items-center justify-center shrink-0"><i className="ti ti-video text-slate-600 text-xs" /></div>}
+                <span className="flex-1 text-xs text-slate-200 truncate">{linkedVideo.title}</span>
+                <button onClick={() => setLinkedVideo(null)} className="w-6 h-6 rounded-md flex items-center justify-center text-slate-500 hover:text-red-400 shrink-0">
+                  <i className="ti ti-x text-xs" />
+                </button>
+              </div>
+            ) : (
+              <button onClick={handleOpenVideoPicker} type="button"
+                className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl border border-dashed border-slate-700 text-xs text-slate-400 hover:border-orange-500/50 hover:text-orange-400 transition-colors">
+                <i className="ti ti-brand-youtube text-sm" /> Video attach karo (optional)
+              </button>
+            )}
+
+            {videoPickerOpen && (
+              <div className="mt-1.5 max-h-40 overflow-y-auto rounded-xl border border-slate-700 bg-[#0f172a] divide-y divide-slate-800">
+                {videoLoading && (
+                  <p className="px-3 py-3 text-xs text-slate-500 text-center">Loading...</p>
+                )}
+                {!videoLoading && videoOptions.length === 0 && (
+                  <p className="px-3 py-3 text-xs text-slate-500 text-center">Watchlist khali hai</p>
+                )}
+                {!videoLoading && videoOptions.map((v) => (
+                  <button key={v._id} onClick={() => pickVideo(v)} type="button"
+                    className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-slate-800/60 transition-colors">
+                    {v.thumbnail
+                      ? <img src={v.thumbnail} alt="" className="w-9 h-6 rounded object-cover shrink-0" />
+                      : <div className="w-9 h-6 rounded bg-slate-800 shrink-0" />}
+                    <span className="flex-1 text-[11px] text-slate-300 truncate">{v.title}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="flex gap-2">
             <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Cancel</button>
@@ -314,9 +380,10 @@ function GoalCard({ goal, subjects, onEdit, onDelete, onUpdateChapters }) {
 }
 
 // ── Task Row ───────────────────────────────────────────────────────────────────
-function TaskRow({ task, onToggle, onDelete }) {
+function TaskRow({ task, onToggle, onDelete, onPlayVideo }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const p = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG["Medium"];
+  const video = task.linkedWatchItem;
 
   return (
     <div className="flex items-center gap-3 px-3 sm:px-4 py-3.5 group border-b border-slate-800/30 last:border-0 hover:bg-slate-800/20 transition-colors">
@@ -325,6 +392,17 @@ function TaskRow({ task, onToggle, onDelete }) {
           ${task.done ? "bg-orange-500 border-orange-500" : "border-slate-600 hover:border-orange-400"}`}>
         {task.done && <i className="ti ti-check text-white text-[9px]" />}
       </button>
+      {video?.itemId && (
+        <button onClick={() => onPlayVideo(video)} title="Video dekho"
+          className="relative w-10 h-7 rounded-md overflow-hidden bg-slate-800 flex-shrink-0 group/vid">
+          {video.thumbnail
+            ? <img src={video.thumbnail} alt="" className="w-full h-full object-cover" />
+            : <div className="w-full h-full flex items-center justify-center"><i className="ti ti-video text-slate-600 text-xs" /></div>}
+          <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover/vid:opacity-100 transition-opacity">
+            <i className="ti ti-player-play-filled text-white text-xs" />
+          </div>
+        </button>
+      )}
       <div className="flex-1 min-w-0">
         <p className={`text-sm transition-all ${task.done ? "line-through text-slate-500" : "text-slate-200"}`}>{task.text}</p>
         {task.subjectName && (
@@ -771,6 +849,7 @@ export default function Todo() {
   const [showAdd, setShowAdd] = useState(false);
   const [addForDate, setAddForDate] = useState(null);
   const [goalModal, setGoalModal] = useState(null);
+  const [playingLinkedVideo, setPlayingLinkedVideo] = useState(null); // linkedWatchItem currently playing
 
   const todayStr = getStudyDayString();
 
@@ -918,7 +997,8 @@ export default function Todo() {
                   {todayTasks.map((task) => (
                     <TaskRow key={task._id || task.id} task={task}
                       onToggle={() => handleToggle(task._id || task.id, task.done)}
-                      onDelete={() => handleDelete(task._id || task.id)} />
+                      onDelete={() => handleDelete(task._id || task.id)}
+                      onPlayVideo={setPlayingLinkedVideo} />
                   ))}
                   <div className="px-4 sm:px-5 py-2.5">
                     <button onClick={() => openAdd(todayStr)} className="flex items-center gap-1.5 text-xs text-orange-400 hover:text-orange-300 transition-colors">
@@ -974,7 +1054,8 @@ export default function Todo() {
                     {dateTasks.map((task) => (
                       <TaskRow key={task._id || task.id} task={task}
                         onToggle={() => handleToggle(task._id || task.id, task.done)}
-                        onDelete={() => handleDelete(task._id || task.id)} />
+                        onDelete={() => handleDelete(task._id || task.id)}
+                        onPlayVideo={setPlayingLinkedVideo} />
                     ))}
                   </div>
                 </div>
@@ -1046,6 +1127,12 @@ export default function Todo() {
       )}
 
       {showAdd && <AddTaskModal subjects={subjects} onClose={() => setShowAdd(false)} onAdd={handleAdd} defaultDate={addForDate} />}
+      {playingLinkedVideo?.itemId && (
+        <VideoPlayerModal
+          item={{ _id: playingLinkedVideo.itemId, youtubeId: playingLinkedVideo.youtubeId, title: playingLinkedVideo.title }}
+          onClose={() => setPlayingLinkedVideo(null)}
+        />
+      )}
       {goalModal && <GoalModal goal={goalModal === "new" ? null : goalModal} subjects={subjects} onClose={() => setGoalModal(null)} onSave={handleSaveGoal} />}
     </div>
   );

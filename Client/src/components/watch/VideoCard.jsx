@@ -9,7 +9,7 @@ function formatDuration(sec = 0) {
 }
 
 export default function VideoCard({
-  item, onPlay, onToggleComplete, onShare, onDelete,
+  item, onPlay, onToggleComplete, onShare, onDelete, onAddTodo,
   selectMode = false, selected = false, onToggleSelect,
 }) {
   function handleThumbClick() {
@@ -101,6 +101,14 @@ export default function VideoCard({
               <i className="ti ti-dots-vertical text-white text-sm" />
             </summary>
             <div className="absolute right-0 mt-1 w-32 rounded-lg bg-slate-800 border border-slate-700 shadow-xl overflow-hidden z-10">
+              {onAddTodo && (
+                <button
+                  onClick={() => onAddTodo(item)}
+                  className="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-slate-700 flex items-center gap-2"
+                >
+                  <i className="ti ti-checkbox" /> Add as Todo
+                </button>
+              )}
               <button
                 onClick={() => onShare(item)}
                 className="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-slate-700 flex items-center gap-2"

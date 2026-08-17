@@ -1,6 +1,7 @@
 import express from 'express'
 import authMiddleware from '../middleware/auth.js'
 import Todo from '../models/Todo.js'
+import WatchItem from '../models/WatchItem.js'
 import { getStudyDayString } from '../utils/dayBoundary.js'
 
 const router = express.Router()
@@ -58,6 +59,18 @@ router.put('/:id', async (req, res) => {
       { new: true }
     )
     if (!todo) return res.status(404).json({ error: 'Todo not found' })
+
+    // Two-way sync: if this todo is linked to a watchlist video, ticking
+    // the todo done/undone also flips that video's `completed` flag — so
+    // whichever side the user finishes from, both stay in sync. Best-effort:
+    // never let a WatchItem sync failure fail the todo update itself.
+    if (typeof updates.done === 'boolean' && todo.linkedWatchItem?.itemId) {
+      WatchItem.findOneAndUpdate(
+        { _id: todo.linkedWatchItem.itemId, userId: req.user.id },
+        { completed: updates.done, completedAt: updates.done ? new Date() : null }
+      ).catch(() => {})
+    }
+
     res.json(todo)
   } catch (e) {
     res.status(500).json({ error: e.message })

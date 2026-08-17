@@ -13,7 +13,7 @@ const SORTS = [
 ]
 
 export default function WatchListGrid({
-  items, onPlay, onToggleComplete, onShare, onDelete,
+  items, onPlay, onToggleComplete, onShare, onDelete, onAddTodo,
   selectMode = false, selectedIds = new Set(), onToggleSelect,
 }) {
   // Folders start collapsed by default — user taps to open the ones they want.
@@ -133,7 +133,7 @@ export default function WatchListGrid({
               </button>
 
               {!isCollapsed && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {group.items.map((item, idx) => (
                     <div key={item._id} className="animate-fade-in-up" style={{ animationDelay: `${Math.min(idx, 8) * 30}ms` }}>
                       <VideoCard
@@ -142,6 +142,7 @@ export default function WatchListGrid({
                         onToggleComplete={onToggleComplete}
                         onShare={onShare}
                         onDelete={onDelete}
+                        onAddTodo={onAddTodo}
                         selectMode={selectMode}
                         selected={selectedIds.has(item._id)}
                         onToggleSelect={onToggleSelect}

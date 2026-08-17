@@ -48,34 +48,13 @@ export default function MiniPlayer() {
     if (!isRunning && !isPaused && pipOpen) closePip();
   }, [isRunning, isPaused]);
 
-  // Goal: 30 minutes = full ring (1800 seconds)
-  const GOAL_SECONDS = 30 * 60;
-
   function updatePipContent() {
     const pipWin = pipWindowRef.current;
     if (!pipWin || pipWin.closed) { setPipOpen(false); return; }
 
     const s = useTimerStore.getState();
-    const ring = pipWin.document.getElementById('pip-ring');
-    const treeEl = pipWin.document.getElementById('tree-emoji');
-
-    const R = 38;
-    const CIRC = 2 * Math.PI * R;
-    const progress = Math.min(s.elapsed / GOAL_SECONDS, 1);
     const paused = s.isPaused;
 
-    if (ring) {
-      ring.style.strokeDashoffset = CIRC * (1 - progress);
-      ring.style.stroke = paused ? '#94a3b8' : (s.subjectColor || '#f97316');
-    }
-    if (treeEl) {
-      // Grow tree: seedling → sprout → sapling → tree
-      if (progress >= 0.75) treeEl.textContent = '🌳';
-      else if (progress >= 0.5) treeEl.textContent = '🌿';
-      else if (progress >= 0.25) treeEl.textContent = '🌱';
-      else treeEl.textContent = '🌱';
-      treeEl.style.filter = paused ? 'grayscale(0.6)' : 'none';
-    }
     const timeEl = pipWin.document.getElementById('pip-time');
     if (timeEl) {
       const m = Math.floor(s.elapsed / 60);
@@ -88,39 +67,22 @@ export default function MiniPlayer() {
   async function openPip() {
     if (!PIP_SUPPORTED) { setMinimized(true); return; }
     try {
-      // Wider pill: tree icon + progress ring left, stop button right
-      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 220, height: 64 });
+      // Compact pill: just the timer + stop button (no tree/ring)
+      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 128, height: 52 });
       pipWindowRef.current = pipWin;
       setPipOpen(true);
-
-      const R = 38;
-      const CIRC = 2 * Math.PI * R; // ~238.76
-      const initProgress = Math.min(elapsed / GOAL_SECONDS, 1);
-      const initOffset = CIRC * (1 - initProgress);
 
       const style = pipWin.document.createElement('style');
       style.textContent = `
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-          background: linear-gradient(135deg, #0a1628 0%, #0f1f4a 40%, #1a1060 70%, #0d0a2e 100%);
+          /* Lower alpha (0.45) than before — dimmer, more see-through pill */
+          background: linear-gradient(135deg, rgba(10,22,40,0.45) 0%, rgba(15,31,74,0.45) 40%, rgba(26,16,96,0.45) 70%, rgba(13,10,46,0.45) 100%);
           height: 100vh; overflow: hidden;
           display: flex; align-items: center; justify-content: space-between;
           padding: 0 10px;
           user-select: none;
           position: relative;
-        }
-        body::before {
-          content: '';
-          position: absolute; inset: 0;
-          background:
-            radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.18) 0%, transparent 60%),
-            radial-gradient(ellipse at 80% 50%, rgba(99,102,241,0.15) 0%, transparent 60%);
-          pointer-events: none;
-        }
-        #tree-wrap {
-          position: relative;
-          width: 52px; height: 52px;
-          flex-shrink: 0;
         }
         #pip-time {
           flex: 1;
@@ -132,45 +94,20 @@ export default function MiniPlayer() {
           letter-spacing: 1px;
           text-shadow: 0 0 12px rgba(99,130,246,0.6);
         }
-        #ring-svg {
-          position: absolute; top: 0; left: 0;
-          width: 52px; height: 52px;
-          transform: rotate(-90deg);
-        }
-        #bg-ring {
-          fill: none; stroke: rgba(99,130,246,0.15);
-          stroke-width: 3;
-        }
-        #pip-ring {
-          fill: none;
-          stroke: ${color};
-          stroke-width: 3;
-          stroke-linecap: round;
-          stroke-dasharray: ${CIRC};
-          stroke-dashoffset: ${initOffset};
-          transition: stroke-dashoffset 1s linear, stroke 0.3s;
-        }
-        #tree-emoji {
-          position: absolute;
-          top: 50%; left: 50%;
-          transform: translate(-50%, -50%);
-          font-size: 22px;
-          line-height: 1;
-        }
         #pip-stop {
-          width: 40px; height: 40px;
+          width: 36px; height: 36px;
           border-radius: 10px;
-          background: rgba(127,29,29,0.6);
+          background: rgba(127,29,29,0.5);
           border: 1px solid rgba(239,68,68,0.3);
           cursor: pointer;
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
           transition: background 0.15s, transform 0.1s;
         }
-        #pip-stop:hover { background: rgba(185,28,28,0.7); }
+        #pip-stop:hover { background: rgba(185,28,28,0.6); }
         #pip-stop:active { transform: scale(0.92); }
         #stop-icon {
-          width: 14px; height: 14px;
+          width: 13px; height: 13px;
           background: #fca5a5;
           border-radius: 3px;
         }
@@ -185,13 +122,6 @@ export default function MiniPlayer() {
       };
 
       pipWin.document.body.innerHTML = `
-        <div id="tree-wrap">
-          <svg id="ring-svg" viewBox="0 0 84 84" xmlns="http://www.w3.org/2000/svg">
-            <circle id="bg-ring" cx="42" cy="42" r="${R}" />
-            <circle id="pip-ring" cx="42" cy="42" r="${R}" />
-          </svg>
-          <div id="tree-emoji">🌱</div>
-        </div>
         <div id="pip-time">${fmt(elapsed)}</div>
         <button id="pip-stop"><div id="stop-icon"></div></button>
       `;

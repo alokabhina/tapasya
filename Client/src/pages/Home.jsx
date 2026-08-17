@@ -23,6 +23,8 @@ import TodoRing from '@/components/home/TodoRing';
 import { fetchWordOfDay } from '@/api/Vocab';
 import { useBadges } from '@/hooks/useBadges';
 import { getBadgeProgress, getBadgeById } from '@/utils/badges';
+import ContinueWatchingCard from '@/components/home/ContinueWatchingCard';
+import VideoPlayerModal from '@/components/watch/VideoPlayerModal';
 
 // ── Aesthetic background styles for cards ─────────────────────────────────────
 const CARD_BACKGROUNDS = [
@@ -667,6 +669,8 @@ export default function Home() {
   const [modal,         setModal]         = useState(null);
   const [switchWarning, setSwitchWarning] = useState(null);
   const [crossDeviceWarning, setCrossDeviceWarning] = useState(null); // { subjectName, elapsed, isPaused }
+  const [playingRecentVideo, setPlayingRecentVideo] = useState(null);
+  const [recentVideoRefreshKey, setRecentVideoRefreshKey] = useState(0);
   const pendingSubjectRef = useRef(null); // subject waiting after cross-device confirm
   const [todayTodos, setTodayTodos] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
@@ -911,6 +915,9 @@ export default function Home() {
             </div>
             </div>
           </div>
+
+          {/* Continue Watching — most recently watched YT Study Pathsala video, resumable */}
+          <ContinueWatchingCard onPlay={setPlayingRecentVideo} refreshKey={recentVideoRefreshKey} />
 
           {/* Study Time Card — aesthetic background */}
           <div className="relative rounded-2xl mb-5 border border-slate-800/50" style={{ isolation: 'isolate' }}>
@@ -1201,6 +1208,17 @@ export default function Home() {
           </div>
         );
       })()}
+
+      {playingRecentVideo && (
+        <VideoPlayerModal
+          item={playingRecentVideo}
+          onClose={() => {
+            setPlayingRecentVideo(null);
+            setRecentVideoRefreshKey((k) => k + 1); // re-check progress/completed after watching
+          }}
+          onCompleted={() => setRecentVideoRefreshKey((k) => k + 1)}
+        />
+      )}
 
       {/* Cross-Device Timer Conflict Warning */}
       {crossDeviceWarning && (
