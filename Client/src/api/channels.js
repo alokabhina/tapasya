@@ -26,6 +26,12 @@ export async function getChannelFeed(channelId) {
   return res.data // [{ videoId, title, thumbnail, publishedAt, channelTitle, folderId }]
 }
 
+// Curated, motivation/education-only Shorts feed for the Shorts tab.
+export async function getShorts() {
+  const res = await api.get('/channels/shorts')
+  return res.data // [{ youtubeId, title, thumbnail, channelTitle, durationSec }]
+}
+
 export async function addFeedVideoToWatchlist(videoId, { folderId, title, thumbnail, channelTitle }) {
   const res = await api.post('/channels/feed/add', { videoId, folderId, title, thumbnail, channelTitle })
   return res.data

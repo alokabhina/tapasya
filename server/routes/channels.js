@@ -10,7 +10,7 @@ import express from 'express'
 import authMiddleware from '../middleware/auth.js'
 import Subscription from '../models/Subscription.js'
 import WatchItem from '../models/WatchItem.js'
-import { searchChannels, getChannelUploadsPlaylist, fetchLatestUploads, fetchVideoDurations } from '../utils/youtube.js'
+import { searchChannels, getChannelUploadsPlaylist, fetchLatestUploads, fetchVideoDurations, searchShorts } from '../utils/youtube.js'
 
 const router = express.Router()
 router.use(authMiddleware)
@@ -92,6 +92,50 @@ router.get('/feed', async (req, res) => {
       }))
 
     res.json(fullVideosOnly)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── Shorts feed — motivation/education only ────────────────────────────
+// Curated queries only — never a generic/open search, so nothing random or
+// entertainment-y slips in. Mix of Hinglish since that's what actually
+// returns relevant results for this audience (banking-exam aspirants).
+const SHORTS_QUERIES = [
+  'study motivation for exam',
+  'success mindset motivation shorts',
+  'discipline motivation students',
+  'IBPS SBI exam preparation tips shorts',
+  'padhai motivation shorts',
+  'competitive exam strategy tips',
+  'time management for students shorts',
+  'self improvement habits shorts',
+  'topper study tips shorts',
+  'exam preparation motivation hindi',
+]
+
+// 30-min in-memory cache per query — search.list costs 100 quota units, so
+// repeat requests within the window are served from cache instead of
+// hitting the API again. Resets on server restart, which is fine here.
+const shortsCache = new Map() // query -> { data, at }
+const SHORTS_CACHE_TTL = 30 * 60 * 1000
+
+// GET /api/channels/shorts   → curated motivation/education Shorts feed
+router.get('/shorts', async (req, res) => {
+  try {
+    const query = SHORTS_QUERIES[Math.floor(Math.random() * SHORTS_QUERIES.length)]
+
+    const cached = shortsCache.get(query)
+    if (cached && Date.now() - cached.at < SHORTS_CACHE_TTL) {
+      return res.json(cached.data)
+    }
+
+    const shorts = await searchShorts(query)
+    // light shuffle so it doesn't feel like the exact same order every time
+    const shuffled = [...shorts].sort(() => Math.random() - 0.5)
+
+    shortsCache.set(query, { data: shuffled, at: Date.now() })
+    res.json(shuffled)
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

@@ -18,11 +18,13 @@ import ChannelSearchBar from '@/components/channels/ChannelSearchBar'
 import SubscribedChannelsBar from '@/components/channels/SubscribedChannelsBar'
 import ChannelFeedGrid from '@/components/channels/ChannelFeedGrid'
 import FeedVideoPlayerModal from '@/components/channels/FeedVideoPlayerModal'
+import ShortsFeed from '@/components/shorts/ShortsFeed'
 import ToastStack, { useToasts } from '@/components/ui/Toast'
 
 const TABS = [
   { id: 'watchlist', label: 'My Watchlist', shortLabel: 'Watchlist', icon: 'ti-playlist' },
   { id: 'feed',       label: 'Channel Feed', shortLabel: 'Feed',      icon: 'ti-rss' },
+  { id: 'shorts',     label: 'Shorts',       shortLabel: 'Shorts',    icon: 'ti-player-play' },
   { id: 'redeem',     label: 'Redeem',       shortLabel: 'Redeem',    icon: 'ti-gift' },
 ]
 
@@ -344,6 +346,11 @@ export default function YTHub() {
             />
           )}
         </>
+      )}
+
+      {/* ── Shorts tab ── */}
+      {tab === 'shorts' && (
+        <ShortsFeed onBack={() => setTab('watchlist')} />
       )}
 
       {/* ── Redeem tab ── */}

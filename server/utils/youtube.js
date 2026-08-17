@@ -183,7 +183,39 @@ export async function fetchVideoDurations(videoIds = []) {
   return info
 }
 
-// ── Channel ──────────────────────────────────────────────────────────────
+/**
+ * Searches for genuine YouTube Shorts (vertical, <=60s) matching a query.
+ * Uses search.list with videoDuration=short (YouTube's own "<4min" bucket)
+ * then narrows to true Shorts length via fetchVideoDurations, since the
+ * Shorts feed here must stay distraction-free — motivation/education only,
+ * nothing random. safeSearch=strict as an extra content-quality guard.
+ */
+export async function searchShorts(query, { maxResults = 25 } = {}) {
+  const data = await ytFetch('search', {
+    part: 'snippet',
+    type: 'video',
+    q: query,
+    videoDuration: 'short',
+    safeSearch: 'strict',
+    relevanceLanguage: 'hi',
+    order: 'relevance',
+    maxResults,
+  })
+  const candidates = (data.items || [])
+    .filter((it) => it.id?.videoId)
+    .map((it) => ({
+      youtubeId: it.id.videoId,
+      title: it.snippet.title,
+      thumbnail: it.snippet.thumbnails?.high?.url || it.snippet.thumbnails?.medium?.url || '',
+      channelTitle: it.snippet.channelTitle,
+    }))
+  if (!candidates.length) return []
+
+  const info = await fetchVideoDurations(candidates.map((v) => v.youtubeId))
+  return candidates
+    .map((v) => ({ ...v, durationSec: info[v.youtubeId]?.durationSec || 0 }))
+    .filter((v) => v.durationSec > 0 && v.durationSec <= 60) // real Shorts only
+}
 
 export async function searchChannels(query, { maxResults = 8 } = {}) {
   const data = await ytFetch('search', {
