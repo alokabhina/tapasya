@@ -101,19 +101,26 @@ router.get('/feed', async (req, res) => {
 
 // ── Shorts feed — motivation/education only ────────────────────────────
 // Curated queries only — never a generic/open search, so nothing random or
-// entertainment-y slips in. Mix of Hinglish since that's what actually
-// returns relevant results for this audience (banking-exam aspirants).
+// entertainment-y slips in. Weighted toward Hindi-language motivational
+// content (North Indian speakers/creators), bank/SSC exam prep, and
+// relatable struggle → success life-story shorts — this is the actual
+// content the user wants, not generic English "study tips" clips.
 const SHORTS_QUERIES = [
-  'study motivation for exam',
-  'success mindset motivation shorts',
-  'discipline motivation students',
-  'IBPS SBI exam preparation tips shorts',
-  'padhai motivation shorts',
-  'competitive exam strategy tips',
-  'time management for students shorts',
-  'self improvement habits shorts',
-  'topper study tips shorts',
+  'motivational speech hindi students',
+  'success story motivation hindi',
+  'struggle success story motivation hindi',
+  'bank exam motivation shorts hindi',
+  'SSC exam motivation shorts hindi',
+  'IBPS SBI motivation shorts hindi',
+  'garib se success story hindi motivation',
+  'sandeep maheshwari motivation shorts',
+  'padhai motivation shorts hindi',
+  'competitive exam success story hindi',
+  'IAS IPS success story motivation hindi',
+  'discipline motivation hindi shorts',
+  'topper interview motivation hindi',
   'exam preparation motivation hindi',
+  'life changing motivation speech hindi',
 ]
 
 // 30-min in-memory cache per query — search.list costs 100 quota units, so
@@ -122,6 +129,26 @@ const SHORTS_QUERIES = [
 const shortsCache = new Map() // query -> { data, at }
 const SHORTS_CACHE_TTL = 30 * 60 * 1000
 const DAILY_SHORTS_LIMIT = 50
+
+// Time-bucketed pick instead of Math.random(): everyone hitting the feed
+// within the same 30-min window gets the SAME query, so after the first
+// person warms the cache, everyone else (and the same user re-opening the
+// tab) gets a near-instant cache hit instead of a fresh ~10-15s YouTube
+// API round trip every single time.
+function currentShortsQuery() {
+  const bucket = Math.floor(Date.now() / SHORTS_CACHE_TTL)
+  return SHORTS_QUERIES[bucket % SHORTS_QUERIES.length]
+}
+
+async function getShortsForQuery(query) {
+  const cached = shortsCache.get(query)
+  if (cached && Date.now() - cached.at < SHORTS_CACHE_TTL) return cached.data
+
+  const shorts = await searchShorts(query)
+  const shuffled = [...shorts].sort(() => Math.random() - 0.5) // light shuffle, avoids identical order every time
+  shortsCache.set(query, { data: shuffled, at: Date.now() })
+  return shuffled
+}
 
 // GET /api/channels/shorts/usage → { count, limit, date }
 // Called by the frontend on load to show "X/50 dekhe" and to know upfront
@@ -168,19 +195,15 @@ router.get('/shorts', async (req, res) => {
       return res.status(429).json({ error: 'Aaj ka Shorts limit khatam ho gaya', limitReached: true, count: usage.count, limit: DAILY_SHORTS_LIMIT })
     }
 
-    const query = SHORTS_QUERIES[Math.floor(Math.random() * SHORTS_QUERIES.length)]
+    const shorts = await getShortsForQuery(currentShortsQuery())
+    res.json(shorts)
 
-    const cached = shortsCache.get(query)
-    if (cached && Date.now() - cached.at < SHORTS_CACHE_TTL) {
-      return res.json(cached.data)
-    }
-
-    const shorts = await searchShorts(query)
-    // light shuffle so it doesn't feel like the exact same order every time
-    const shuffled = [...shorts].sort(() => Math.random() - 0.5)
-
-    shortsCache.set(query, { data: shuffled, at: Date.now() })
-    res.json(shuffled)
+    // Fire-and-forget: warm next bucket's query in the background so that
+    // when the 30-min window rolls over, the FIRST request after it still
+    // hits a warm cache instead of everyone waiting on a fresh search again.
+    const nextBucket = Math.floor(Date.now() / SHORTS_CACHE_TTL) + 1
+    const nextQuery = SHORTS_QUERIES[nextBucket % SHORTS_QUERIES.length]
+    if (!shortsCache.has(nextQuery)) getShortsForQuery(nextQuery).catch(() => {})
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

@@ -190,7 +190,7 @@ export async function fetchVideoDurations(videoIds = []) {
  * Shorts feed here must stay distraction-free — motivation/education only,
  * nothing random. safeSearch=strict as an extra content-quality guard.
  */
-export async function searchShorts(query, { maxResults = 25 } = {}) {
+export async function searchShorts(query, { maxResults = 18 } = {}) {
   const data = await ytFetch('search', {
     part: 'snippet',
     type: 'video',
@@ -198,6 +198,7 @@ export async function searchShorts(query, { maxResults = 25 } = {}) {
     videoDuration: 'short',
     safeSearch: 'strict',
     relevanceLanguage: 'hi',
+    regionCode: 'IN',
     order: 'relevance',
     maxResults,
   })

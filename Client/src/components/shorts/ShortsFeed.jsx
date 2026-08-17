@@ -37,12 +37,16 @@ export default function ShortsFeed({ onBack }) {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    getShortsUsage()
-      .then((u) => {
+    // Parallel, not sequential — usage and the feed itself don't depend on
+    // each other, so fetching them together roughly halves the wait.
+    Promise.all([getShortsUsage(), getShorts().catch((e) => ({ __error: e }))])
+      .then(([u, list]) => {
         if (cancelled) return
         setUsage(u)
-        if (u.count >= u.limit) { setBlocked(true); setLoading(false); return }
-        return getShorts().then((list) => { if (!cancelled) { setShorts(list); setError(false) } })
+        if (u.count >= u.limit) { setBlocked(true); return }
+        if (list?.__error) throw list.__error
+        setShorts(list)
+        setError(false)
       })
       .catch((err) => {
         if (cancelled) return
@@ -205,6 +209,15 @@ function MobileReels({ shorts, onBack, usage, registerView }) {
               <p className="text-white text-sm font-medium line-clamp-2">{s.title}</p>
               {s.channelTitle && <p className="text-white/60 text-xs mt-1">{s.channelTitle}</p>}
             </div>
+            {activeIndex === i && (
+              <button
+                onClick={handleEnded}
+                title="Next"
+                className="absolute bottom-24 right-4 z-10 w-10 h-10 rounded-full bg-black/50 backdrop-blur flex items-center justify-center text-white animate-bounce"
+              >
+                <i className="ti ti-chevron-down text-xl" />
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -235,45 +248,36 @@ function DesktopShortsPlayer({ shorts, usage, registerView }) {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-end mb-3">
+    <div className="flex flex-col items-center">
+      <div className="w-full max-w-[300px] flex items-center justify-end mb-2">
         <span className="px-2.5 py-1 rounded-full bg-slate-800/70 border border-slate-700 text-[11px] text-slate-400 tabular-nums">
           {count}/{usage.limit} dekhe
         </span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
-        {/* Player takes whatever space its 9:16 short naturally needs — capped
-            to a sensible max height so it doesn't dominate a wide desktop screen. */}
-        <div className="flex justify-center">
-          <div className="w-full max-w-[380px] aspect-[9/16] rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 relative">
-            {canPlay ? (
-              <ShortPlayer key={current.youtubeId} video={current} onEnded={handleEnded} autoplay fill />
-            ) : (
-              <img src={current.thumbnail} alt="" className="w-full h-full object-cover opacity-60" />
-            )}
-          </div>
-        </div>
+      {/* Single centered player, sized like a real Shorts reel — not the
+          whole page. No "up next" list: feed feels random/auto, like the
+          real YouTube Shorts, not a pre-spoiled queue. */}
+      <div className="w-full max-w-[300px] aspect-[9/16] rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 relative">
+        {canPlay ? (
+          <ShortPlayer key={current.youtubeId} video={current} onEnded={handleEnded} autoplay fill />
+        ) : (
+          <img src={current.thumbnail} alt="" className="w-full h-full object-cover opacity-60" />
+        )}
 
-        <div className="max-h-[600px] overflow-y-auto space-y-2 pr-1">
-          {shorts.map((s, i) => (
-            <button
-              key={s.youtubeId}
-              onClick={() => canPlay && setIndex(i)}
-              className={`w-full flex items-center gap-2 p-1.5 rounded-xl border transition-colors text-left ${
-                i === index ? 'bg-orange-500/10 border-orange-500/40' : 'bg-slate-800/40 border-slate-800 hover:border-slate-700'
-              }`}
-            >
-              <div className="w-12 h-16 rounded-lg overflow-hidden bg-slate-900 shrink-0">
-                <img src={s.thumbnail} alt="" className="w-full h-full object-cover" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-slate-200 line-clamp-2 leading-snug">{s.title}</p>
-                {s.channelTitle && <p className="text-[11px] text-slate-500 truncate mt-0.5">{s.channelTitle}</p>}
-              </div>
-            </button>
-          ))}
-        </div>
+        {/* Manual "next" — downward arrow, same direction as the swipe gesture on mobile */}
+        <button
+          onClick={handleEnded}
+          title="Next"
+          className="absolute bottom-3 right-3 z-10 w-9 h-9 rounded-full bg-black/50 backdrop-blur flex items-center justify-center text-white animate-bounce"
+        >
+          <i className="ti ti-chevron-down text-lg" />
+        </button>
+      </div>
+
+      <div className="w-full max-w-[300px] mt-2 text-center">
+        <p className="text-xs text-slate-300 line-clamp-2">{current.title}</p>
+        {current.channelTitle && <p className="text-[11px] text-slate-500 mt-0.5">{current.channelTitle}</p>}
       </div>
     </div>
   )
