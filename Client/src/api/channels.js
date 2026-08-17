@@ -32,6 +32,24 @@ export async function getShorts() {
   return res.data // [{ youtubeId, title, thumbnail, channelTitle, durationSec }]
 }
 
+// Daily Shorts watch cap (50/day) — see server routes/channels.js.
+export async function getShortsUsage() {
+  const res = await api.get('/channels/shorts/usage')
+  return res.data // { count, limit, date }
+}
+
+export async function incrementShortsUsage() {
+  try {
+    const res = await api.post('/channels/shorts/usage/increment')
+    return res.data // { count, limit, limitReached }
+  } catch (err) {
+    // 429 = limit reached — this is an expected state, not a failure; the
+    // server still sends the same { count, limit, limitReached } payload.
+    if (err.response?.status === 429 && err.response.data) return err.response.data
+    throw err
+  }
+}
+
 export async function addFeedVideoToWatchlist(videoId, { folderId, title, thumbnail, channelTitle }) {
   const res = await api.post('/channels/feed/add', { videoId, folderId, title, thumbnail, channelTitle })
   return res.data

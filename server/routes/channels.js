@@ -10,7 +10,9 @@ import express from 'express'
 import authMiddleware from '../middleware/auth.js'
 import Subscription from '../models/Subscription.js'
 import WatchItem from '../models/WatchItem.js'
+import ShortsUsage from '../models/ShortsUsage.js'
 import { searchChannels, getChannelUploadsPlaylist, fetchLatestUploads, fetchVideoDurations, searchShorts } from '../utils/youtube.js'
+import { getStudyDayString } from '../utils/dayBoundary.js'
 
 const router = express.Router()
 router.use(authMiddleware)
@@ -119,10 +121,53 @@ const SHORTS_QUERIES = [
 // hitting the API again. Resets on server restart, which is fine here.
 const shortsCache = new Map() // query -> { data, at }
 const SHORTS_CACHE_TTL = 30 * 60 * 1000
+const DAILY_SHORTS_LIMIT = 50
+
+// GET /api/channels/shorts/usage → { count, limit, date }
+// Called by the frontend on load to show "X/50 dekhe" and to know upfront
+// whether the feed should even open today.
+router.get('/shorts/usage', async (req, res) => {
+  try {
+    const date = getStudyDayString()
+    const usage = await ShortsUsage.findOne({ userId: req.user.id, date })
+    res.json({ count: usage?.count || 0, limit: DAILY_SHORTS_LIMIT, date })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// POST /api/channels/shorts/usage/increment → call once per Short actually
+// opened/played (not per scroll-past). Rejects once the daily cap is hit,
+// so this is the actual enforcement point, not just the display counter.
+router.post('/shorts/usage/increment', async (req, res) => {
+  try {
+    const date = getStudyDayString()
+    const existing = await ShortsUsage.findOne({ userId: req.user.id, date })
+
+    if (existing && existing.count >= DAILY_SHORTS_LIMIT) {
+      return res.status(429).json({ count: existing.count, limit: DAILY_SHORTS_LIMIT, limitReached: true })
+    }
+
+    const usage = await ShortsUsage.findOneAndUpdate(
+      { userId: req.user.id, date },
+      { $inc: { count: 1 } },
+      { new: true, upsert: true }
+    )
+    res.json({ count: usage.count, limit: DAILY_SHORTS_LIMIT, limitReached: usage.count >= DAILY_SHORTS_LIMIT })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
 
 // GET /api/channels/shorts   → curated motivation/education Shorts feed
 router.get('/shorts', async (req, res) => {
   try {
+    const date = getStudyDayString()
+    const usage = await ShortsUsage.findOne({ userId: req.user.id, date })
+    if (usage && usage.count >= DAILY_SHORTS_LIMIT) {
+      return res.status(429).json({ error: 'Aaj ka Shorts limit khatam ho gaya', limitReached: true, count: usage.count, limit: DAILY_SHORTS_LIMIT })
+    }
+
     const query = SHORTS_QUERIES[Math.floor(Math.random() * SHORTS_QUERIES.length)]
 
     const cached = shortsCache.get(query)

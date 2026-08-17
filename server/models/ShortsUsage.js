@@ -1,0 +1,15 @@
+// server/models/ShortsUsage.js
+// One document per user per study-day (see utils/dayBoundary.js — resets
+// at 3am IST, same boundary as Todo/Timer, not plain midnight). Tracks how
+// many distinct Shorts the user has opened today, to enforce the daily cap.
+import mongoose from 'mongoose'
+
+const shortsUsageSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  date:   { type: String, required: true }, // getStudyDayString(), e.g. "2026-08-17"
+  count:  { type: Number, default: 0 },
+}, { timestamps: true })
+
+shortsUsageSchema.index({ userId: 1, date: 1 }, { unique: true })
+
+export default mongoose.model('ShortsUsage', shortsUsageSchema)
