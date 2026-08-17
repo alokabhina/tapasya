@@ -194,25 +194,27 @@ export default function YTHub() {
     <div className="p-3 sm:p-6 max-w-6xl mx-auto pb-24">
       <ToastStack toasts={toasts} />
 
-      {/* ── Header ── */}
-      <div className="relative mb-5 rounded-2xl overflow-hidden border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-orange-950/30">
-        <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
-        <div className="relative px-4 sm:px-6 py-4 sm:py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-orange-500/15 border border-orange-500/20 flex items-center justify-center shrink-0">
-              <i className="ti ti-brand-youtube text-orange-400 text-2xl" />
+      {/* ── Header — hidden on Shorts so the player fits in one frame ── */}
+      {tab !== 'shorts' && (
+        <div className="relative mb-5 rounded-2xl overflow-hidden border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-orange-950/30">
+          <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
+          <div className="relative px-4 sm:px-6 py-4 sm:py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-orange-500/15 border border-orange-500/20 flex items-center justify-center shrink-0">
+                <i className="ti ti-brand-youtube text-orange-400 text-2xl" />
+              </div>
+              <div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-100">YT Study Pathsala</h2>
+                <p className="text-xs text-slate-500">Distraction-free video study, all in one place</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg sm:text-xl font-bold text-slate-100">YT Study Pathsala</h2>
-              <p className="text-xs text-slate-500">Distraction-free video study, all in one place</p>
-            </div>
+            <WatchStatsWidget stats={stats} />
           </div>
-          <WatchStatsWidget stats={stats} />
         </div>
-      </div>
+      )}
 
       {/* ── Tabs ── */}
-      <div className="flex items-center gap-1 mb-5 border-b border-slate-800 overflow-x-auto no-scrollbar sticky top-0 bg-[#0f172a] z-10 -mx-3 px-3 sm:mx-0 sm:px-0">
+      <div className={`flex items-center gap-1 border-b border-slate-800 overflow-x-auto no-scrollbar sticky top-0 bg-[#0f172a] z-10 -mx-3 px-3 sm:mx-0 sm:px-0 ${tab === 'shorts' ? 'mb-2' : 'mb-5'}`}>
         {TABS.map((t) => (
           <button
             key={t.id}

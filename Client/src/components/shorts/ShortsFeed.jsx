@@ -283,12 +283,20 @@ function DesktopShortsPlayer({ shorts, usage, registerView }) {
   )
 }
 
+// Module-level (not component state) so it survives ShortPlayer being
+// torn down and recreated for every new video. Starts true because
+// autoplay-with-sound is blocked until the user explicitly unmutes once —
+// after that, the choice should stick for the rest of the session instead
+// of resetting back to muted on every single Short.
+let sessionMuted = true
+
 // ── Shared player: mounts a real YT.Player, autoplays muted (browser
-// requirement), tap anywhere to unmute, fires onEnded to advance/loop ──────
+// requirement), tap anywhere to unmute — stays unmuted for later Shorts
+// too, once toggled. Fires onEnded to advance/loop. ──────────────────────
 function ShortPlayer({ video, onEnded, fill }) {
   const containerRef = useRef(null)
   const playerRef = useRef(null)
-  const [muted, setMuted] = useState(true)
+  const [muted, setMuted] = useState(sessionMuted)
 
   useEffect(() => {
     let cancelled = false
@@ -296,10 +304,33 @@ function ShortPlayer({ video, onEnded, fill }) {
       if (cancelled || !containerRef.current) return
       playerRef.current = new window.YT.Player(containerRef.current, {
         videoId: video.youtubeId,
-        playerVars: { autoplay: 1, mute: 1, playsinline: 1, controls: 1, rel: 0, modestbranding: 1 },
+        playerVars: {
+          autoplay: 1,
+          // Request the ACTUAL desired mute state up front, not always
+          // muted-then-unmuted-after. Once the user has unmuted once this
+          // session, the browser already has the "user engaged with this
+          // page, autoplay-with-sound is fine" signal — asking for mute:0
+          // directly at creation honours that far more reliably than
+          // calling unMute() after the fact, which some browsers ignore.
+          mute: sessionMuted ? 1 : 0,
+          playsinline: 1,
+          controls: 0, // hide YouTube's own overlapping mute/CC icons — ours is the only control
+          rel: 0,
+          modestbranding: 1,
+        },
         events: {
+          onReady: (e) => {
+            if (!sessionMuted) { e.target.unMute(); e.target.setVolume(100) }
+            setMuted(sessionMuted)
+          },
           onStateChange: (e) => {
             if (e.data === window.YT.PlayerState.ENDED) onEnded?.()
+            // Safety net: if we intended unmuted but the player still
+            // reports muted (a stricter browser silently reverted it),
+            // re-apply once playback has actually begun.
+            if (e.data === window.YT.PlayerState.PLAYING && !sessionMuted && e.target.isMuted?.()) {
+              e.target.unMute(); e.target.setVolume(100)
+            }
           },
         },
       })
@@ -313,8 +344,10 @@ function ShortPlayer({ video, onEnded, fill }) {
   function toggleMute() {
     const p = playerRef.current
     if (!p) return
-    if (muted) { p.unMute(); p.setVolume(100); setMuted(false) }
-    else { p.mute(); setMuted(true) }
+    const next = !muted
+    if (next === false) { p.unMute(); p.setVolume(100) } else { p.mute() }
+    sessionMuted = next // remember for every Short that plays after this one
+    setMuted(next)
   }
 
   return (
