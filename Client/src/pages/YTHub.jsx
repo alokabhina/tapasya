@@ -11,7 +11,7 @@ import WatchStatsWidget from '@/components/watch/WatchStatsWidget'
 import WatchListGrid from '@/components/watch/WatchListGrid'
 import VideoGridSkeleton from '@/components/watch/VideoGridSkeleton'
 import AddLinkModal from '@/components/watch/AddLinkModal'
-import VideoPlayerModal from '@/components/watch/VideoPlayerModal'
+import useWatchPlayerStore from '@/store/watchPlayerStore'
 import ShareModal from '@/components/watch/ShareModal'
 import RedeemCodeBar from '@/components/watch/RedeemCodeBar'
 import ChannelSearchBar from '@/components/channels/ChannelSearchBar'
@@ -39,7 +39,8 @@ export default function YTHub() {
   const [loading, setLoading] = useState(true)
   const [folderFilter, setFolderFilter] = useState('all')
   const [addOpen, setAddOpen] = useState(false)
-  const [playingItem, setPlayingItem] = useState(null)
+  const playWatchItem = useWatchPlayerStore((s) => s.play)
+  const lastCompleted = useWatchPlayerStore((s) => s.lastCompleted)
   const [sharingItem, setSharingItem] = useState(null)
 
   const [selectMode, setSelectMode] = useState(false)
@@ -133,10 +134,13 @@ export default function YTHub() {
     exitSelectMode()
   }
 
-  function handleCompletedInPlayer(item) {
-    setItems((prev) => prev.map((i) => (i._id === item._id ? { ...i, completed: true } : i)))
+  // The player is global (lives in App.jsx so it can float across pages),
+  // so we react to its "completed" signal here instead of owning it directly.
+  useEffect(() => {
+    if (!lastCompleted?.itemId) return
+    setItems((prev) => prev.map((i) => (i._id === lastCompleted.itemId ? { ...i, completed: true } : i)))
     getWatchStats().then(setStats).catch(() => {})
-  }
+  }, [lastCompleted])
 
   // ── Channel Feed tab state ───────────────────────────────────────────
   const [subs, setSubs] = useState([])
@@ -294,7 +298,7 @@ export default function YTHub() {
           ) : (
             <WatchListGrid
               items={items}
-              onPlay={setPlayingItem}
+              onPlay={(item) => playWatchItem(item, items)}
               onToggleComplete={handleToggleComplete}
               onShare={setSharingItem}
               onDelete={handleDelete}
@@ -368,16 +372,6 @@ export default function YTHub() {
         defaultFolderId={folderFilter !== 'all' ? folderFilter : undefined}
         onToast={pushToast}
       />
-
-      {playingItem && (
-        <VideoPlayerModal
-          item={playingItem}
-          queue={items}
-          onClose={() => setPlayingItem(null)}
-          onCompleted={handleCompletedInPlayer}
-          onPlayNext={setPlayingItem}
-        />
-      )}
 
       {sharingItem && (
         <ShareModal item={sharingItem} onClose={() => setSharingItem(null)} />

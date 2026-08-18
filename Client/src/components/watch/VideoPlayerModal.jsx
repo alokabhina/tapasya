@@ -10,13 +10,16 @@ import { useAutoLandscapeFullscreen } from '@/hooks/useAutoLandscapeFullscreen'
 
 const PROGRESS_SAVE_INTERVAL_MS = 15000
 
-export default function VideoPlayerModal({ item, queue = [], onClose, onCompleted, onPlayNext }) {
+export default function VideoPlayerModal({ item, queue = [], minimized = false, onClose, onCompleted, onPlayNext, onMinimize, onExpand }) {
   const containerRef = useRef(null)
   const playerRef = useRef(null)
   const lastSavedRef = useRef(0)
+  const lastSaveWallClockRef = useRef(Date.now()) // real-world clock, to clamp deltaSeconds
   const intervalRef = useRef(null)
   const [ready, setReady] = useState(false)
 
+  // Auto-landscape-fullscreen only makes sense for the full player, not
+  // while it's a small floating corner box.
   useAutoLandscapeFullscreen()
 
   useEffect(() => {
@@ -30,6 +33,7 @@ export default function VideoPlayerModal({ item, queue = [], onClose, onComplete
       ? Math.max(0, Math.floor(item.watchedSeconds) - 2)
       : 0
     lastSavedRef.current = resumeAt
+    lastSaveWallClockRef.current = Date.now()
 
     function createPlayer() {
       playerRef.current = new window.YT.Player(containerRef.current, {
@@ -44,12 +48,12 @@ export default function VideoPlayerModal({ item, queue = [], onClose, onComplete
         events: {
           onReady: () => setReady(true),
           onStateChange: (e) => {
+            clearInterval(intervalRef.current) // avoid stacking intervals on repeated play events
             if (e.data === window.YT.PlayerState.PLAYING) {
               intervalRef.current = setInterval(saveProgress, PROGRESS_SAVE_INTERVAL_MS)
-            } else {
-              clearInterval(intervalRef.current)
             }
             if (e.data === window.YT.PlayerState.ENDED) {
+              saveProgress() // capture the last few seconds before marking complete
               handleComplete()
             }
           },
@@ -60,10 +64,13 @@ export default function VideoPlayerModal({ item, queue = [], onClose, onComplete
     if (window.YT && window.YT.Player) {
       createPlayer()
     } else {
-      const tag = document.createElement('script')
-      tag.src = 'https://www.youtube.com/iframe_api'
-      document.body.appendChild(tag)
-      window.onYouTubeIframeAPIReady = createPlayer
+      const prevReady = window.onYouTubeIframeAPIReady
+      window.onYouTubeIframeAPIReady = () => { prevReady?.(); createPlayer() }
+      if (!document.querySelector('script[src*="iframe_api"]')) {
+        const tag = document.createElement('script')
+        tag.src = 'https://www.youtube.com/iframe_api'
+        document.body.appendChild(tag)
+      }
     }
 
     return () => {
@@ -83,8 +90,19 @@ export default function VideoPlayerModal({ item, queue = [], onClose, onComplete
 
   function saveProgress() {
     if (!playerRef.current?.getCurrentTime) return
+
+    const now = Date.now()
+    const wallClockElapsed = (now - lastSaveWallClockRef.current) / 1000
+    lastSaveWallClockRef.current = now
+
     const currentTime = Math.floor(playerRef.current.getCurrentTime())
-    const delta = Math.max(0, currentTime - lastSavedRef.current)
+    let delta = Math.max(0, currentTime - lastSavedRef.current)
+    // Hard safety cap: we can never have genuinely watched more seconds
+    // than have actually elapsed in real time since the last save. This
+    // catches any getCurrentTime() glitch (buffering, seeking, a stray
+    // read right at video end) that would otherwise inflate watch stats
+    // — e.g. reporting a full video's length after only a 2-minute open.
+    delta = Math.min(delta, Math.ceil(wallClockElapsed) + 2)
     lastSavedRef.current = currentTime
     if (delta > 0) {
       updateWatchProgress(item._id, { watchedSeconds: currentTime, deltaSeconds: delta }).catch(() => {})
@@ -104,19 +122,36 @@ export default function VideoPlayerModal({ item, queue = [], onClose, onComplete
   const next = currentIndex >= 0 ? queue[currentIndex + 1] : null
 
   return (
-    <div className="fixed inset-0 z-[110] bg-black/95 flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 gap-3">
+    <div
+      className={
+        minimized
+          ? 'fixed bottom-4 right-4 z-[110] w-64 sm:w-80 rounded-xl overflow-hidden shadow-2xl shadow-black/60 border border-slate-800 bg-black'
+          : 'fixed inset-0 z-[110] bg-black/95 flex flex-col'
+      }
+    >
+      <div className={minimized ? 'flex items-center justify-between px-2 py-1.5 bg-slate-900 gap-2' : 'flex items-center justify-between px-4 py-3 border-b border-slate-800 gap-3'}>
         <div className="min-w-0">
-          <p className="text-sm text-slate-200 truncate">{item.title}</p>
-          {item.channelTitle && <p className="text-xs text-slate-500 truncate">{item.channelTitle}</p>}
+          <p className={minimized ? 'text-xs text-slate-300 truncate' : 'text-sm text-slate-200 truncate'}>{item.title}</p>
+          {!minimized && item.channelTitle && <p className="text-xs text-slate-500 truncate">{item.channelTitle}</p>}
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-white shrink-0 w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center">
-          <i className="ti ti-x text-2xl" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {minimized ? (
+            <button onClick={onExpand} title="Expand" className="text-slate-400 hover:text-white w-7 h-7 rounded-md hover:bg-slate-800 flex items-center justify-center">
+              <i className="ti ti-arrows-maximize text-base" />
+            </button>
+          ) : (
+            <button onClick={onMinimize} title="Minimize — video chalta rahega" className="text-slate-400 hover:text-white w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center">
+              <i className="ti ti-minus text-2xl" />
+            </button>
+          )}
+          <button onClick={onClose} title="Close" className={minimized ? 'text-slate-400 hover:text-white w-7 h-7 rounded-md hover:bg-slate-800 flex items-center justify-center' : 'text-slate-400 hover:text-white shrink-0 w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center'}>
+            <i className={minimized ? 'ti ti-x text-base' : 'ti ti-x text-2xl'} />
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-2 sm:p-6 min-h-0">
-        <div className="w-full max-w-4xl aspect-video bg-black relative">
+      <div className={minimized ? 'w-full' : 'flex-1 flex items-center justify-center p-2 sm:p-6 min-h-0'}>
+        <div className={minimized ? 'w-full aspect-video bg-black relative' : 'w-full max-w-4xl aspect-video bg-black relative'}>
           <div ref={containerRef} className="w-full h-full" />
           {!ready && (
             <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
@@ -126,7 +161,7 @@ export default function VideoPlayerModal({ item, queue = [], onClose, onComplete
         </div>
       </div>
 
-      {next && (
+      {!minimized && next && (
         <div className="flex items-center justify-center px-4 py-3 border-t border-slate-800">
           <button
             onClick={() => onPlayNext(next)}

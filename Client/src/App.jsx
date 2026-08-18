@@ -13,6 +13,8 @@ import Sidebar    from './components/layout/Sidebar';
 import BottomNav  from './components/layout/BottomNav';
 import MiniPlayer from './components/layout/MiniPlayer';
 import WhatsNewModal from './components/whatsnew/WhatsNewModal';
+import VideoPlayerModal from './components/watch/VideoPlayerModal';
+import useWatchPlayerStore from './store/watchPlayerStore';
 
 // Pages (lazy imports for code-splitting)
 import { lazy, Suspense } from 'react';
@@ -205,7 +207,31 @@ export default function App() {
         </Routes>
         {/* MiniPlayer globally — persists across ALL routes including /timer */}
         <MiniPlayer />
+        {/* Watchlist video player, globally — same reasoning: outside Routes so
+            minimizing it and navigating to Todo/Stats/etc keeps it playing,
+            exactly like YouTube's own miniplayer. */}
+        <GlobalWatchPlayer />
       </Suspense>
     </div>
   );
+}
+
+// Reads the video-player store and renders VideoPlayerModal only when
+// something is actually playing — kept as its own component so App()
+// doesn't re-render on every store change.
+function GlobalWatchPlayer() {
+  const { item, queue, minimized, close, minimize, expand, playNext, markCompleted } = useWatchPlayerStore()
+  if (!item) return null
+  return (
+    <VideoPlayerModal
+      item={item}
+      queue={queue}
+      minimized={minimized}
+      onClose={close}
+      onMinimize={minimize}
+      onExpand={expand}
+      onPlayNext={playNext}
+      onCompleted={(completedItem) => markCompleted(completedItem._id)}
+    />
+  )
 }
