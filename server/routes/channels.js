@@ -82,16 +82,29 @@ router.get('/feed', async (req, res) => {
       .filter((v) => {
         const meta = info[v.videoId]
         if (!meta) return false
-        return meta.isLive || meta.durationSec > 60 // Shorts are always <=60s
+        // Shorts are always <=60s — but a scheduled/upcoming stream often
+        // reports 0 duration until it actually airs, so it must be kept
+        // regardless of durationSec, not just live ones.
+        return meta.isLive || meta.isUpcoming || meta.durationSec > 60
       })
       .slice(0, 24)
       .map((v) => ({
         ...v,
         durationSec: info[v.videoId]?.durationSec || 0,
         isLive: info[v.videoId]?.isLive || false,
+        isUpcoming: info[v.videoId]?.isUpcoming || false,
+        scheduledStartTime: info[v.videoId]?.scheduledStartTime || null,
+        publishedAt: info[v.videoId]?.publishedAt || v.publishedAt,
         channelTitle: sub.channelTitle,
         folderId: sub.folderId,
       }))
+      // Priority: truly live first, then most recently uploaded — a
+      // 10-day-out scheduled stream should NOT jump the queue just for
+      // being "upcoming", only genuinely live or freshly-published content does.
+      .sort((a, b) => {
+        if (a.isLive !== b.isLive) return a.isLive ? -1 : 1
+        return new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0)
+      })
 
     res.json(fullVideosOnly)
   } catch (e) {
@@ -128,7 +141,9 @@ const SHORTS_QUERIES = [
 // hitting the API again. Resets on server restart, which is fine here.
 const shortsCache = new Map() // query -> { data, at }
 const SHORTS_CACHE_TTL = 30 * 60 * 1000
-const DAILY_SHORTS_LIMIT = 50
+const DAILY_SHORTS_LIMIT = 40
+const BATCH_SIZE = 10
+const BATCH_COOLDOWN_MS = 2 * 60 * 60 * 1000 // 2 hours between batches of 10
 
 // Time-bucketed pick instead of Math.random(): everyone hitting the feed
 // within the same 30-min window gets the SAME query, so after the first
@@ -144,20 +159,39 @@ async function getShortsForQuery(query) {
   const cached = shortsCache.get(query)
   if (cached && Date.now() - cached.at < SHORTS_CACHE_TTL) return cached.data
 
-  const shorts = await searchShorts(query)
+  // Fetch enough for a whole day's worth of batches (4 × 10), not just one
+  // batch's worth — so later batches in the same day are actually
+  // different videos, not the same 10 repeated.
+  const shorts = await searchShorts(query, { maxResults: 40 })
   const shuffled = [...shorts].sort(() => Math.random() - 0.5) // light shuffle, avoids identical order every time
   shortsCache.set(query, { data: shuffled, at: Date.now() })
   return shuffled
 }
 
-// GET /api/channels/shorts/usage → { count, limit, date }
-// Called by the frontend on load to show "X/50 dekhe" and to know upfront
-// whether the feed should even open today.
+// Slices `count` items starting at `offset`, wrapping around if the pool
+// is smaller than needed — guarantees a full batch even on a thin day.
+function sliceWithWrap(arr, offset, count) {
+  if (!arr.length) return []
+  const out = []
+  for (let i = 0; i < count; i++) out.push(arr[(offset + i) % arr.length])
+  return out
+}
+
+// GET /api/channels/shorts/usage → { count, limit, date, batchOnCooldown, nextBatchAt }
+// Called by the frontend on load to show "X/40 dekhe" and to know upfront
+// whether the feed should even open today / this batch window.
 router.get('/shorts/usage', async (req, res) => {
   try {
     const date = getStudyDayString()
     const usage = await ShortsUsage.findOne({ userId: req.user.id, date })
-    res.json({ count: usage?.count || 0, limit: DAILY_SHORTS_LIMIT, date })
+    const nextBatchAt = usage?.lastBatchAt ? new Date(usage.lastBatchAt.getTime() + BATCH_COOLDOWN_MS) : null
+    res.json({
+      count: usage?.count || 0,
+      limit: DAILY_SHORTS_LIMIT,
+      date,
+      batchOnCooldown: !!(nextBatchAt && nextBatchAt > new Date()),
+      nextBatchAt,
+    })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -186,16 +220,57 @@ router.post('/shorts/usage/increment', async (req, res) => {
   }
 })
 
-// GET /api/channels/shorts   → curated motivation/education Shorts feed
+// GET /api/channels/shorts   → curated motivation/education Shorts feed,
+// max 10 at a time (see BATCH_SIZE) — next batch only after BATCH_COOLDOWN_MS
+// of the PREVIOUS batch being fully watched (reloading mid-batch just
+// re-serves the same unfinished batch, it doesn't reset any cooldown).
 router.get('/shorts', async (req, res) => {
   try {
     const date = getStudyDayString()
     const usage = await ShortsUsage.findOne({ userId: req.user.id, date })
+
     if (usage && usage.count >= DAILY_SHORTS_LIMIT) {
       return res.status(429).json({ error: 'Aaj ka Shorts limit khatam ho gaya', limitReached: true, count: usage.count, limit: DAILY_SHORTS_LIMIT })
     }
 
-    const shorts = await getShortsForQuery(currentShortsQuery())
+    const watchedInBatch = (usage?.count || 0) - (usage?.lastBatchStartCount || 0)
+    const batchExhausted = !usage?.lastBatchAt || watchedInBatch >= (usage?.lastBatchSize || 0)
+
+    if (!batchExhausted) {
+      // Still videos left in the current batch — just re-serve it, no
+      // cooldown involved (this is what makes a page reload mid-batch safe).
+      const all = await getShortsForQuery(currentShortsQuery())
+      const offset = (usage.batchesIssuedToday - 1) * BATCH_SIZE
+      return res.json(sliceWithWrap(all, offset, usage.lastBatchSize))
+    }
+
+    // Current batch is fully watched — a NEW batch needs the cooldown to have passed.
+    if (usage?.lastBatchAt) {
+      const nextBatchAt = new Date(usage.lastBatchAt.getTime() + BATCH_COOLDOWN_MS)
+      if (nextBatchAt > new Date()) {
+        return res.status(429).json({ error: '2 ghante baad agla batch milega', batchOnCooldown: true, nextBatchAt, count: usage.count, limit: DAILY_SHORTS_LIMIT })
+      }
+    }
+
+    const remaining = DAILY_SHORTS_LIMIT - (usage?.count || 0)
+    const batchSize = Math.max(1, Math.min(BATCH_SIZE, remaining))
+    const batchesIssuedToday = (usage?.batchesIssuedToday || 0) + 1
+
+    const all = await getShortsForQuery(currentShortsQuery())
+    const offset = (batchesIssuedToday - 1) * BATCH_SIZE
+    const shorts = sliceWithWrap(all, offset, batchSize)
+
+    await ShortsUsage.findOneAndUpdate(
+      { userId: req.user.id, date },
+      {
+        lastBatchAt: new Date(),
+        lastBatchStartCount: usage?.count || 0,
+        lastBatchSize: batchSize,
+        batchesIssuedToday,
+      },
+      { upsert: true }
+    )
+
     res.json(shorts)
 
     // Fire-and-forget: warm next bucket's query in the background so that

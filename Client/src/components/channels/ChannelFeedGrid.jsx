@@ -18,6 +18,15 @@ function timeAgo(dateStr) {
   return `${days}d pehle`
 }
 
+function formatScheduled(dateStr) {
+  if (!dateStr) return 'Scheduled'
+  const diff = new Date(dateStr).getTime() - Date.now()
+  const days = Math.round(diff / 86400000)
+  if (days <= 0) return 'Aaj/kal'
+  if (days === 1) return 'Kal'
+  return `${days}d mein`
+}
+
 // Small popover: pick an existing folder or create a new one on the fly.
 function FolderPickerPopover({ video, folders, onPick, onFolderCreated, onClose }) {
   const ref = useRef(null)
@@ -193,8 +202,13 @@ export default function ChannelFeedGrid({ feed, folders = [], onPlay, onAddedToW
                       <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE
                     </span>
                   )}
+                  {!v.isLive && v.isUpcoming && (
+                    <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-slate-700/90 text-[10px] text-slate-200 font-medium flex items-center gap-1">
+                      <i className="ti ti-calendar-event text-[10px]" /> {formatScheduled(v.scheduledStartTime)}
+                    </span>
+                  )}
                   <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 text-[11px] text-white">
-                    {v.isLive ? 'LIVE' : timeAgo(v.publishedAt)}
+                    {v.isLive ? 'LIVE' : v.isUpcoming ? 'Upcoming' : timeAgo(v.publishedAt)}
                   </span>
                 </div>
                 <div className="p-2">

@@ -170,13 +170,19 @@ export async function fetchVideoDurations(videoIds = []) {
     const chunk = videoIds.slice(i, i + 50)
     if (!chunk.length) continue
     const data = await ytFetch('videos', {
-      part: 'contentDetails,snippet',
+      part: 'contentDetails,snippet,liveStreamingDetails',
       id: chunk.join(','),
     })
     for (const it of data.items || []) {
       info[it.id] = {
         durationSec: parseISODuration(it.contentDetails.duration),
-        isLive: it.snippet?.liveBroadcastContent === 'live' || it.snippet?.liveBroadcastContent === 'upcoming',
+        // Only a currently-live stream counts as "live". 'upcoming' means
+        // scheduled for later (could be days away) — that must NOT show a
+        // LIVE tag, it needs its own "Scheduled" treatment.
+        isLive: it.snippet?.liveBroadcastContent === 'live',
+        isUpcoming: it.snippet?.liveBroadcastContent === 'upcoming',
+        scheduledStartTime: it.liveStreamingDetails?.scheduledStartTime || null,
+        publishedAt: it.snippet?.publishedAt || null,
       }
     }
   }
