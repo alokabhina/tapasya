@@ -51,11 +51,11 @@ function getCloudinary() {
   return cloud
 }
 
-function uploadPdfToCloudinary(buffer, publicId) {
+function uploadPdfToCloudinary(buffer, publicId, { overwrite = false } = {}) {
   return new Promise((resolve, reject) => {
     const cloud = getCloudinary()
     const stream = cloud.uploader.upload_stream(
-      { folder: 'tapasya/pdfs', resource_type: 'raw', public_id: publicId, format: 'pdf' },
+      { folder: 'tapasya/pdfs', resource_type: 'raw', public_id: publicId, format: 'pdf', overwrite, invalidate: overwrite },
       (error, result) => { if (error) return reject(error); resolve(result) }
     )
     Readable.from(buffer).pipe(stream)
@@ -177,8 +177,14 @@ router.post('/:id/annotated', handleUpload, async (req, res) => {
     }
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
-    const publicId = `${req.user.id}-${doc._id}-annotated-${Date.now()}`
-    const result = await uploadPdfToCloudinary(req.file.buffer, publicId)
+    // Stable public_id (no timestamp) + overwrite — every save from now on
+    // replaces this SAME Cloudinary file in place. Doesn't matter how many
+    // times you re-annotate and save, it's always the one "annotated" slot,
+    // never a growing pile of files.
+    const publicId = String(doc.userId) === req.user.id
+      ? `${doc._id}-annotated`
+      : `${doc._id}-annotated-${req.user.id}` // personal layer for a global doc
+    const result = await uploadPdfToCloudinary(req.file.buffer, publicId, { overwrite: true })
 
     if (String(doc.userId) === req.user.id) {
       doc.annotatedUrl = result.secure_url

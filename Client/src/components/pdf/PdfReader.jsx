@@ -54,17 +54,26 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   const pdfDocRef = useRef(null)       // pdf.js document proxy (for viewing)
   const drawingRef = useRef(false)
   const currentStrokeRef = useRef(null)
+  const viewerContainerRef = useRef(null) // the stable, full-width scroll area — NOT the canvas wrapper
 
   const [libsReady, setLibsReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [numPages, setNumPages] = useState(0)
   const [pageNum, setPageNum] = useState(1)
+  const [zoom, setZoom] = useState(1) // multiplier on top of the fit-to-width base scale
   const [tool, setTool] = useState('pen') // 'pen' | 'marker' | 'eraser'
   const [color, setColor] = useState(COLORS[0].hex)
   const [annotations, setAnnotations] = useState({}) // { [pageNum]: Stroke[] }
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false) // any unsaved strokes since last save
+  const [downloading, setDownloading] = useState(false)
+  // Which file we're viewing/building on top of. Default to continuing on
+  // the existing annotated version (if any) so previous markup isn't lost —
+  // new strokes just add to it, and saving updates that SAME file. Switch
+  // to 'original' to start fresh from the clean, untouched copy instead.
+  const [editingSource, setEditingSource] = useState(doc.annotatedUrl ? 'annotated' : 'original')
+  const sourceUrl = editingSource === 'annotated' && doc.annotatedUrl ? doc.annotatedUrl : doc.originalUrl
 
   // ── Load pdf.js + pdf-lib, then the PDF itself ──────────────────────────
   useEffect(() => {
@@ -79,7 +88,8 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     if (!libsReady) return
     let cancelled = false
     setLoading(true)
-    fetch(doc.originalUrl)
+    setAnnotations({}) // fresh strokes for this editing session — the base PDF already carries prior markup if 'annotated' was picked
+    fetch(sourceUrl)
       .then((r) => {
         if (!r.ok) throw new Error(`PDF fetch failed: HTTP ${r.status}`)
         return r.arrayBuffer()
@@ -99,17 +109,22 @@ export default function PdfReader({ doc, onClose, onSaved }) {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [libsReady, doc.originalUrl])
+  }, [libsReady, sourceUrl])
 
   // ── Render the current page onto the base canvas ────────────────────────
   const renderPage = useCallback(async () => {
     const pdf = pdfDocRef.current
-    if (!pdf || !baseCanvasRef.current || !overlayCanvasRef.current) return
+    if (!pdf || !baseCanvasRef.current || !overlayCanvasRef.current || !viewerContainerRef.current) return
     const page = await pdf.getPage(pageNum)
-    const containerWidth = Math.min(baseCanvasRef.current.parentElement.clientWidth, 900)
+
+    // Measure the STABLE outer container, not the canvas's immediate
+    // wrapper — that wrapper shrink-wraps to the canvas's own size, which
+    // was the bug: it kept measuring the canvas's default ~300px width
+    // right back at itself instead of the actual available screen space.
+    const available = viewerContainerRef.current.clientWidth - 32 // minus container padding
     const unscaledViewport = page.getViewport({ scale: 1 })
-    const scale = containerWidth / unscaledViewport.width
-    const viewport = page.getViewport({ scale })
+    const fitScale = Math.min(available, 1100) / unscaledViewport.width
+    const viewport = page.getViewport({ scale: fitScale * zoom })
 
     for (const canvas of [baseCanvasRef.current, overlayCanvasRef.current]) {
       canvas.width = viewport.width
@@ -120,9 +135,17 @@ export default function PdfReader({ doc, onClose, onSaved }) {
 
     await page.render({ canvasContext: baseCanvasRef.current.getContext('2d'), viewport }).promise
     redrawOverlay()
-  }, [pageNum]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pageNum, zoom]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { renderPage() }, [renderPage])
+
+  // Re-fit when the window/panel is resized (e.g. rotating a tablet, or
+  // resizing the browser) — otherwise the page stays sized for the old width.
+  useEffect(() => {
+    function onResize() { renderPage() }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [renderPage])
 
   // ── Redraw the overlay canvas from stored strokes for this page ─────────
   function redrawOverlay() {
@@ -215,12 +238,17 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     }
   }
 
-  // ── Export: fresh original bytes + all strokes drawn as vector lines ────
+  // ── Export: builds on top of the current editing base (original or the
+  // existing annotated copy) so previous markup isn't lost — new strokes
+  // just add to it. The base is only ever READ here, never modified; the
+  // export always goes out as a brand new blob to the SAME annotated slot
+  // (server overwrites it in place — see routes/pdfs.js), so re-saving
+  // never creates extra files, just updates the one "annotated" copy.
   async function handleSaveAnnotated() {
     setSaving(true)
     try {
       const { PDFDocument, rgb, LineCapStyle } = window.PDFLib
-      const bytes = await fetch(doc.originalUrl).then((r) => r.arrayBuffer()) // fresh copy — original untouched
+      const bytes = await fetch(sourceUrl).then((r) => r.arrayBuffer())
       const pdfLibDoc = await PDFDocument.load(bytes)
       const pages = pdfLibDoc.getPages()
 
@@ -258,6 +286,33 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     }
   }
 
+  function switchSource(next) {
+    if (next === editingSource) return
+    if (dirty && !confirm('Abhi ke unsaved marks chhoot jayenge agar switch karo. Continue?')) return
+    setEditingSource(next)
+  }
+
+  async function handleDownload() {
+    setDownloading(true)
+    try {
+      // fetch + blob + object URL — works reliably regardless of whether
+      // Cloudinary's response sets Content-Disposition:attachment or not.
+      const blob = await fetch(sourceUrl).then((r) => r.blob())
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${doc.title}${editingSource === 'annotated' ? ' (marked)' : ''}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Download nahi ho paya, dobara try karo')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const currentPageHasAnnotations = (annotations[pageNum] || []).length > 0
 
   return (
@@ -272,15 +327,29 @@ export default function PdfReader({ doc, onClose, onSaved }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {doc.annotatedUrl && (
-            <a
-              href={doc.annotatedUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-300"
-            >
-              <i className="ti ti-pencil text-orange-400" /> Marked version
-            </a>
+            <div className="hidden sm:flex items-center rounded-lg bg-slate-800 border border-slate-700 p-0.5 text-xs">
+              <button
+                onClick={() => switchSource('original')}
+                className={`px-2.5 py-1.5 rounded-md transition-colors ${editingSource === 'original' ? 'bg-slate-700 text-slate-100' : 'text-slate-400'}`}
+              >
+                Original
+              </button>
+              <button
+                onClick={() => switchSource('annotated')}
+                className={`px-2.5 py-1.5 rounded-md transition-colors flex items-center gap-1 ${editingSource === 'annotated' ? 'bg-orange-500/20 text-orange-400' : 'text-slate-400'}`}
+              >
+                <i className="ti ti-pencil text-xs" /> Annotated
+              </button>
+            </div>
           )}
+          <button
+            onClick={handleDownload}
+            disabled={downloading}
+            title="Download"
+            className="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-50 flex items-center justify-center"
+          >
+            {downloading ? <div className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" /> : <i className="ti ti-download text-base" />}
+          </button>
           <button
             onClick={handleSaveAnnotated}
             disabled={saving || !dirty}
@@ -321,6 +390,29 @@ export default function PdfReader({ doc, onClose, onSaved }) {
           />
         ))}
         <div className="flex-1" />
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.2).toFixed(2)))}
+            title="Zoom out"
+            className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-400 flex items-center justify-center"
+          >
+            <i className="ti ti-zoom-out text-sm" />
+          </button>
+          <button
+            onClick={() => setZoom(1)}
+            title="Reset zoom"
+            className="px-2 h-8 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-400 text-[11px] tabular-nums min-w-[42px]"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            onClick={() => setZoom((z) => Math.min(3, +(z + 0.2).toFixed(2)))}
+            title="Zoom in"
+            className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-400 flex items-center justify-center"
+          >
+            <i className="ti ti-zoom-in text-sm" />
+          </button>
+        </div>
         {currentPageHasAnnotations && (
           <button
             onClick={() => { setAnnotations((prev) => ({ ...prev, [pageNum]: [] })); setDirty(true) }}
@@ -332,7 +424,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
       </div>
 
       {/* Page canvas */}
-      <div className="flex-1 overflow-auto flex items-start justify-center p-3 sm:p-6">
+      <div ref={viewerContainerRef} className="flex-1 overflow-auto flex items-start justify-center p-3 sm:p-6">
         {loading && (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500">
             <div className="w-8 h-8 rounded-full border-2 border-slate-700 border-t-orange-500 animate-spin mb-3" />
