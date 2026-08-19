@@ -10,15 +10,12 @@ import Avatar from '../ui/Avatar';
 
 const SECONDARY_NAV = [
   { to: '/stats',        icon: 'ti-chart-bar', label: 'Stats',            desc: 'Study performance & insights' },
-  { to: '/syllabus',     icon: 'ti-books',     label: 'Syllabus',         desc: 'Track topics & progress'     },
   { to: '/yt-hub',       icon: 'ti-brand-youtube', label: 'YT Study Pathsala', desc: 'Subject-wise video watchlist' },
+  { to: '/pdf-library',  icon: 'ti-file-text', label: 'PDF Library',     desc: 'Read & mark up your PDFs' },
   // { to: '/games',     icon: 'ti-sword',     label: 'Games',            desc: 'Practice Arena'              }, // OUTDATED — removed from nav, feature deprecated
-  { to: '/money',        icon: 'ti-wallet',    label: 'Money',            desc: 'Budget & expenses'           },
   { to: '/profile',      icon: 'ti-user',      label: 'Profile',          desc: 'Your account'                },
-  { to: '/calendar',     icon: 'ti-calendar',  label: 'Calendar',         desc: 'Study heatmap & schedule'    },
-  { to: '/history',      icon: 'ti-history',   label: 'History',          desc: 'Past sessions & records'     },
-  { to: '/wellbeing',    icon: 'ti-heart',     label: 'Digital Wellbeing', desc: 'Screen time & habits'       },
-  { to: '/achievements', icon: 'ti-trophy',    label: 'Achievements',     desc: 'Badges & milestones'         },
+  // Calendar, History, Wellbeing, Achievements, Money moved into Other Tools to declutter this list
+  { to: '/other-tools',  icon: 'ti-apps',       label: 'Other Tools',      desc: 'Calendar, Syllabus, History, Achievements, Wellbeing, Money' },
   { to: '/settings',     icon: 'ti-settings',  label: 'Settings',         desc: 'App preferences & account'  },
 ];
 

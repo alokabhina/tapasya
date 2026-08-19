@@ -16,16 +16,13 @@ const NAV_ITEMS = [
   // { to: '/games',     icon: 'ti-sword',            label: 'Practice Arena' },  // OUTDATED — removed from nav, feature deprecated
   { to: '/speedmath',    icon: 'ti-bolt',              label: 'Speed Math' },      // NEW — Tables/Squares/Cubes/%-Fraction
   { to: '/stats',        icon: 'ti-chart-bar',        label: 'Stats' },
-  { to: '/calendar',     icon: 'ti-calendar',         label: 'Calendar' },
   { to: '/todo',         icon: 'ti-checkbox',         label: 'Todo' },
-  { to: '/syllabus',     icon: 'ti-books',            label: 'Syllabus' },
   { to: '/vocab',        icon: 'ti-book-2',           label: 'Vocab Master' },
   { to: '/yt-hub',       icon: 'ti-brand-youtube',    label: 'YT Study Pathsala' },
-  { to: '/history',      icon: 'ti-history',          label: 'History' },
-  { to: '/achievements', icon: 'ti-trophy',           label: 'Achievements' },
+  { to: '/pdf-library',  icon: 'ti-file-text',        label: 'PDF Library' },
   { to: '/group',        icon: 'ti-users',            label: 'Study Group' },
-  { to: '/wellbeing',    icon: 'ti-heart',            label: 'Wellbeing' },
-  { to: '/money',        icon: 'ti-wallet',           label: 'Money' },  // NEW — separate from study Stats
+  // Calendar, Syllabus, History, Achievements, Wellbeing, Money moved here to declutter the sidebar
+  { to: '/other-tools',  icon: 'ti-apps',              label: 'Other Tools' },
 ];
 
 const ADMIN_EMAIL = 'alokabhiii9@gmail.com';
