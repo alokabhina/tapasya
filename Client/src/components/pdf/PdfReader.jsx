@@ -80,7 +80,10 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     let cancelled = false
     setLoading(true)
     fetch(doc.originalUrl)
-      .then((r) => r.arrayBuffer())
+      .then((r) => {
+        if (!r.ok) throw new Error(`PDF fetch failed: HTTP ${r.status}`)
+        return r.arrayBuffer()
+      })
       .then((buf) => window.pdfjsLib.getDocument({ data: buf }).promise)
       .then((pdf) => {
         if (cancelled) return
@@ -89,7 +92,11 @@ export default function PdfReader({ doc, onClose, onSaved }) {
         setPageNum(1)
         setError(false)
       })
-      .catch(() => { if (!cancelled) setError(true) })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('PDF load failed:', err.message, '— check Cloudinary Settings → Security → "PDF and ZIP files delivery" if this is a 401/403.')
+        if (!cancelled) setError(true)
+      })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [libsReady, doc.originalUrl])
