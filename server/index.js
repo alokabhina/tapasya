@@ -22,6 +22,7 @@ import watchShareRoutes from './routes/watchShare.js'
 import channelRoutes  from './routes/channels.js'
 import folderRoutes   from './routes/folders.js'
 import pdfRoutes      from './routes/pdfs.js'
+import mockExamsRoutes from './routes/mockExams.js'
 import { checkAndFetchVocab } from './utils/opentdbFetcher.js'
 import { connectDB } from './utils/db.js'
 
@@ -73,6 +74,7 @@ app.use('/api/watch',     watchShareRoutes)   // adds /api/watch/share + /api/wa
 app.use('/api/channels',  channelRoutes)
 app.use('/api/folders',   folderRoutes)
 app.use('/api/pdfs',      pdfRoutes)
+app.use('/api/mock-exams', mockExamsRoutes)
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ ok: true }))

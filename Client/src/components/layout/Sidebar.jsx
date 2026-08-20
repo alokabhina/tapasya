@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { to: '/vocab',        icon: 'ti-book-2',           label: 'Vocab Master' },
   { to: '/yt-hub',       icon: 'ti-brand-youtube',    label: 'YT Study Pathsala' },
   { to: '/pdf-library',  icon: 'ti-file-text',        label: 'PDF Library' },
+  { to: '/mock-tracker', icon: 'ti-clipboard-data',   label: 'Mock Tracker' },
   { to: '/group',        icon: 'ti-users',            label: 'Study Group' },
   // Calendar, Syllabus, History, Achievements, Wellbeing, Money moved here to declutter the sidebar
   { to: '/other-tools',  icon: 'ti-apps',              label: 'Other Tools' },

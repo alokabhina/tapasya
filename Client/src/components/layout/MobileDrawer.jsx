@@ -12,6 +12,7 @@ const SECONDARY_NAV = [
   { to: '/stats',        icon: 'ti-chart-bar', label: 'Stats',            desc: 'Study performance & insights' },
   { to: '/yt-hub',       icon: 'ti-brand-youtube', label: 'YT Study Pathsala', desc: 'Subject-wise video watchlist' },
   { to: '/pdf-library',  icon: 'ti-file-text', label: 'PDF Library',     desc: 'Read & mark up your PDFs' },
+  { to: '/mock-tracker', icon: 'ti-clipboard-data', label: 'Mock Tracker', desc: 'Track mock results & weak topics' },
   // { to: '/games',     icon: 'ti-sword',     label: 'Games',            desc: 'Practice Arena'              }, // OUTDATED — removed from nav, feature deprecated
   { to: '/profile',      icon: 'ti-user',      label: 'Profile',          desc: 'Your account'                },
   // Calendar, History, Wellbeing, Achievements, Money moved into Other Tools to declutter this list

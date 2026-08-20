@@ -21,6 +21,14 @@ const todoSchema = new mongoose.Schema({
     title:     String,
     thumbnail: String,
   },
+  // Optional link to a weak topic surfaced by Mock Tracker — lets the
+  // WeakTopicsList "Remind me" button create a todo pointing back to it.
+  linkedMockWeakTopic: {
+    sectionName: String,
+    topicName:   String,
+    correctPct:  Number,
+    examName:    String,
+  },
 }, { timestamps: true })
 todoSchema.index({ userId: 1, date: 1 })
 export default mongoose.model('Todo', todoSchema)

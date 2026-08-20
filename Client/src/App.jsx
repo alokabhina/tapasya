@@ -56,6 +56,8 @@ const SpeedMathStats     = lazy(() => import('./pages/SpeedMathStats'));
 const YTHub = lazy(() => import('./pages/YTHub'));
 const PdfLibrary = lazy(() => import('./pages/PdfLibrary'));
 const OtherTools = lazy(() => import('./pages/OtherTools'));
+const MockTracker = lazy(() => import('./pages/MockTracker'));
+const MockExamDashboard = lazy(() => import('./pages/MockExamDashboard'));
 
 // ── Vocab Master (personal dictionary + quiz) ────────────────────────────────
 const VocabMaster = lazy(() => import('./pages/VocabMaster'));
@@ -164,6 +166,8 @@ export default function App() {
             ['/yt-hub',             <YTHub />],
             ['/pdf-library',        <PdfLibrary />],
             ['/other-tools',        <OtherTools />],
+            ['/mock-tracker',       <MockTracker />],
+            ['/mock-tracker/:examId', <MockExamDashboard />],
             // ── Practice Arena routes ─────────────────────────────────────
             ['/games',              <Games />],
             ['/games/stats',        <GameStats />],
