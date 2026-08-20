@@ -1,13 +1,18 @@
 // src/components/layout/QuestionStopwatch.jsx
-// Question-solving ke liye ek chota, draggable stopwatch miniplayer.
+// Question-solving ke liye stopwatch miniplayer.
 // Study timer (MiniPlayer.jsx) se poori tarah independent — apna alag store
 // (stopwatchStore.js) use krta hai, isliye study timer par koi asar nahi padta.
 // Flow: Home se "openWidget" -> chota panel dikhta hai -> Start dabao -> chalu ->
 // Lap dabao -> current time split ho kr list me save ho jata hai, stopwatch chalta rehta hai ->
 // Stop dabao -> ruk jata hai (laps review ke liye rehte hain) -> Reset se 00:00.
+// "Float on top" (Document Picture-in-Picture) — browser tab ke bahar, poore laptop
+// screen par (kisi bhi app ke upar) alag chota window ban jata hai, bilkul study
+// timer ke miniplayer jaisa. Isi PiP window se hi Lap/Pause/Stop control ho sakta hai.
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import useStopwatchStore from '@/store/stopwatchStore';
+
+const PIP_SUPPORTED = 'documentPictureInPicture' in window;
 
 function fmt(totalSeconds) {
   const m = Math.floor(totalSeconds / 60);
@@ -34,6 +39,8 @@ export default function QuestionStopwatch() {
 
   const tick = useStopwatchStore((s) => s.tick);
 
+  const color = '#22d3ee'; // cyan — study timer (orange) se visually alag
+
   // ── Wall-clock accurate ticking, sirf running+not-paused hone par ─────────
   useEffect(() => {
     if (!isRunning || isPaused) return;
@@ -42,6 +49,133 @@ export default function QuestionStopwatch() {
     return () => clearInterval(id);
   }, [isRunning, isPaused, tick]);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // Document Picture-in-Picture — real OS-level floating window
+  // ═══════════════════════════════════════════════════════════════════════
+  const [pipOpen, setPipOpen] = useState(false);
+  const pipWindowRef = useRef(null);
+  const pipTimerRef  = useRef(null);
+
+  useEffect(() => {
+    if (!pipOpen || !pipWindowRef.current) return;
+    updatePipContent();
+    pipTimerRef.current = setInterval(updatePipContent, 250);
+    return () => clearInterval(pipTimerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipOpen]);
+
+  // Live-sync PiP content jab bhi elapsed/laps/running state badle
+  useEffect(() => { if (pipOpen) updatePipContent(); }, [elapsed, isRunning, isPaused, laps.length, pipOpen]);
+
+  useEffect(() => {
+    if (!open && pipOpen) closePip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  function updatePipContent() {
+    const pipWin = pipWindowRef.current;
+    if (!pipWin || pipWin.closed) { setPipOpen(false); return; }
+    const s = useStopwatchStore.getState();
+
+    const timeEl = pipWin.document.getElementById('sw-time');
+    if (timeEl) {
+      timeEl.textContent = fmt(s.elapsed);
+      timeEl.style.opacity = s.isPaused ? '0.5' : '1';
+    }
+    const startBtn = pipWin.document.getElementById('sw-start');
+    const pauseBtn = pipWin.document.getElementById('sw-pause');
+    const lapBtn   = pipWin.document.getElementById('sw-lap');
+    const stopBtn  = pipWin.document.getElementById('sw-stop');
+    if (startBtn) startBtn.style.display = s.isRunning ? 'none' : 'flex';
+    if (pauseBtn) {
+      pauseBtn.style.display = s.isRunning ? 'flex' : 'none';
+      pauseBtn.innerHTML = s.isPaused
+        ? '<div class="sw-icon-play"></div>'
+        : '<div class="sw-icon-pause"><span></span><span></span></div>';
+    }
+    if (lapBtn) { lapBtn.style.display = s.isRunning ? 'flex' : 'none'; lapBtn.disabled = s.isPaused; }
+    if (stopBtn) stopBtn.style.display = s.isRunning ? 'flex' : 'none';
+
+    const lapsEl = pipWin.document.getElementById('sw-laps');
+    if (lapsEl) {
+      lapsEl.innerHTML = [...s.laps].reverse().slice(0, 4).map(
+        (l) => `<div class="sw-lap-row"><span>Q${l.no}</span><span>${fmt(l.lapTime)}</span></div>`
+      ).join('');
+    }
+  }
+
+  async function openPip() {
+    if (!PIP_SUPPORTED) return;
+    try {
+      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 190, height: 210 });
+      pipWindowRef.current = pipWin;
+      setPipOpen(true);
+
+      const style = pipWin.document.createElement('style');
+      style.textContent = `
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: ui-sans-serif, system-ui; }
+        body {
+          background: linear-gradient(135deg, rgba(10,22,40,0.92) 0%, rgba(10,15,30,0.96) 100%);
+          height: 100vh; overflow: hidden; padding: 10px 12px;
+          display: flex; flex-direction: column; gap: 6px; user-select: none;
+        }
+        .sw-header { display:flex; align-items:center; justify-content:space-between; }
+        .sw-label { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: ${color}; font-weight: 700; }
+        #sw-time { text-align:center; font-family: ui-monospace, monospace; font-size: 30px; font-weight: 700; color: ${color}; letter-spacing: 1px; padding: 4px 0; }
+        .sw-controls { display:flex; gap:6px; }
+        .sw-btn { flex:1; height:32px; border-radius:8px; border:1px solid ${color}40; background:${color}20; color:${color};
+          font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:4px; cursor:pointer; }
+        .sw-btn:disabled { opacity:.4; cursor:default; }
+        .sw-btn-icon { width:32px; flex:none; background:rgba(255,255,255,0.08); border:none; color:#e2e8f0; }
+        .sw-btn-stop { width:32px; flex:none; background:rgba(127,29,29,0.5); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; }
+        .sw-icon-play { width:0; height:0; border-style:solid; border-width:6px 0 6px 9px; border-color:transparent transparent transparent currentColor; }
+        .sw-icon-pause { display:flex; gap:3px; }
+        .sw-icon-pause span { width:3px; height:11px; background:currentColor; border-radius:1px; }
+        .sw-icon-stop { width:11px; height:11px; background:currentColor; border-radius:2px; }
+        #sw-laps { flex:1; overflow-y:auto; border-top:1px solid rgba(255,255,255,0.08); padding-top:4px; }
+        .sw-lap-row { display:flex; justify-content:space-between; font-size:10.5px; color:#94a3b8; padding:2px 0; font-family: ui-monospace, monospace; }
+      `;
+      pipWin.document.head.appendChild(style);
+
+      pipWin.document.body.innerHTML = `
+        <div class="sw-header"><span class="sw-label">⏱ Stopwatch</span></div>
+        <div id="sw-time">00:00</div>
+        <div class="sw-controls">
+          <button id="sw-start" class="sw-btn"><div class="sw-icon-play"></div>&nbsp;Start</button>
+          <button id="sw-pause" class="sw-btn sw-btn-icon" style="display:none"><div class="sw-icon-play"></div></button>
+          <button id="sw-lap" class="sw-btn" style="display:none">Lap</button>
+          <button id="sw-stop" class="sw-btn sw-btn-stop" style="display:none"><div class="sw-icon-stop"></div></button>
+        </div>
+        <div id="sw-laps"></div>
+      `;
+
+      pipWin.document.getElementById('sw-start').onclick = () => start();
+      pipWin.document.getElementById('sw-pause').onclick = () => {
+        const s = useStopwatchStore.getState();
+        s.isPaused ? resume() : pause();
+      };
+      pipWin.document.getElementById('sw-lap').onclick = () => lap();
+      pipWin.document.getElementById('sw-stop').onclick = () => stop();
+
+      pipWin.addEventListener('pagehide', () => {
+        setPipOpen(false);
+        pipWindowRef.current = null;
+        clearInterval(pipTimerRef.current);
+      });
+
+      updatePipContent();
+    } catch (err) {
+      console.error('Stopwatch PiP failed:', err);
+    }
+  }
+
+  function closePip() {
+    if (pipWindowRef.current && !pipWindowRef.current.closed) pipWindowRef.current.close();
+    pipWindowRef.current = null;
+    clearInterval(pipTimerRef.current);
+    setPipOpen(false);
+  }
+
   // ── Drag support (desktop) ─────────────────────────────────────────────
   const pillRef = useRef(null);
   const drag = useRef({ on: false, sx: 0, sy: 0, ox: 0, oy: 0 });
@@ -49,7 +183,7 @@ export default function QuestionStopwatch() {
   const [pos, setPos] = useState({ x: null, y: null });
 
   function onMouseDown(e) {
-    if (window.innerWidth < 768) return;
+    if (window.innerWidth < 768 || pipOpen) return;
     didDrag.current = false;
     const rect = pillRef.current?.getBoundingClientRect();
     drag.current = { on: true, sx: e.clientX, sy: e.clientY, ox: pos.x ?? rect?.left ?? 0, oy: pos.y ?? rect?.top ?? 0 };
@@ -70,18 +204,33 @@ export default function QuestionStopwatch() {
 
   if (!open) return null;
 
-  const color = '#22d3ee'; // cyan — study timer (orange) se visually alag
   const glassStyle = {
     background: 'rgba(10,15,30,0.55)',
     backdropFilter: 'blur(18px)',
     WebkitBackdropFilter: 'blur(18px)',
   };
-  const floatStyle = pos.x !== null
+  const floatStyle = pos.x !== null && !pipOpen
     ? { position: 'fixed', left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' }
     : {};
   // Study timer bottom-center/top-right use krta hai — ye left side me rakha, taaki dono
   // ek saath chal saken bina overlap ke.
   const posClass = "z-50 fixed bottom-[calc(56px+64px+env(safe-area-inset-bottom,0px))] left-3 md:bottom-auto md:top-4 md:left-4";
+
+  // ── PiP active badge (browser me sirf ek chota indicator, asli widget bahar khula hai) ──
+  if (pipOpen) {
+    return (
+      <div className={posClass}>
+        <button
+          onClick={closePip}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] transition-all"
+          style={{ ...glassStyle, border: `1px solid ${color}30`, color }}
+        >
+          <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: color }} />
+          Stopwatch floating · close
+        </button>
+      </div>
+    );
+  }
 
   // ── Minimized pill ──────────────────────────────────────────────────────
   if (minimized) {
@@ -121,6 +270,11 @@ export default function QuestionStopwatch() {
           <i className="ti ti-stopwatch text-xs" /> Stopwatch
         </span>
         <div className="flex items-center gap-1">
+          {PIP_SUPPORTED && (
+            <button onClick={openPip} className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: `${color}18`, border: `1px solid ${color}30` }} title="Float on top (whole laptop screen)">
+              <i className="ti ti-picture-in-picture text-[10px]" style={{ color }} />
+            </button>
+          )}
           <button onClick={toggleMinimized} className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.07)' }}>
             <i className="ti ti-minus text-[10px] text-slate-300" />
           </button>

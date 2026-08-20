@@ -3,9 +3,14 @@
 // stopwatch (QuestionStopwatch.jsx) jaisa hi independent, study timer ko affect nahi krta.
 // Duration set karo (presets ya custom minutes) -> Start -> ring khali hoti jayegi ->
 // khatam hone par beep + pulse alert.
+// "Float on top" (Document Picture-in-Picture) — poore laptop screen par (browser
+// tab/app switch karne par bhi upar) alag chota window, bilkul study timer ke
+// miniplayer jaisa.
 
 import { useEffect, useRef, useState } from 'react';
 import useClockTimerStore from '@/store/clockTimerStore';
+
+const PIP_SUPPORTED = 'documentPictureInPicture' in window;
 
 function fmt(totalSeconds) {
   const m = Math.floor(totalSeconds / 60);
@@ -55,6 +60,8 @@ export default function ClockTimerWidget() {
   const acknowledgeFinish = useClockTimerStore((s) => s.acknowledgeFinish);
   const tick          = useClockTimerStore((s) => s.tick);
 
+  const color = finished ? '#f87171' : '#a78bfa'; // violet — stopwatch(cyan)/study timer(orange) se alag
+
   useEffect(() => {
     if (!isRunning || isPaused) return;
     tick();
@@ -66,6 +73,118 @@ export default function ClockTimerWidget() {
     if (finished) playBeep();
   }, [finished]);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // Document Picture-in-Picture — real OS-level floating window
+  // ═══════════════════════════════════════════════════════════════════════
+  const [pipOpen, setPipOpen] = useState(false);
+  const pipWindowRef = useRef(null);
+  const pipTimerRef  = useRef(null);
+
+  useEffect(() => {
+    if (!pipOpen || !pipWindowRef.current) return;
+    updatePipContent();
+    pipTimerRef.current = setInterval(updatePipContent, 250);
+    return () => clearInterval(pipTimerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipOpen]);
+
+  useEffect(() => { if (pipOpen) updatePipContent(); }, [remaining, isRunning, isPaused, finished, pipOpen]);
+
+  useEffect(() => {
+    if (!open && pipOpen) closePip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const R_CONST = 26, CIRC_CONST = 2 * Math.PI * R_CONST;
+
+  function updatePipContent() {
+    const pipWin = pipWindowRef.current;
+    if (!pipWin || pipWin.closed) { setPipOpen(false); return; }
+    const s = useClockTimerStore.getState();
+
+    const timeEl = pipWin.document.getElementById('ct-time');
+    if (timeEl) timeEl.textContent = fmt(s.remaining);
+
+    const ring = pipWin.document.getElementById('ct-ring');
+    if (ring) {
+      const pct = s.durationSec > 0 ? s.remaining / s.durationSec : 0;
+      ring.setAttribute('stroke-dashoffset', String(CIRC_CONST * (1 - pct)));
+      ring.setAttribute('stroke', s.finished ? '#f87171' : '#a78bfa');
+    }
+
+    const startBtn = pipWin.document.getElementById('ct-start');
+    const pauseBtn = pipWin.document.getElementById('ct-pause');
+    if (startBtn) startBtn.style.display = s.isRunning ? 'none' : 'flex';
+    if (pauseBtn) {
+      pauseBtn.style.display = s.isRunning ? 'flex' : 'none';
+      pauseBtn.textContent = s.isPaused ? 'Resume' : 'Pause';
+    }
+    const doneEl = pipWin.document.getElementById('ct-done');
+    if (doneEl) doneEl.style.display = s.finished ? 'block' : 'none';
+  }
+
+  async function openPip() {
+    if (!PIP_SUPPORTED) return;
+    try {
+      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 190, height: 220 });
+      pipWindowRef.current = pipWin;
+      setPipOpen(true);
+
+      const style = pipWin.document.createElement('style');
+      style.textContent = `
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: ui-sans-serif, system-ui; }
+        body {
+          background: linear-gradient(135deg, rgba(10,22,40,0.92) 0%, rgba(10,15,30,0.96) 100%);
+          height: 100vh; overflow: hidden; padding: 10px 12px;
+          display: flex; flex-direction: column; align-items: center; gap: 6px; user-select: none;
+        }
+        .ct-label { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: #a78bfa; font-weight: 700; align-self: flex-start; }
+        #ct-time { font-family: ui-monospace, monospace; font-size: 15px; font-weight: 700; fill: #a78bfa; }
+        #ct-done { display:none; font-size: 11px; font-weight: 700; color: #f87171; }
+        .ct-btn { width: 100%; height: 32px; border-radius: 8px; border: 1px solid rgba(167,139,250,0.4);
+          background: rgba(167,139,250,0.2); color: #a78bfa; font-size: 12px; font-weight: 600;
+          display: flex; align-items: center; justify-content: center; cursor: pointer; }
+      `;
+      pipWin.document.head.appendChild(style);
+
+      pipWin.document.body.innerHTML = `
+        <span class="ct-label">⏰ Timer</span>
+        <svg width="76" height="76" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="${R_CONST}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="5" />
+          <circle id="ct-ring" cx="32" cy="32" r="${R_CONST}" fill="none" stroke="#a78bfa" stroke-width="5"
+            stroke-dasharray="${CIRC_CONST}" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 32 32)" />
+          <text id="ct-time" x="32" y="36" text-anchor="middle">00:00</text>
+        </svg>
+        <div id="ct-done">Time up!</div>
+        <button id="ct-start" class="ct-btn">Start</button>
+        <button id="ct-pause" class="ct-btn" style="display:none">Pause</button>
+      `;
+
+      pipWin.document.getElementById('ct-start').onclick = () => { acknowledgeFinish(); start(); };
+      pipWin.document.getElementById('ct-pause').onclick = () => {
+        const s = useClockTimerStore.getState();
+        s.isPaused ? resume() : pause();
+      };
+
+      pipWin.addEventListener('pagehide', () => {
+        setPipOpen(false);
+        pipWindowRef.current = null;
+        clearInterval(pipTimerRef.current);
+      });
+
+      updatePipContent();
+    } catch (err) {
+      console.error('Timer PiP failed:', err);
+    }
+  }
+
+  function closePip() {
+    if (pipWindowRef.current && !pipWindowRef.current.closed) pipWindowRef.current.close();
+    pipWindowRef.current = null;
+    clearInterval(pipTimerRef.current);
+    setPipOpen(false);
+  }
+
   // ── Drag support (desktop) ─────────────────────────────────────────────
   const pillRef = useRef(null);
   const drag = useRef({ on: false, sx: 0, sy: 0, ox: 0, oy: 0 });
@@ -73,7 +192,7 @@ export default function ClockTimerWidget() {
   const [pos, setPos] = useState({ x: null, y: null });
 
   function onMouseDown(e) {
-    if (window.innerWidth < 768) return;
+    if (window.innerWidth < 768 || pipOpen) return;
     didDrag.current = false;
     const rect = pillRef.current?.getBoundingClientRect();
     drag.current = { on: true, sx: e.clientX, sy: e.clientY, ox: pos.x ?? rect?.left ?? 0, oy: pos.y ?? rect?.top ?? 0 };
@@ -94,13 +213,12 @@ export default function ClockTimerWidget() {
 
   if (!open) return null;
 
-  const color = finished ? '#f87171' : '#a78bfa'; // violet — stopwatch(cyan)/study timer(orange) se alag
   const glassStyle = {
     background: 'rgba(10,15,30,0.55)',
     backdropFilter: 'blur(18px)',
     WebkitBackdropFilter: 'blur(18px)',
   };
-  const floatStyle = pos.x !== null
+  const floatStyle = pos.x !== null && !pipOpen
     ? { position: 'fixed', left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' }
     : {};
   // Stopwatch left side pe hai, ye right side — dono ek saath chal sakein
@@ -109,6 +227,22 @@ export default function ClockTimerWidget() {
   const pct = durationSec > 0 ? remaining / durationSec : 0;
   const R = 26, CIRC = 2 * Math.PI * R;
   const dashOffset = CIRC * (1 - pct);
+
+  // ── PiP active badge ──────────────────────────────────────────────────
+  if (pipOpen) {
+    return (
+      <div className={posClass}>
+        <button
+          onClick={closePip}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] transition-all"
+          style={{ ...glassStyle, border: `1px solid ${color}30`, color }}
+        >
+          <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: color }} />
+          Timer floating · close
+        </button>
+      </div>
+    );
+  }
 
   // ── Minimized pill ──────────────────────────────────────────────────────
   if (minimized) {
@@ -147,6 +281,11 @@ export default function ClockTimerWidget() {
           <i className="ti ti-clock text-xs" /> Timer
         </span>
         <div className="flex items-center gap-1">
+          {PIP_SUPPORTED && (
+            <button onClick={openPip} className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: `${color}18`, border: `1px solid ${color}30` }} title="Float on top (whole laptop screen)">
+              <i className="ti ti-picture-in-picture text-[10px]" style={{ color }} />
+            </button>
+          )}
           <button onClick={toggleMinimized} className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.07)' }}>
             <i className="ti ti-minus text-[10px] text-slate-300" />
           </button>
