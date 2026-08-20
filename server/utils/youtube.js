@@ -85,6 +85,12 @@ export function parseYoutubeUrl(rawUrl) {
     const id = url.pathname.split('/embed/')[1]
     if (id) return { type: 'video', id }
   }
+  // youtube.com/live/<id> — the URL YouTube gives out for ongoing/scheduled
+  // livestreams (e.g. shared from the "Go live" page or the live watch page).
+  if (url.pathname.startsWith('/live/')) {
+    const id = url.pathname.split('/live/')[1]?.split('/')[0]
+    if (id) return { type: 'video', id }
+  }
 
   // Fallback: video link that also has a list param → treat as playlist import
   if (listId) return { type: 'playlist', id: listId }
