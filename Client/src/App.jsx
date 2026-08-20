@@ -12,6 +12,8 @@ import PageLoader from './components/layout/PageLoader';
 import Sidebar    from './components/layout/Sidebar';
 import BottomNav  from './components/layout/BottomNav';
 import MiniPlayer from './components/layout/MiniPlayer';
+import QuestionStopwatch from './components/layout/QuestionStopwatch';
+import ClockTimerWidget from './components/layout/ClockTimerWidget';
 import WhatsNewModal from './components/whatsnew/WhatsNewModal';
 import VideoPlayerModal from './components/watch/VideoPlayerModal';
 import useWatchPlayerStore from './store/watchPlayerStore';
@@ -215,6 +217,11 @@ export default function App() {
         </Routes>
         {/* MiniPlayer globally — persists across ALL routes including /timer */}
         <MiniPlayer />
+        {/* Question-solving stopwatch + clock timer — apne alag stores use krte hain,
+            study timer se completely independent, isliye globally mount taaki
+            navigation ke baad bhi chalte rahein. */}
+        <QuestionStopwatch />
+        <ClockTimerWidget />
         {/* Watchlist video player, globally — same reasoning: outside Routes so
             minimizing it and navigating to Todo/Stats/etc keeps it playing,
             exactly like YouTube's own miniplayer. */}

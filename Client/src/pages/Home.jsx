@@ -25,6 +25,8 @@ import { useBadges } from '@/hooks/useBadges';
 import { getBadgeProgress, getBadgeById } from '@/utils/badges';
 import ContinueWatchingCard from '@/components/home/ContinueWatchingCard';
 import useWatchPlayerStore from '@/store/watchPlayerStore';
+import useStopwatchStore from '@/store/stopwatchStore';
+import useClockTimerStore from '@/store/clockTimerStore';
 
 // ── Aesthetic background styles for cards ─────────────────────────────────────
 const CARD_BACKGROUNDS = [
@@ -612,6 +614,57 @@ function SubjectCard({ subject, index, onEdit, onDelete, onStart }) {
   );
 }
 
+// ── Question Tools: Stopwatch + Clock Timer launcher ────────────────────────
+// Ek click me chota miniplayer floating widget open ho jata hai (bilkul PDF se
+// question solve karte waqt use karne ke liye) — study timer ko koi effect nahi.
+function QuestionToolsCard() {
+  const swOpen  = useStopwatchStore((s) => s.open);
+  const swRunning = useStopwatchStore((s) => s.isRunning);
+  const swMin   = useStopwatchStore((s) => s.minimized);
+  const swOpenWidget = useStopwatchStore((s) => s.openWidget);
+  const swSetMinimized = useStopwatchStore((s) => s.setMinimized ?? (() => {}));
+
+  const ctOpen  = useClockTimerStore((s) => s.open);
+  const ctRunning = useClockTimerStore((s) => s.isRunning);
+  const ctMin   = useClockTimerStore((s) => s.minimized);
+  const ctOpenWidget = useClockTimerStore((s) => s.openWidget);
+
+  function handleStopwatch() {
+    if (swOpen && swMin) { swSetMinimized(false); return; } // already open but minimized -> expand
+    swOpenWidget();
+  }
+  function handleTimer() {
+    if (ctOpen && ctMin) { useClockTimerStore.getState().setMinimized(false); return; }
+    ctOpenWidget();
+  }
+
+  return (
+    <div className="bg-[#141d2e] rounded-2xl p-3.5 border border-slate-800">
+      <p className="text-[10px] uppercase tracking-wide text-slate-500 font-medium mb-2.5 flex items-center gap-1.5">
+        <i className="ti ti-apps text-cyan-400" /> Question Tools
+      </p>
+      <div className="grid grid-cols-2 gap-2.5">
+        <button
+          onClick={handleStopwatch}
+          className="flex flex-col items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 hover:bg-cyan-500/15 transition-colors py-3"
+        >
+          <i className="ti ti-stopwatch text-lg text-cyan-400" />
+          <span className="text-[11px] font-semibold text-slate-200">Stopwatch</span>
+          {swOpen && swRunning && <span className="text-[9px] text-cyan-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />running</span>}
+        </button>
+        <button
+          onClick={handleTimer}
+          className="flex flex-col items-center gap-1.5 rounded-xl border border-violet-500/20 bg-violet-500/10 hover:bg-violet-500/15 transition-colors py-3"
+        >
+          <i className="ti ti-clock text-lg text-violet-400" />
+          <span className="text-[11px] font-semibold text-slate-200">Timer</span>
+          {ctOpen && ctRunning && <span className="text-[9px] text-violet-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />running</span>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Quick Stats ───────────────────────────────────────────────────────────────
 function QuickStatCard({ icon, label, value, iconBg, iconColor }) {
   return (
@@ -1003,6 +1056,9 @@ export default function Home() {
 
       {/* ── Right panel ── */}
       <div className="flex flex-col w-full xl:w-[290px] xl:flex-shrink-0 border-t xl:border-t-0 xl:border-l border-slate-800 p-4 gap-4 xl:overflow-y-auto xl:h-screen xl:sticky xl:top-0 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent pb-24 xl:pb-4">
+
+        {/* Question-solving Stopwatch + Clock Timer — chota miniplayer, study timer se independent */}
+        <QuestionToolsCard />
 
         {/* Focus Mode - Pomodoro (FIRST) */}
         <FocusMode subjects={subjects} />
