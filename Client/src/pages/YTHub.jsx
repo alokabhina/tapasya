@@ -15,6 +15,7 @@ import useWatchPlayerStore from '@/store/watchPlayerStore'
 import ShareModal from '@/components/watch/ShareModal'
 import RedeemCodeBar from '@/components/watch/RedeemCodeBar'
 import ChannelSearchBar from '@/components/channels/ChannelSearchBar'
+import VideoSearchBar from '@/components/channels/VideoSearchBar'
 import SubscribedChannelsBar from '@/components/channels/SubscribedChannelsBar'
 import ChannelFeedGrid from '@/components/channels/ChannelFeedGrid'
 import FeedVideoPlayerModal from '@/components/channels/FeedVideoPlayerModal'
@@ -148,6 +149,7 @@ export default function YTHub() {
   const [activeChannelId, setActiveChannelId] = useState(null)
   const [feed, setFeed] = useState([])
   const [playingFeedVideo, setPlayingFeedVideo] = useState(null)
+  const [videoSearchActive, setVideoSearchActive] = useState(false)
 
   const loadSubs = useCallback(async () => {
     setFeedLoading(true)
@@ -325,31 +327,43 @@ export default function YTHub() {
       {/* ── Channel Feed tab ── */}
       {tab === 'feed' && (
         <>
-          <ChannelSearchBar onSubscribed={loadSubs} onToast={pushToast} />
-          <SubscribedChannelsBar
-            subscriptions={subs}
-            activeChannelId={activeChannelId}
-            onSelect={setActiveChannelId}
-            onUnsubscribe={handleUnsubscribe}
+          <VideoSearchBar
+            folders={folders}
+            onPlay={setPlayingFeedVideo}
+            onAddedToWatchlist={() => pushToast('Added to watchlist', 'success')}
+            onFolderCreated={(f) => setFolders((prev) => [...prev, f])}
+            onActiveChange={setVideoSearchActive}
           />
-          {feedLoading ? (
-            <VideoGridSkeleton />
-          ) : !subs.length ? (
-            <div className="text-center py-16 text-slate-500">
-              <div className="w-16 h-16 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-center mx-auto mb-3">
-                <i className="ti ti-brand-youtube text-3xl" />
-              </div>
-              <p className="text-sm font-medium text-slate-400">Koi channel subscribe nahi kiya</p>
-              <p className="text-xs text-slate-600 mt-1">Upar se search karke ek channel select karo</p>
-            </div>
-          ) : (
-            <ChannelFeedGrid
-              feed={feed}
-              folders={folders}
-              onPlay={setPlayingFeedVideo}
-              onAddedToWatchlist={() => pushToast('Added to watchlist', 'success')}
-              onFolderCreated={(f) => setFolders((prev) => [...prev, f])}
-            />
+
+          {!videoSearchActive && (
+            <>
+              <ChannelSearchBar onSubscribed={loadSubs} onToast={pushToast} />
+              <SubscribedChannelsBar
+                subscriptions={subs}
+                activeChannelId={activeChannelId}
+                onSelect={setActiveChannelId}
+                onUnsubscribe={handleUnsubscribe}
+              />
+              {feedLoading ? (
+                <VideoGridSkeleton />
+              ) : !subs.length ? (
+                <div className="text-center py-16 text-slate-500">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-center mx-auto mb-3">
+                    <i className="ti ti-brand-youtube text-3xl" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-400">Koi channel subscribe nahi kiya</p>
+                  <p className="text-xs text-slate-600 mt-1">Upar se search karke ek channel select karo</p>
+                </div>
+              ) : (
+                <ChannelFeedGrid
+                  feed={feed}
+                  folders={folders}
+                  onPlay={setPlayingFeedVideo}
+                  onAddedToWatchlist={() => pushToast('Added to watchlist', 'success')}
+                  onFolderCreated={(f) => setFolders((prev) => [...prev, f])}
+                />
+              )}
+            </>
           )}
         </>
       )}

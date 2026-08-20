@@ -11,7 +11,7 @@ import authMiddleware from '../middleware/auth.js'
 import Subscription from '../models/Subscription.js'
 import WatchItem from '../models/WatchItem.js'
 import ShortsUsage from '../models/ShortsUsage.js'
-import { searchChannels, getChannelUploadsPlaylist, fetchLatestUploads, fetchVideoDurations, searchShorts } from '../utils/youtube.js'
+import { searchChannels, getChannelUploadsPlaylist, fetchLatestUploads, fetchVideoDurations, searchShorts, searchVideos } from '../utils/youtube.js'
 import { getStudyDayString } from '../utils/dayBoundary.js'
 
 const router = express.Router()
@@ -23,6 +23,28 @@ router.get('/search', async (req, res) => {
     const { q } = req.query
     if (!q || q.trim().length < 2) return res.json([])
     const results = await searchChannels(q.trim())
+    res.json(results)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// GET /api/channels/search-videos?q=
+// Open video search (not limited to subscribed channels) — powers the
+// "search any video" bar on the Channel Feed tab. Short-lived per-query
+// cache since search.list costs 100 quota units per call.
+const videoSearchCache = new Map() // query -> { data, at }
+const VIDEO_SEARCH_CACHE_TTL = 10 * 60 * 1000
+router.get('/search-videos', async (req, res) => {
+  try {
+    const { q } = req.query
+    if (!q || q.trim().length < 2) return res.json([])
+    const key = q.trim().toLowerCase()
+    const cached = videoSearchCache.get(key)
+    if (cached && Date.now() - cached.at < VIDEO_SEARCH_CACHE_TTL) return res.json(cached.data)
+
+    const results = await searchVideos(q.trim())
+    videoSearchCache.set(key, { data: results, at: Date.now() })
     res.json(results)
   } catch (e) {
     res.status(500).json({ error: e.message })

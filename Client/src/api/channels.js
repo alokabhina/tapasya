@@ -6,6 +6,12 @@ export async function searchChannels(query) {
   return res.data // [{ channelId, channelTitle, channelThumbnail }]
 }
 
+// Open video search — any video, not just from subscribed channels.
+export async function searchVideos(query) {
+  const res = await api.get('/channels/search-videos', { params: { q: query } })
+  return res.data // [{ videoId, title, thumbnail, channelTitle, publishedAt, durationSec, isLive, isUpcoming }]
+}
+
 export async function subscribeChannel({ channelId, channelTitle, channelThumbnail, folderId }) {
   const res = await api.post('/channels/subscribe', { channelId, channelTitle, channelThumbnail, folderId })
   return res.data

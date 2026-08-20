@@ -230,6 +230,47 @@ export async function searchShorts(query, { maxResults = 18 } = {}) {
     .filter((v) => v.durationSec > 0 && v.durationSec <= 60) // real Shorts only
 }
 
+/**
+ * General video search (type=video) — used by the "search any video" bar
+ * on the Channel Feed tab, so people aren't limited to just their
+ * subscribed channels. Shorts (<=60s) are filtered out here too, same as
+ * the channel feed — there's a dedicated Shorts tab for that.
+ */
+export async function searchVideos(query, { maxResults = 24 } = {}) {
+  const data = await ytFetch('search', {
+    part: 'snippet',
+    type: 'video',
+    q: query,
+    safeSearch: 'strict',
+    regionCode: 'IN',
+    order: 'relevance',
+    maxResults,
+  })
+  const candidates = (data.items || [])
+    .filter((it) => it.id?.videoId)
+    .map((it) => ({
+      videoId: it.id.videoId,
+      title: it.snippet.title,
+      thumbnail: it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url || '',
+      channelTitle: it.snippet.channelTitle,
+      publishedAt: it.snippet.publishedAt,
+    }))
+  if (!candidates.length) return []
+
+  const info = await fetchVideoDurations(candidates.map((v) => v.videoId))
+  return candidates
+    .map((v) => ({
+      ...v,
+      durationSec: info[v.videoId]?.durationSec || 0,
+      isLive: info[v.videoId]?.isLive || false,
+      isUpcoming: info[v.videoId]?.isUpcoming || false,
+      scheduledStartTime: info[v.videoId]?.scheduledStartTime || null,
+    }))
+    // keep genuinely live/upcoming even if durationSec reads 0 (not aired
+    // yet), otherwise require > 60s so real Shorts stay out of this feed
+    .filter((v) => v.isLive || v.isUpcoming || v.durationSec > 60)
+}
+
 export async function searchChannels(query, { maxResults = 8 } = {}) {
   const data = await ytFetch('search', {
     part: 'snippet',
