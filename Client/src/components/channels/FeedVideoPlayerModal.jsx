@@ -25,6 +25,7 @@ export default function FeedVideoPlayerModal({ video, onClose }) {
   const [showChat, setShowChat] = useState(true) // mobile: toggle between video/chat
   const [chatLoaded, setChatLoaded] = useState(false)
   const [chatStuck, setChatStuck] = useState(false) // still blank after a while → likely blocked by the browser
+  const [chatExpanded, setChatExpanded] = useState(false) // desktop: chat takes over most of the width — YouTube's chat embed switches to a cramped avatar-only view below a certain width, so giving it more room is a real fix, not just cosmetic
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose?.() }
@@ -32,7 +33,7 @@ export default function FeedVideoPlayerModal({ video, onClose }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [video, onClose])
 
-  useEffect(() => { setShowChat(true); setChatLoaded(false); setChatStuck(false) }, [video?.videoId]) // reset per video
+  useEffect(() => { setShowChat(true); setChatLoaded(false); setChatStuck(false); setChatExpanded(false) }, [video?.videoId]) // reset per video
 
   useEffect(() => {
     if (!video?.isLive || chatLoaded) return undefined
@@ -43,7 +44,7 @@ export default function FeedVideoPlayerModal({ video, onClose }) {
   if (!video) return null
 
   const src = `https://www.youtube.com/embed/${video.videoId}?autoplay=1&modestbranding=1&rel=0`
-  const chatSrc = `https://www.youtube.com/live_chat?v=${video.videoId}&embed_domain=${window.location.hostname}`
+  const chatSrc = `https://www.youtube.com/live_chat?v=${video.videoId}&embed_domain=${window.location.hostname}&dark_theme=1`
   const chatDirectUrl = `https://www.youtube.com/live_chat?v=${video.videoId}&is_popout=1`
   const isLive = !!video.isLive
 
@@ -80,9 +81,9 @@ export default function FeedVideoPlayerModal({ video, onClose }) {
       {video.channelTitle && <p className="px-4 pt-2 text-xs text-slate-500 truncate lg:hidden">{video.channelTitle}</p>}
 
       <div className="flex-1 flex flex-col lg:flex-row items-stretch justify-center gap-0 lg:gap-4 p-2 sm:p-4 lg:p-6 min-h-0">
-        {/* Player — hidden on mobile while chat is showing (no room for both); on
-            desktop it's hidden only if chat has been expanded to take over. */}
-        <div className={`flex-1 flex items-center justify-center min-h-0 ${showChat ? 'hidden lg:flex' : 'flex'}`}>
+        {/* Player — hidden on mobile while chat is showing (no room for both);
+            on desktop it's hidden only if chat has been expanded to take over. */}
+        <div className={`flex-1 flex items-center justify-center min-h-0 ${showChat ? 'hidden lg:flex' : 'flex'} ${chatExpanded ? 'lg:hidden' : ''}`}>
           <div className="w-full max-w-4xl aspect-video bg-black">
             <iframe
               key={video.videoId}
@@ -96,25 +97,38 @@ export default function FeedVideoPlayerModal({ video, onClose }) {
         </div>
 
         {isLive && showChat && (
-          <div className="w-full lg:w-[340px] shrink-0 flex flex-col min-h-0">
-            <div className="flex items-center justify-between px-1 pb-2">
-              <span className="flex items-center gap-1.5 text-xs text-slate-400">
-                <i className="ti ti-message-circle text-orange-400" /> Live Chat
+          <div className={`w-full shrink-0 flex flex-col min-h-0 transition-all ${chatExpanded ? 'lg:w-full lg:max-w-2xl' : 'lg:w-[400px]'}`}>
+            <div className="flex items-center justify-between px-1 pb-2 gap-2">
+              <span className="flex items-center gap-1.5 text-xs text-slate-400 min-w-0">
+                <i className="ti ti-message-circle text-orange-400 shrink-0" /> Live Chat
               </span>
-              <button onClick={() => setShowChat(false)} className="text-slate-500 hover:text-white w-6 h-6 rounded-md hover:bg-slate-800 flex items-center justify-center">
-                <i className="ti ti-x text-sm" />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => setChatExpanded((s) => !s)}
+                  className="hidden lg:flex text-slate-500 hover:text-white w-6 h-6 rounded-md hover:bg-slate-800 items-center justify-center"
+                  title={chatExpanded ? 'Chat chota karo' : 'Chat bada karo'}
+                >
+                  <i className={`ti ${chatExpanded ? 'ti-arrows-minimize' : 'ti-arrows-maximize'} text-sm`} />
+                </button>
+                <button onClick={() => setShowChat(false)} className="text-slate-500 hover:text-white w-6 h-6 rounded-md hover:bg-slate-800 flex items-center justify-center">
+                  <i className="ti ti-x text-sm" />
+                </button>
+              </div>
             </div>
 
-            {/* YouTube's chat UI is white with dark text — the panel is
-                built to match that instead of fighting it with a dark
-                wrapper, and shows a loading shimmer until the iframe
-                actually fires onLoad (a blocked/stuck embed just stays on
-                this shimmer instead of turning into a mystery blank box). */}
-            <div className="relative flex-1 min-h-0 rounded-lg overflow-hidden border border-slate-800 bg-white">
+            {/* Requesting YouTube's own dark chat theme above (dark_theme=1)
+                so the panel matches this app's dark UI. If the surrounding
+                OS/browser has a "force dark mode for web content" feature
+                enabled (common on Edge/Chrome, sometimes via extensions like
+                Dark Reader), it can double-recolor this cross-origin iframe
+                and produce mismatched text/background colours (e.g. white
+                text on a white background) — that's a browser-level effect
+                on YouTube's own page, which this app has no way to reach
+                into and override. The help text below calls that out. */}
+            <div className="relative flex-1 min-h-[360px] rounded-lg overflow-hidden border border-slate-800 bg-slate-900">
               {!chatLoaded && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-100">
-                  <div className="w-6 h-6 rounded-full border-2 border-slate-300 border-t-orange-500 animate-spin" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-900">
+                  <div className="w-6 h-6 rounded-full border-2 border-slate-700 border-t-orange-500 animate-spin" />
                   <p className="text-[11px] text-slate-500">Chat load ho raha hai...</p>
                 </div>
               )}
@@ -127,24 +141,29 @@ export default function FeedVideoPlayerModal({ video, onClose }) {
               />
             </div>
 
-            <div className="flex items-center justify-between gap-2 mt-1.5 px-1">
-              <p className="text-[10px] text-slate-600">
-                Comment karne ke liye chat ke andar apne Google/YouTube account se sign in karo
-              </p>
+            <div className="mt-2 space-y-2">
               <a
                 href={chatDirectUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="shrink-0 text-[10px] text-orange-400 hover:text-orange-300 flex items-center gap-0.5 whitespace-nowrap"
+                className="w-full py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center justify-center gap-1.5 hover:border-slate-600"
               >
-                YouTube pe kholo <i className="ti ti-external-link text-[11px]" />
+                <i className="ti ti-external-link text-sm" /> Chat YouTube pe poori tarah kholo
               </a>
-            </div>
-            {chatStuck && (
-              <p className="text-[10px] text-amber-500/80 px-1 mt-1">
-                Chat khaali dikh raha hai? Browser ki privacy/shield settings (Brave Shields, ad-blocker) is site ke liye off karke dekho, ya upar "YouTube pe kholo" use karo.
+              <p className="text-[10px] text-slate-600 px-1">
+                Comment karne ke liye chat ke andar apne Google/YouTube account se sign in karo
               </p>
-            )}
+              {chatStuck && (
+                <div className="text-[10px] text-amber-500/80 px-1 leading-relaxed space-y-1.5">
+                  <p>
+                    Agar text hi nahi dikh raha (jaise white background pe white text) — ye YouTube ke chat iframe ka apna rendering hai, jise ye app control nahi kar sakta. Iski sabse aam wajah browser ka "poore web content ko dark bana do" wala forced-dark-mode feature hota hai, jo YouTube ke chat ko bhi apne rang se overwrite kar deta hai aur text/background ka contrast bigad jaata hai.
+                  </p>
+                  <p>
+                    Fix: Edge/Chrome mein — <span className="text-slate-400">Settings → Appearance → "Enhance the appearance of web content"</span> ko is site ke liye off karo (ya page pe right-click karke "Use dark mode for this site" band karo). Fir bhi na dikhe to "Chat YouTube pe poori tarah kholo" use karo — wahan hamesha sahi rangon mein dikhega.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

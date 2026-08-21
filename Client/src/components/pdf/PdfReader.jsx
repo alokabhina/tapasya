@@ -31,9 +31,13 @@ const COLORS = [
   { name: 'Yellow', hex: '#facc15' },
   { name: 'Orange', hex: '#fb923c' },
   { name: 'Red', hex: '#f87171' },
-  { name: 'Green', hex: '#4ade80' },
+  { name: 'Pink', hex: '#f472b6' },
+  { name: 'Purple', hex: '#a78bfa' },
   { name: 'Blue', hex: '#60a5fa' },
-  { name: 'Black', hex: '#e2e8f0' },
+  { name: 'Cyan', hex: '#22d3ee' },
+  { name: 'Green', hex: '#4ade80' },
+  { name: 'White', hex: '#f8fafc' },
+  { name: 'Black', hex: '#1e293b' },
 ]
 
 function loadScript(src) {
@@ -64,10 +68,14 @@ function hexToRgb01(hex) {
 function svgCursor(svg, hx, hy, fallback) {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${hx} ${hy}, ${fallback}`
 }
-function getToolCursor(tool, color) {
+function getToolCursor(tool, color, eraserSize = 3) {
+  if (tool === 'none') return 'auto'
   if (tool === 'eraser') {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="9" fill="white" fill-opacity="0.85" stroke="#334155" stroke-width="2"/></svg>`
-    return svgCursor(svg, 11, 11, 'auto')
+    const r = 7 + eraserSize * 2.2
+    const size = Math.ceil(r * 2 + 4)
+    const c = size / 2
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${c}" cy="${c}" r="${r}" fill="white" fill-opacity="0.85" stroke="#334155" stroke-width="2"/></svg>`
+    return svgCursor(svg, c, c, 'auto')
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><g transform="rotate(45 15 15)"><rect x="13" y="3" width="4" height="16" rx="1.5" fill="${color}" stroke="#1e293b" stroke-width="1"/><polygon points="13,19 17,19 15,27" fill="#1e293b"/></g></svg>`
   return svgCursor(svg, 4, 27, 'crosshair')
@@ -92,7 +100,7 @@ function drawStroke(ctx, stroke, w, h) {
 
 // ── One page: lazily rendered when it scrolls near the viewport ────────────
 function PageBlock({
-  pageNum, pdfDoc, zoom, containerWidth, tool, color, penWidth, markerWidth, markerOpacity,
+  pageNum, pdfDoc, zoom, containerWidth, tool, color, penWidth, markerWidth, markerOpacity, eraserSize,
   strokes, onStroke, onErase, registerRenderObserver, registerViewObserver,
 }) {
   const wrapRef = useRef(null)
@@ -170,9 +178,15 @@ function PageBlock({
   }
 
   function handlePointerDown(e) {
+    if (tool === 'none') return // read/scroll mode — overlay has pointer-events:none anyway
     e.preventDefault()
     const pt = getNormalizedPoint(e)
-    if (tool === 'eraser') { onErase(pageNum, pt); return }
+    if (tool === 'eraser') {
+      drawingRef.current = true
+      onErase(pageNum, pt)
+      overlayCanvasRef.current.setPointerCapture(e.pointerId)
+      return
+    }
     drawingRef.current = true
     const width = tool === 'marker' ? markerWidth : penWidth
     const opacity = tool === 'marker' ? markerOpacity : 1
@@ -183,6 +197,7 @@ function PageBlock({
   function handlePointerMove(e) {
     if (!drawingRef.current) return
     const pt = getNormalizedPoint(e)
+    if (tool === 'eraser') { onErase(pageNum, pt); return }
     currentStrokeRef.current.points.push(pt)
     const ctx = overlayCanvasRef.current.getContext('2d')
     const w = overlayCanvasRef.current.width, h = overlayCanvasRef.current.height
@@ -193,6 +208,7 @@ function PageBlock({
   function handlePointerUp() {
     if (!drawingRef.current) return
     drawingRef.current = false
+    if (tool === 'eraser') return
     const stroke = currentStrokeRef.current
     currentStrokeRef.current = null
     if (stroke && stroke.points.length > 1) onStroke(pageNum, stroke)
@@ -218,8 +234,8 @@ function PageBlock({
       <canvas ref={baseCanvasRef} className={`rounded-lg shadow-xl block mx-auto ${rendered ? '' : 'hidden'}`} />
       <canvas
         ref={overlayCanvasRef}
-        className={`absolute inset-0 touch-none ${rendered ? '' : 'hidden'}`}
-        style={{ cursor: getToolCursor(tool, color) }}
+        className={`absolute inset-0 ${tool === 'none' ? 'pointer-events-none' : 'touch-none'} ${rendered ? '' : 'hidden'}`}
+        style={{ cursor: getToolCursor(tool, color, eraserSize) }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -248,13 +264,17 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   const [currentPage, setCurrentPage] = useState(1) // derived from scroll position, for the floating indicator
   const [containerWidth, setContainerWidth] = useState(800)
   const [zoom, setZoom] = useState(1)
-  const [tool, setTool] = useState('pen')
+  const [tool, setTool] = useState('none') // 'none' = read/scroll mode (default) — pen kabhi apne aap select nahi rehta
   const [color, setColor] = useState(COLORS[0].hex)
   const [penWidth, setPenWidth] = useState(3)
   const [markerWidth, setMarkerWidth] = useState(16)
   const [markerOpacity, setMarkerOpacity] = useState(0.35)
-  const [panelOpen, setPanelOpen] = useState(null) // 'thickness' | 'opacity' | null
+  const [eraserSize, setEraserSize] = useState(3) // 1–10, eraser ki "size" (chota/bada)
+  const [panelOpen, setPanelOpen] = useState(null) // 'thickness' | 'opacity' | 'eraser' | 'color' | null
   const [annotations, setAnnotations] = useState({}) // { [pageNum]: Stroke[] }
+  const [undoStack, setUndoStack] = useState([]) // [{ pageNum, snapshot }] — history for Undo
+  const [redoStack, setRedoStack] = useState([]) // [{ pageNum, snapshot }] — history for Redo
+  const customColorInputRef = useRef(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false) // any unsaved strokes since last save
   const [downloading, setDownloading] = useState(false)
@@ -364,15 +384,28 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     }
   }
 
+  // Har mutating action se pehle current state history me push kr dete hain,
+  // taaki Undo/Redo kaam kr sake. Naya stroke/erase hote hi redo stack clear
+  // ho jata hai (jaise Word/Photoshop me hota hai).
+  function pushHistory(pageNum, snapshot) {
+    setUndoStack((s) => [...s.slice(-49), { pageNum, snapshot }])
+    setRedoStack([])
+  }
+
   function handleStroke(pageNum, stroke) {
-    setAnnotations((prev) => ({ ...prev, [pageNum]: [...(prev[pageNum] || []), stroke] }))
+    setAnnotations((prev) => {
+      const before = prev[pageNum] || []
+      pushHistory(pageNum, before)
+      return { ...prev, [pageNum]: [...before, stroke] }
+    })
     setDirty(true)
   }
 
   function handleErase(pageNum, pt) {
     setAnnotations((prev) => {
       const strokes = prev[pageNum] || []
-      const threshold = 0.02 // ~2% of page dimension
+      // eraserSize (1–10) se threshold scale hota hai, taaki eraser "chota/bada" kiya ja sake
+      const threshold = 0.02 * (eraserSize / 3)
       let nearestIdx = -1, nearestDist = Infinity
       strokes.forEach((s, idx) => {
         for (const p of s.points) {
@@ -381,6 +414,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
         }
       })
       if (nearestIdx >= 0 && nearestDist < threshold * 3) {
+        pushHistory(pageNum, strokes)
         const next = [...strokes]
         next.splice(nearestIdx, 1)
         setDirty(true)
@@ -389,6 +423,45 @@ export default function PdfReader({ doc, onClose, onSaved }) {
       return prev
     })
   }
+
+  function undo() {
+    if (!undoStack.length) return
+    const last = undoStack[undoStack.length - 1]
+    const currentSnapshot = annotations[last.pageNum] || []
+    setRedoStack((r) => [...r, { pageNum: last.pageNum, snapshot: currentSnapshot }])
+    setAnnotations((prev) => ({ ...prev, [last.pageNum]: last.snapshot }))
+    setUndoStack((s) => s.slice(0, -1))
+    setDirty(true)
+  }
+
+  function redo() {
+    if (!redoStack.length) return
+    const last = redoStack[redoStack.length - 1]
+    const currentSnapshot = annotations[last.pageNum] || []
+    setUndoStack((s) => [...s, { pageNum: last.pageNum, snapshot: currentSnapshot }])
+    setAnnotations((prev) => ({ ...prev, [last.pageNum]: last.snapshot }))
+    setRedoStack((r) => r.slice(0, -1))
+    setDirty(true)
+  }
+
+  // Keyboard shortcuts — Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z (ya Ctrl+Y) redo,
+  // Esc se read/scroll mode (pen deselect), 1/2/3 se tool switch.
+  useEffect(() => {
+    function onKey(e) {
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && e.key.toLowerCase() === 'z' && e.shiftKey) { e.preventDefault(); redo(); return }
+      if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return }
+      if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return }
+      if (e.key === 'Escape') { setTool('none'); setPanelOpen(null); return }
+      if (e.key === '1') setTool('pen')
+      else if (e.key === '2') setTool('marker')
+      else if (e.key === '3') setTool('eraser')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undoStack, redoStack, annotations])
 
   // ── Export: builds on top of the current editing base (original or the
   // existing annotated copy) so previous markup isn't lost — new strokes
@@ -465,11 +538,6 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     }
   }
 
-  function selectTool(t) {
-    setTool(t)
-    setPanelOpen(null)
-  }
-
   const currentPageHasAnnotations = (annotations[currentPage] || []).length > 0
   const activeThickness = tool === 'marker' ? markerWidth : penWidth
 
@@ -505,15 +573,17 @@ export default function PdfReader({ doc, onClose, onSaved }) {
 
         <div className="w-px h-6 bg-slate-700 mx-1 shrink-0" />
 
-        {/* Drawing tools */}
+        {/* Drawing tools — "Read" default hai (pen kabhi apne aap active nahi rehta),
+            active tool ko dobara click krne se bhi wapas Read mode aa jata hai */}
         {[
+          { id: 'none', icon: 'ti-hand-stop', label: 'Read / Scroll' },
           { id: 'pen', icon: 'ti-pencil', label: 'Pen' },
           { id: 'marker', icon: 'ti-highlight', label: 'Marker' },
           { id: 'eraser', icon: 'ti-eraser', label: 'Eraser' },
         ].map((t) => (
           <button
             key={t.id}
-            onClick={() => selectTool(t.id)}
+            onClick={() => { setTool((prev) => (t.id !== 'none' && prev === t.id ? 'none' : t.id)); setPanelOpen(null) }}
             title={t.label}
             className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border transition-colors ${
               tool === t.id ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-slate-800/60 border-slate-700 text-slate-400'
@@ -523,7 +593,27 @@ export default function PdfReader({ doc, onClose, onSaved }) {
           </button>
         ))}
 
-        {tool !== 'eraser' && (
+        <div className="w-px h-6 bg-slate-700 mx-1 shrink-0" />
+
+        {/* Undo / Redo */}
+        <button
+          onClick={undo}
+          disabled={!undoStack.length}
+          title="Undo (Ctrl+Z)"
+          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border bg-slate-800/60 border-slate-700 text-slate-400 disabled:opacity-30"
+        >
+          <i className="ti ti-arrow-back-up text-base" />
+        </button>
+        <button
+          onClick={redo}
+          disabled={!redoStack.length}
+          title="Redo (Ctrl+Shift+Z)"
+          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border bg-slate-800/60 border-slate-700 text-slate-400 disabled:opacity-30"
+        >
+          <i className="ti ti-arrow-forward-up text-base" />
+        </button>
+
+        {(tool === 'pen' || tool === 'marker') && (
           <>
             <div className="w-px h-6 bg-slate-700 mx-1 shrink-0" />
             {COLORS.map((c) => (
@@ -535,34 +625,71 @@ export default function PdfReader({ doc, onClose, onSaved }) {
                 style={{ backgroundColor: c.hex }}
               />
             ))}
+            {/* Custom color — koi bhi color chuno */}
+            <div className="relative shrink-0">
+              <button
+                onClick={() => customColorInputRef.current?.click()}
+                title="Custom color"
+                className="w-7 h-7 rounded-full shrink-0 border-2 border-dashed border-slate-500 flex items-center justify-center"
+                style={{ background: !COLORS.some((c) => c.hex === color) ? color : 'conic-gradient(red,orange,yellow,green,blue,violet,red)' }}
+              >
+                {COLORS.some((c) => c.hex === color) && <i className="ti ti-plus text-xs text-white" style={{ textShadow: '0 0 3px rgba(0,0,0,0.8)' }} />}
+              </button>
+              <input
+                ref={customColorInputRef}
+                type="color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="absolute inset-0 w-7 h-7 opacity-0 pointer-events-none"
+              />
+            </div>
 
             <div className="w-px h-6 bg-slate-700 mx-1 shrink-0" />
 
-            {/* Thickness — Edge-style popover slider */}
-            <div className="relative shrink-0">
+            {/* Thickness — quick -/+ buttons plus an Edge-style popover slider */}
+            <div className="flex items-center gap-0.5 shrink-0">
               <button
-                onClick={() => setPanelOpen((p) => (p === 'thickness' ? null : 'thickness'))}
-                title="Thickness"
-                className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-colors ${panelOpen === 'thickness' ? 'bg-orange-500/20 border-orange-500/50' : 'bg-slate-800/60 border-slate-700'}`}
+                onClick={() => (tool === 'marker' ? setMarkerWidth((w) => Math.max(1, w - 2)) : setPenWidth((w) => Math.max(1, w - 1)))}
+                title="Chota karo"
+                className="w-7 h-9 rounded-lg flex items-center justify-center bg-slate-800/60 border border-slate-700 text-slate-400"
               >
-                <span
-                  className="rounded-full bg-slate-200"
-                  style={{ width: Math.min(18, 5 + activeThickness / 3), height: Math.min(18, 5 + activeThickness / 3) }}
-                />
+                <i className="ti ti-minus text-xs" />
               </button>
-              {panelOpen === 'thickness' && (
-                <div className="absolute top-11 left-0 z-20 bg-slate-800 border border-slate-700 rounded-lg p-3 w-40 shadow-xl">
-                  <p className="text-[10px] text-slate-400 mb-1.5">Thickness</p>
-                  <input
-                    type="range"
-                    min="1"
-                    max={tool === 'marker' ? 36 : 12}
-                    value={activeThickness}
-                    onChange={(e) => (tool === 'marker' ? setMarkerWidth(+e.target.value) : setPenWidth(+e.target.value))}
-                    className="w-full accent-orange-500"
+              <div className="relative shrink-0">
+                <button
+                  onClick={() => setPanelOpen((p) => (p === 'thickness' ? null : 'thickness'))}
+                  title="Thickness"
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-colors ${panelOpen === 'thickness' ? 'bg-orange-500/20 border-orange-500/50' : 'bg-slate-800/60 border-slate-700'}`}
+                >
+                  <span
+                    className="rounded-full bg-slate-200"
+                    style={{ width: Math.min(18, 5 + activeThickness / 3), height: Math.min(18, 5 + activeThickness / 3) }}
                   />
-                </div>
-              )}
+                </button>
+                {panelOpen === 'thickness' && (
+                  <div className="absolute top-11 left-0 z-20 bg-slate-800 border border-slate-700 rounded-lg p-3 w-40 shadow-xl">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[10px] text-slate-400">Thickness</p>
+                      <p className="text-[10px] text-slate-300 tabular-nums">{activeThickness}px</p>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max={tool === 'marker' ? 36 : 12}
+                      value={activeThickness}
+                      onChange={(e) => (tool === 'marker' ? setMarkerWidth(+e.target.value) : setPenWidth(+e.target.value))}
+                      className="w-full accent-orange-500"
+                    />
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => (tool === 'marker' ? setMarkerWidth((w) => Math.min(36, w + 2)) : setPenWidth((w) => Math.min(12, w + 1)))}
+                title="Bada karo"
+                className="w-7 h-9 rounded-lg flex items-center justify-center bg-slate-800/60 border border-slate-700 text-slate-400"
+              >
+                <i className="ti ti-plus text-xs" />
+              </button>
             </div>
 
             {/* Darkness (opacity) — marker only, like a highlighter's ink strength */}
@@ -594,9 +721,63 @@ export default function PdfReader({ doc, onClose, onSaved }) {
           </>
         )}
 
+        {/* Eraser size — chota/bada eraser */}
+        {tool === 'eraser' && (
+          <>
+            <div className="w-px h-6 bg-slate-700 mx-1 shrink-0" />
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                onClick={() => setEraserSize((s) => Math.max(1, s - 1))}
+                title="Chota karo"
+                className="w-7 h-9 rounded-lg flex items-center justify-center bg-slate-800/60 border border-slate-700 text-slate-400"
+              >
+                <i className="ti ti-minus text-xs" />
+              </button>
+              <div className="relative shrink-0">
+                <button
+                  onClick={() => setPanelOpen((p) => (p === 'eraser' ? null : 'eraser'))}
+                  title="Eraser size"
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-colors ${panelOpen === 'eraser' ? 'bg-orange-500/20 border-orange-500/50' : 'bg-slate-800/60 border-slate-700'}`}
+                >
+                  <span className="rounded-sm bg-slate-200" style={{ width: 6 + eraserSize, height: 6 + eraserSize }} />
+                </button>
+                {panelOpen === 'eraser' && (
+                  <div className="absolute top-11 left-0 z-20 bg-slate-800 border border-slate-700 rounded-lg p-3 w-40 shadow-xl">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[10px] text-slate-400">Eraser size</p>
+                      <p className="text-[10px] text-slate-300 tabular-nums">{eraserSize}</p>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={eraserSize}
+                      onChange={(e) => setEraserSize(+e.target.value)}
+                      className="w-full accent-orange-500"
+                    />
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => setEraserSize((s) => Math.min(10, s + 1))}
+                title="Bada karo"
+                className="w-7 h-9 rounded-lg flex items-center justify-center bg-slate-800/60 border border-slate-700 text-slate-400"
+              >
+                <i className="ti ti-plus text-xs" />
+              </button>
+            </div>
+          </>
+        )}
+
         {currentPageHasAnnotations && (
           <button
-            onClick={() => { setAnnotations((prev) => ({ ...prev, [currentPage]: [] })); setDirty(true) }}
+            onClick={() => {
+              setAnnotations((prev) => {
+                pushHistory(currentPage, prev[currentPage] || [])
+                return { ...prev, [currentPage]: [] }
+              })
+              setDirty(true)
+            }}
             className="text-[11px] text-slate-500 hover:text-red-400 px-2 shrink-0"
           >
             Page clear karo
@@ -683,6 +864,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
             penWidth={penWidth}
             markerWidth={markerWidth}
             markerOpacity={markerOpacity}
+            eraserSize={eraserSize}
             strokes={annotations[pn] || []}
             onStroke={handleStroke}
             onErase={handleErase}

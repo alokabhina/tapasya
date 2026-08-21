@@ -3,9 +3,19 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getMockDashboard, getMockAttempts, deleteMockAttempt } from '@/api/mockExams'
 import ScoreTrendChart from '@/components/mocktest/ScoreTrendChart'
+import SubjectAccuracyChart from '@/components/mocktest/SubjectAccuracyChart'
+import AttemptsBreakdownChart from '@/components/mocktest/AttemptsBreakdownChart'
+import ScoreDistributionChart from '@/components/mocktest/ScoreDistributionChart'
 import WeakTopicsList from '@/components/mocktest/WeakTopicsList'
 import AddMockResultModal from '@/components/mocktest/AddMockResultModal'
 import AttemptDetailView from '@/components/mocktest/AttemptDetailView'
+
+// Section-name matching is normalized (trimmed + case-insensitive) so a
+// result saved with slightly different casing/whitespace than the exam's
+// current section list (e.g. after a section was renamed, or an AI-parsed
+// import used its own casing) still shows up under the right subject tab
+// instead of only appearing in "All".
+const norm = (s) => (s || '').trim().toLowerCase()
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -61,7 +71,7 @@ export default function MockExamDashboard() {
 
   const { exam, summary, trend, subjectAccuracy, weakTopics, strongTopics } = dashboard
   const sectionalFiltered = tab === 'sectional' && sectionFilter !== 'all'
-    ? attempts.filter((a) => a.sections?.[0]?.sectionName === sectionFilter)
+    ? attempts.filter((a) => (a.sections || []).some((s) => norm(s.sectionName) === norm(sectionFilter)))
     : attempts
 
   return (
@@ -110,21 +120,20 @@ export default function MockExamDashboard() {
           {subjectAccuracy.length > 0 && (
             <div className="rounded-2xl border border-slate-800 p-4">
               <p className="text-sm font-semibold text-slate-200 mb-3">Subject-wise Accuracy</p>
-              <div className="space-y-2">
-                {subjectAccuracy.map((s) => (
-                  <div key={s.sectionName}>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-slate-300">{s.sectionName}</span>
-                      <span className="text-slate-400">{s.avgAccuracy}%</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                      <div className="h-full bg-orange-500 rounded-full" style={{ width: `${Math.min(100, s.avgAccuracy)}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <SubjectAccuracyChart data={subjectAccuracy} />
             </div>
           )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-slate-800 p-4">
+              <p className="text-sm font-semibold text-slate-200 mb-3">Full vs Sectional</p>
+              <AttemptsBreakdownChart full={summary.fullAttempts} sectional={summary.sectionalAttempts} />
+            </div>
+            <div className="rounded-2xl border border-slate-800 p-4">
+              <p className="text-sm font-semibold text-slate-200 mb-3">Score Distribution</p>
+              <ScoreDistributionChart trend={trend} />
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="rounded-2xl border border-slate-800 p-4">

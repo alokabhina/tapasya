@@ -14,6 +14,16 @@ function emptyTopic() {
 
 function num(v) { return v === '' || v == null ? null : Number(v) }
 function str(v) { return v == null ? '' : String(v) }
+const norm = (s) => (s || '').trim().toLowerCase()
+
+// AI-parsed section names won't always match the exam's saved section names
+// exactly (different casing/whitespace). Snap to the real one when there's
+// a normalized match, so results land under the right subject tab later —
+// otherwise the data only ever shows up in "All", not the specific subject.
+function snapSectionName(name, examSections) {
+  const match = examSections.find((s) => norm(s.name) === norm(name))
+  return match ? match.name : name
+}
 
 export default function AddMockResultModal({ examSections = [], onClose, onSaved, examId }) {
   const [entryMethod, setEntryMethod] = useState('manual') // 'manual' | 'ai'
@@ -88,7 +98,7 @@ export default function AddMockResultModal({ examSections = [], onClose, onSaved
       })
 
       const parsedSections = (data.sections || []).map((s) => ({
-        sectionName: s.sectionName || '',
+        sectionName: snapSectionName(s.sectionName || '', examSections),
         score: str(s.score), maxScore: str(s.maxScore), attempted: str(s.attempted),
         totalQuestions: str(s.totalQuestions), correct: str(s.correct), incorrect: str(s.incorrect),
         accuracy: str(s.accuracy), timeTakenSec: str(s.timeTakenSec),
