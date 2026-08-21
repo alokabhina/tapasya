@@ -25,8 +25,11 @@ export function buildFullTrend(attempts) {
 
 // Sectional tests grouped by subject — Quant should only ever be compared
 // against other Quant attempts, English against English, etc. Returns
-// { [sectionName]: trendPoints[] } so the UI can offer a subject picker.
-export function buildSectionalTrends(attempts) {
+// { [sectionName]: { totalAttempts, bestScore, avgScore, avgAccuracy,
+// trend, weakTopics, strongTopics } } — a full self-contained mini
+// dashboard per subject, not just a trend line, so each subject's stats
+// page has everything it needs on its own.
+export function buildSectionalDashboards(attempts) {
   const bySection = new Map() // sectionName -> attempts[]
   for (const a of attempts) {
     if (a.mode !== 'sectional') continue
@@ -36,7 +39,20 @@ export function buildSectionalTrends(attempts) {
     bySection.get(name).push(a)
   }
   const result = {}
-  for (const [name, list] of bySection) result[name] = buildTrend(list)
+  for (const [name, list] of bySection) {
+    const scores = list.map((a) => a.overall?.score).filter((v) => v != null)
+    const accuracies = list.map((a) => a.overall?.accuracy).filter((v) => v != null)
+    const topicRollup = buildTopicRollup(list)
+    result[name] = {
+      totalAttempts: list.length,
+      bestScore: scores.length ? Math.max(...scores) : null,
+      avgScore: scores.length ? +(scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(1) : null,
+      avgAccuracy: accuracies.length ? +(accuracies.reduce((s, v) => s + v, 0) / accuracies.length).toFixed(1) : null,
+      trend: buildTrend(list),
+      weakTopics: [...topicRollup].sort((a, b) => a.avgCorrectPct - b.avgCorrectPct).slice(0, 8),
+      strongTopics: [...topicRollup].sort((a, b) => b.avgCorrectPct - a.avgCorrectPct).slice(0, 8),
+    }
+  }
   return result
 }
 

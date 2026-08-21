@@ -7,6 +7,7 @@ import SubjectAccuracyChart from '@/components/mocktest/SubjectAccuracyChart'
 import AttemptsBreakdownChart from '@/components/mocktest/AttemptsBreakdownChart'
 import ScoreDistributionChart from '@/components/mocktest/ScoreDistributionChart'
 import WeakTopicsList from '@/components/mocktest/WeakTopicsList'
+import SectionalSubjectStats from '@/components/mocktest/SectionalSubjectStats'
 import AddMockResultModal from '@/components/mocktest/AddMockResultModal'
 import AttemptDetailView from '@/components/mocktest/AttemptDetailView'
 import { colorForSection, FULL_MOCK_SCORE_COLOR, FULL_MOCK_ACCURACY_COLOR, SECTIONAL_ACCURACY_COLOR } from '@/utils/sectionColors'
@@ -71,7 +72,7 @@ export default function MockExamDashboard() {
     return <div className="p-6 text-center text-slate-500 text-sm">Exam nahi mila</div>
   }
 
-  const { exam, summary, trend, fullTrend, sectionalTrends, subjectAccuracy, weakTopics, strongTopics } = dashboard
+  const { exam, summary, trend, fullTrend, sectionalTrends, sectionalDashboards, subjectAccuracy, weakTopics, strongTopics } = dashboard
   const sectionalSubjects = Object.keys(sectionalTrends || {})
   const activeTrendSubject = trendSubject && sectionalSubjects.includes(trendSubject) ? trendSubject : sectionalSubjects[0]
   const sectionalFiltered = tab === 'sectional' && sectionFilter !== 'all'
@@ -193,6 +194,16 @@ export default function MockExamDashboard() {
                 <button key={s.name} onClick={() => setSectionFilter(s.name)} className={`px-2.5 py-1 rounded-full text-[11px] shrink-0 ${sectionFilter === s.name ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>{s.name}</button>
               ))}
             </div>
+          )}
+
+          {/* Each subject's own mini-dashboard — stats, trend, weak/strong
+              topics — scoped entirely to that subject's sectional attempts. */}
+          {tab === 'sectional' && sectionFilter !== 'all' && (
+            <SectionalSubjectStats
+              sectionName={sectionFilter}
+              data={dashboard.sectionalDashboards?.[sectionFilter]}
+              examName={exam.name}
+            />
           )}
 
           {attemptsLoading ? (

@@ -100,7 +100,7 @@ function drawStroke(ctx, stroke, w, h) {
 
 // ── One page: lazily rendered when it scrolls near the viewport ────────────
 function PageBlock({
-  pageNum, pdfDoc, zoom, containerWidth, tool, color, penWidth, markerWidth, markerOpacity, eraserSize,
+  pageNum, pdfDoc, zoom, containerWidth, tool, color, penWidth, penOpacity, markerWidth, markerOpacity, eraserSize,
   strokes, onStroke, onErase, registerRenderObserver, registerViewObserver,
 }) {
   const wrapRef = useRef(null)
@@ -189,7 +189,7 @@ function PageBlock({
     }
     drawingRef.current = true
     const width = tool === 'marker' ? markerWidth : penWidth
-    const opacity = tool === 'marker' ? markerOpacity : 1
+    const opacity = tool === 'marker' ? markerOpacity : penOpacity
     currentStrokeRef.current = { tool, color, width, opacity, points: [pt] }
     overlayCanvasRef.current.setPointerCapture(e.pointerId)
   }
@@ -267,6 +267,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   const [tool, setTool] = useState('none') // 'none' = read/scroll mode (default) — pen kabhi apne aap select nahi rehta
   const [color, setColor] = useState(COLORS[0].hex)
   const [penWidth, setPenWidth] = useState(3)
+  const [penOpacity, setPenOpacity] = useState(1) // pen ki apni darkness — pehle sirf marker ki thi
   const [markerWidth, setMarkerWidth] = useState(16)
   const [markerOpacity, setMarkerOpacity] = useState(0.35)
   const [eraserSize, setEraserSize] = useState(3) // 1–10, eraser ki "size" (chota/bada)
@@ -277,6 +278,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   const customColorInputRef = useRef(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false) // any unsaved strokes since last save
+  const [autoSaveState, setAutoSaveState] = useState('saved') // 'saved' | 'pending' | 'saving' | 'error' — drives the status pill so you always know your marks are safe
   const [downloading, setDownloading] = useState(false)
   // Which file we're viewing/building on top of. Default to continuing on
   // the existing annotated version (if any) so previous markup isn't lost —
@@ -469,8 +471,20 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   // export always goes out as a brand new blob to the SAME annotated slot
   // (server overwrites it in place — see routes/pdfs.js), so re-saving
   // never creates extra files, just updates the one "annotated" copy.
-  async function handleSaveAnnotated() {
+  //
+  // `silent` (used by auto-save) skips the alert() on failure — auto-save
+  // retries on the next change anyway, and a popup mid-drawing would be
+  // disruptive. Re-entrant calls (a new stroke landing while a save is
+  // already in flight) don't stack up as concurrent saves — they just mark
+  // one more save as pending and it runs right after the current one.
+  const savingRef = useRef(false)
+  const pendingSaveRef = useRef(false)
+
+  async function handleSaveAnnotated({ silent = false } = {}) {
+    if (savingRef.current) { pendingSaveRef.current = true; return }
+    savingRef.current = true
     setSaving(true)
+    setAutoSaveState('saving')
     try {
       const { PDFDocument, rgb, LineCapStyle } = window.PDFLib
       const bytes = await fetch(sourceUrl).then((r) => r.arrayBuffer())
@@ -504,16 +518,56 @@ export default function PdfReader({ doc, onClose, onSaved }) {
       const updated = await saveAnnotatedPdf(doc._id, blob)
       onSaved?.(updated)
       setDirty(false)
+      setAutoSaveState('saved')
     } catch {
-      alert('Save nahi ho paya, dobara try karo')
+      setAutoSaveState('error')
+      if (!silent) alert('Save nahi ho paya, dobara try karo')
     } finally {
       setSaving(false)
+      savingRef.current = false
+      if (pendingSaveRef.current) {
+        pendingSaveRef.current = false
+        handleSaveAnnotated({ silent: true })
+      }
     }
   }
 
-  function switchSource(next) {
+  // ── Auto-save: 2.5s after the last stroke/erase/undo/redo, save quietly
+  // in the background — so forgetting to hit "Save" before closing never
+  // loses work. Timer resets on every new change, so a burst of drawing
+  // doesn't trigger a save per-stroke, only once things settle down.
+  useEffect(() => {
+    if (!dirty) return undefined
+    setAutoSaveState('pending')
+    const t = setTimeout(() => { handleSaveAnnotated({ silent: true }) }, 2500)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [annotations, dirty])
+
+  // Best-effort final save if you close the reader (or navigate away) with
+  // unsaved marks still pending — don't make "did I remember to save"
+  // something you have to think about at all.
+  async function handleClose() {
+    if (dirty) { try { await handleSaveAnnotated({ silent: true }) } catch { /* swallow — user is leaving anyway */ } }
+    onClose()
+  }
+
+  useEffect(() => {
+    function beforeUnload(e) {
+      if (!dirty) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => window.removeEventListener('beforeunload', beforeUnload)
+  }, [dirty])
+
+  async function switchSource(next) {
     if (next === editingSource) return
-    if (dirty && !confirm('Abhi ke unsaved marks chhoot jayenge agar switch karo. Continue?')) return
+    if (dirty) {
+      if (!confirm('Abhi ke unsaved marks pehle save kar loon, phir switch karu?')) return
+      await handleSaveAnnotated({ silent: true })
+    }
     setEditingSource(next)
   }
 
@@ -547,7 +601,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
           all the remaining vertical space. Scrolls horizontally on narrow
           screens instead of wrapping to a second row. */}
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-800 overflow-x-auto no-scrollbar shrink-0">
-        <button onClick={onClose} className="text-slate-400 hover:text-white w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center shrink-0">
+        <button onClick={handleClose} className="text-slate-400 hover:text-white w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center shrink-0">
           <i className="ti ti-arrow-left text-xl" />
         </button>
         <p className="text-sm text-slate-200 truncate max-w-[84px] sm:max-w-[200px] shrink-0">{doc.title}</p>
@@ -692,32 +746,35 @@ export default function PdfReader({ doc, onClose, onSaved }) {
               </button>
             </div>
 
-            {/* Darkness (opacity) — marker only, like a highlighter's ink strength */}
-            {tool === 'marker' && (
-              <div className="relative shrink-0">
-                <button
-                  onClick={() => setPanelOpen((p) => (p === 'opacity' ? null : 'opacity'))}
-                  title="Darkness"
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-colors ${panelOpen === 'opacity' ? 'bg-orange-500/20 border-orange-500/50' : 'bg-slate-800/60 border-slate-700'}`}
-                >
-                  <i className="ti ti-droplet-half text-sm text-slate-300" />
-                </button>
-                {panelOpen === 'opacity' && (
-                  <div className="absolute top-11 left-0 z-20 bg-slate-800 border border-slate-700 rounded-lg p-3 w-40 shadow-xl">
-                    <p className="text-[10px] text-slate-400 mb-1.5">Darkness</p>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="0.8"
-                      step="0.05"
-                      value={markerOpacity}
-                      onChange={(e) => setMarkerOpacity(+e.target.value)}
-                      className="w-full accent-orange-500"
-                    />
+            {/* Darkness (opacity) — for both pen and marker, so pen strokes
+                can be made lighter (e.g. for light annotations) or the
+                marker's ink strength adjusted, like a highlighter */}
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setPanelOpen((p) => (p === 'opacity' ? null : 'opacity'))}
+                title="Darkness"
+                className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-colors ${panelOpen === 'opacity' ? 'bg-orange-500/20 border-orange-500/50' : 'bg-slate-800/60 border-slate-700'}`}
+              >
+                <i className="ti ti-droplet-half text-sm text-slate-300" />
+              </button>
+              {panelOpen === 'opacity' && (
+                <div className="absolute top-11 left-0 z-20 bg-slate-800 border border-slate-700 rounded-lg p-3 w-40 shadow-xl">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-[10px] text-slate-400">Darkness</p>
+                    <p className="text-[10px] text-slate-300 tabular-nums">{Math.round((tool === 'marker' ? markerOpacity : penOpacity) * 100)}%</p>
                   </div>
-                )}
-              </div>
-            )}
+                  <input
+                    type="range"
+                    min="0.1"
+                    max={tool === 'marker' ? '0.8' : '1'}
+                    step="0.05"
+                    value={tool === 'marker' ? markerOpacity : penOpacity}
+                    onChange={(e) => (tool === 'marker' ? setMarkerOpacity(+e.target.value) : setPenOpacity(+e.target.value))}
+                    className="w-full accent-orange-500"
+                  />
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -821,8 +878,19 @@ export default function PdfReader({ doc, onClose, onSaved }) {
         >
           {downloading ? <div className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" /> : <i className="ti ti-download text-base" />}
         </button>
+
+        {/* Auto-save status — so you never have to wonder if your marks
+            are safe. Manual "Save" button still there for an immediate
+            save instead of waiting out the auto-save debounce. */}
+        <span className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-500 shrink-0 px-1">
+          {autoSaveState === 'saving' && (<><div className="w-3 h-3 rounded-full border-2 border-slate-600 border-t-slate-300 animate-spin" /> Saving...</>)}
+          {autoSaveState === 'pending' && (<><span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Save ho raha hai jald hi...</>)}
+          {autoSaveState === 'saved' && (<><i className="ti ti-circle-check text-green-500 text-sm" /> Sab save ho gaya</>)}
+          {autoSaveState === 'error' && (<><i className="ti ti-alert-circle text-red-400 text-sm" /> Save fail hua</>)}
+        </span>
+
         <button
-          onClick={handleSaveAnnotated}
+          onClick={() => handleSaveAnnotated()}
           disabled={saving || !dirty}
           className="px-3 sm:px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-xs sm:text-sm font-semibold flex items-center gap-1.5 shrink-0"
         >
@@ -862,6 +930,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
             tool={tool}
             color={color}
             penWidth={penWidth}
+            penOpacity={penOpacity}
             markerWidth={markerWidth}
             markerOpacity={markerOpacity}
             eraserSize={eraserSize}

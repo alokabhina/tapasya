@@ -15,6 +15,13 @@ const pdfDocSchema = new mongoose.Schema({
   annotatedAt:         { type: Date, default: null },
   fileSizeBytes:       { type: Number, default: 0 },
   pageCount:           { type: Number, default: 0 },
+  // Freeform folder name for organizing the library (e.g. "Quant",
+  // "English") — null/empty means it sits in the "Ungrouped" bucket.
+  // Kept as a plain string on the doc itself rather than a separate Folder
+  // collection: a folder exists simply because at least one PDF references
+  // it, which is exactly how the "create a folder, put PDFs in it" flow
+  // works from the UI (no empty-folder bookkeeping needed).
+  folder:              { type: String, default: null, trim: true },
   // Uploaded by the PDF-library admin, visible to every user (not just the
   // uploader). Regular users can read/annotate it, but their markup goes
   // into a personal PdfAnnotation layer (see model below) — the shared
@@ -25,6 +32,7 @@ const pdfDocSchema = new mongoose.Schema({
 
 pdfDocSchema.index({ userId: 1, createdAt: -1 })
 pdfDocSchema.index({ isGlobal: 1 })
+pdfDocSchema.index({ userId: 1, folder: 1 })
 
 // Personal annotation layer for GLOBAL PDFs only — one row per (user, doc).
 // A regular user's markup on a shared/global PDF lives here, never on the

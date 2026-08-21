@@ -89,11 +89,12 @@ router.get('/is-admin', async (req, res) => {
   }
 })
 
-// POST /api/pdfs/upload   multipart: file, title, global ('true'/'false')
+// POST /api/pdfs/upload   multipart: file, title, global ('true'/'false'), folder
 router.post('/upload', handleUpload, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
     const title = (req.body.title || req.file.originalname || 'Untitled').replace(/\.pdf$/i, '')
+    const folder = (req.body.folder || '').trim() || null
 
     // "global" is only ever honoured for the actual admin — anyone else
     // sending the flag just gets a normal private upload, silently.
@@ -106,6 +107,7 @@ router.post('/upload', handleUpload, async (req, res) => {
     const doc = await PdfDoc.create({
       userId: req.user.id,
       title,
+      folder,
       originalUrl: result.secure_url,
       originalPublicId: result.public_id,
       fileSizeBytes: req.file.size,
@@ -141,6 +143,24 @@ router.get('/', async (req, res) => {
     ]
     all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     res.json(all)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// PATCH /api/pdfs/:id   body: { title?, folder? } — owner only. Used to
+// rename a PDF or move it into a different folder (or out to "Ungrouped"
+// by sending folder: '' / null).
+router.patch('/:id', async (req, res) => {
+  try {
+    const doc = await PdfDoc.findOne({ _id: req.params.id })
+    if (!doc) return res.status(404).json({ error: 'Not found' })
+    if (String(doc.userId) !== req.user.id) return res.status(404).json({ error: 'Not found' })
+
+    if (req.body.title != null) doc.title = String(req.body.title).trim() || doc.title
+    if (req.body.folder !== undefined) doc.folder = (req.body.folder || '').trim() || null
+    await doc.save()
+    res.json(doc)
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
