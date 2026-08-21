@@ -9,6 +9,7 @@ import ScoreDistributionChart from '@/components/mocktest/ScoreDistributionChart
 import WeakTopicsList from '@/components/mocktest/WeakTopicsList'
 import AddMockResultModal from '@/components/mocktest/AddMockResultModal'
 import AttemptDetailView from '@/components/mocktest/AttemptDetailView'
+import { colorForSection, FULL_MOCK_SCORE_COLOR, FULL_MOCK_ACCURACY_COLOR, SECTIONAL_ACCURACY_COLOR } from '@/utils/sectionColors'
 
 // Section-name matching is normalized (trimmed + case-insensitive) so a
 // result saved with slightly different casing/whitespace than the exam's
@@ -34,6 +35,7 @@ export default function MockExamDashboard() {
   const [showAdd, setShowAdd] = useState(false)
   const [viewingAttempt, setViewingAttempt] = useState(null)
   const [sectionFilter, setSectionFilter] = useState('all')
+  const [trendSubject, setTrendSubject] = useState(null) // which subject's sectional trend is shown in Overview
 
   const loadDashboard = useCallback(() => {
     setLoading(true)
@@ -69,7 +71,9 @@ export default function MockExamDashboard() {
     return <div className="p-6 text-center text-slate-500 text-sm">Exam nahi mila</div>
   }
 
-  const { exam, summary, trend, subjectAccuracy, weakTopics, strongTopics } = dashboard
+  const { exam, summary, trend, fullTrend, sectionalTrends, subjectAccuracy, weakTopics, strongTopics } = dashboard
+  const sectionalSubjects = Object.keys(sectionalTrends || {})
+  const activeTrendSubject = trendSubject && sectionalSubjects.includes(trendSubject) ? trendSubject : sectionalSubjects[0]
   const sectionalFiltered = tab === 'sectional' && sectionFilter !== 'all'
     ? attempts.filter((a) => (a.sections || []).some((s) => norm(s.sectionName) === norm(sectionFilter)))
     : attempts
@@ -113,9 +117,41 @@ export default function MockExamDashboard() {
           </div>
 
           <div className="rounded-2xl border border-slate-800 p-4">
-            <p className="text-sm font-semibold text-slate-200 mb-3">Score & Accuracy Trend</p>
-            <ScoreTrendChart trend={trend} />
+            <p className="text-sm font-semibold text-slate-200 mb-3">Full Mock Trend</p>
+            <ScoreTrendChart
+              trend={fullTrend}
+              scoreColor={FULL_MOCK_SCORE_COLOR}
+              accuracyColor={FULL_MOCK_ACCURACY_COLOR}
+              emptyMessage="Kam se kam 2 Full Mock results chahiye trend dekhne ke liye"
+            />
           </div>
+
+          {sectionalSubjects.length > 0 && (
+            <div className="rounded-2xl border border-slate-800 p-4">
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-slate-200">Sectional Trend</p>
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                  {sectionalSubjects.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setTrendSubject(s)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] shrink-0 border transition-colors ${activeTrendSubject === s ? 'text-white' : 'bg-slate-800 text-slate-400 border-slate-700'}`}
+                      style={activeTrendSubject === s ? { background: colorForSection(s) + '33', borderColor: colorForSection(s), color: colorForSection(s) } : undefined}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <ScoreTrendChart
+                trend={sectionalTrends[activeTrendSubject] || []}
+                scoreColor={colorForSection(activeTrendSubject)}
+                accuracyColor={SECTIONAL_ACCURACY_COLOR}
+                scoreLabel={`${activeTrendSubject} Score %`}
+                emptyMessage={`Kam se kam 2 "${activeTrendSubject}" sectional results chahiye trend dekhne ke liye`}
+              />
+            </div>
+          )}
 
           {subjectAccuracy.length > 0 && (
             <div className="rounded-2xl border border-slate-800 p-4">

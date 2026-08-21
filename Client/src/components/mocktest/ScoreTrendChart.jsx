@@ -2,10 +2,17 @@
 // Pure SVG line chart — score % and accuracy % over time. No chart library
 // dependency, matches the pattern used elsewhere in this app (e.g. the
 // sparkline on the Mock Tracker list cards).
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
-export default function ScoreTrendChart({ trend = [] }) {
+export default function ScoreTrendChart({
+  trend = [],
+  scoreColor = '#fb923c',
+  accuracyColor = '#60a5fa',
+  scoreLabel = 'Score %',
+  emptyMessage = 'Kam se kam 2 results chahiye trend dekhne ke liye',
+}) {
   const [hover, setHover] = useState(null)
+  const gradientId = useId()
 
   const points = trend
     .filter((t) => t.score != null)
@@ -14,7 +21,7 @@ export default function ScoreTrendChart({ trend = [] }) {
   if (points.length < 2) {
     return (
       <div className="h-48 flex items-center justify-center text-xs text-slate-600 text-center px-6">
-        Kam se kam 2 results chahiye trend dekhne ke liye
+        {emptyMessage}
       </div>
     )
   }
@@ -53,8 +60,8 @@ export default function ScoreTrendChart({ trend = [] }) {
   return (
     <div>
       <div className="flex items-center gap-4 mb-2 text-[11px]">
-        <span className="flex items-center gap-1.5 text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Score %</span>
-        <span className="flex items-center gap-1.5 text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-blue-400" /> Accuracy %</span>
+        <span className="flex items-center gap-1.5 text-slate-400"><span className="w-2.5 h-2.5 rounded-full" style={{ background: scoreColor }} /> {scoreLabel}</span>
+        <span className="flex items-center gap-1.5 text-slate-400"><span className="w-2.5 h-2.5 rounded-full" style={{ background: accuracyColor }} /> Accuracy %</span>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
@@ -65,9 +72,9 @@ export default function ScoreTrendChart({ trend = [] }) {
         onTouchEnd={() => setHover(null)}
       >
         <defs>
-          <linearGradient id="scoreFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#fb923c" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#fb923c" stopOpacity="0" />
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={scoreColor} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={scoreColor} stopOpacity="0" />
           </linearGradient>
         </defs>
 
@@ -87,20 +94,20 @@ export default function ScoreTrendChart({ trend = [] }) {
         ) : null)}
 
         {/* score area fill */}
-        <path d={areaPath} fill="url(#scoreFill)" stroke="none" />
+        <path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
 
         {/* hover guide line */}
         {active && (
           <line x1={xFor(hover)} x2={xFor(hover)} y1={PAD_T} y2={PAD_T + plotH} stroke="#475569" strokeWidth="1" strokeDasharray="3 3" />
         )}
 
-        <path d={accPath} fill="none" stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 3" />
-        <path d={scorePath} fill="none" stroke="#fb923c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={accPath} fill="none" stroke={accuracyColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 3" />
+        <path d={scorePath} fill="none" stroke={scoreColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
 
         {points.map((p, i) => (
           <g key={i}>
-            <circle cx={xFor(i)} cy={yFor(p.accuracy ?? 0)} r={hover === i ? 5 : 3} fill="#60a5fa" stroke="#0f172a" strokeWidth={hover === i ? 1.5 : 0} />
-            <circle cx={xFor(i)} cy={yFor(p.scorePct)} r={hover === i ? 5 : 3} fill="#fb923c" stroke="#0f172a" strokeWidth={hover === i ? 1.5 : 0} />
+            <circle cx={xFor(i)} cy={yFor(p.accuracy ?? 0)} r={hover === i ? 5 : 3} fill={accuracyColor} stroke="#0f172a" strokeWidth={hover === i ? 1.5 : 0} />
+            <circle cx={xFor(i)} cy={yFor(p.scorePct)} r={hover === i ? 5 : 3} fill={scoreColor} stroke="#0f172a" strokeWidth={hover === i ? 1.5 : 0} />
           </g>
         ))}
       </svg>
@@ -109,8 +116,8 @@ export default function ScoreTrendChart({ trend = [] }) {
         {active ? (
           <>
             {active.title || new Date(active.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-            {' — '}Score: <span className="text-orange-400 font-medium">{active.score}{active.maxScore ? `/${active.maxScore}` : ''}</span>
-            {' · '}Accuracy: <span className="text-blue-400 font-medium">{active.accuracy}%</span>
+            {' — '}Score: <span className="font-medium" style={{ color: scoreColor }}>{active.score}{active.maxScore ? `/${active.maxScore}` : ''}</span>
+            {' · '}Accuracy: <span className="font-medium" style={{ color: accuracyColor }}>{active.accuracy}%</span>
           </>
         ) : (
           <span className="text-slate-600">Hover / touch karke details dekho</span>

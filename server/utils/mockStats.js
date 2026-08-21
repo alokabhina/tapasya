@@ -16,6 +16,30 @@ export function buildTrend(attempts) {
     }))
 }
 
+// Full Mocks only — comparing a full mock's score against a sectional
+// test's score is meaningless (different max scores, different scope), so
+// the "compare" trend chart needs full mocks isolated from everything else.
+export function buildFullTrend(attempts) {
+  return buildTrend(attempts.filter((a) => a.mode === 'full'))
+}
+
+// Sectional tests grouped by subject — Quant should only ever be compared
+// against other Quant attempts, English against English, etc. Returns
+// { [sectionName]: trendPoints[] } so the UI can offer a subject picker.
+export function buildSectionalTrends(attempts) {
+  const bySection = new Map() // sectionName -> attempts[]
+  for (const a of attempts) {
+    if (a.mode !== 'sectional') continue
+    const name = a.sections?.[0]?.sectionName
+    if (!name) continue
+    if (!bySection.has(name)) bySection.set(name, [])
+    bySection.get(name).push(a)
+  }
+  const result = {}
+  for (const [name, list] of bySection) result[name] = buildTrend(list)
+  return result
+}
+
 // Average accuracy per section name, across ALL attempts (full + sectional
 // both contribute their section-level data — this is section-level, not
 // full-vs-sectional comparison, so mixing here is intentional and correct).

@@ -3,7 +3,7 @@ import express from 'express'
 import authMiddleware from '../middleware/auth.js'
 import MockExam from '../models/MockExam.js'
 import MockAttempt from '../models/MockAttempt.js'
-import { buildTrend, buildSubjectAccuracy, buildWeakTopics, buildStrongTopics, buildSummaryStats } from '../utils/mockStats.js'
+import { buildTrend, buildFullTrend, buildSectionalTrends, buildSubjectAccuracy, buildWeakTopics, buildStrongTopics, buildSummaryStats } from '../utils/mockStats.js'
 
 const router = express.Router()
 router.use(authMiddleware)
@@ -185,6 +185,8 @@ router.get('/:id/dashboard', async (req, res) => {
       exam,
       summary: buildSummaryStats(attempts),
       trend: buildTrend(attempts),
+      fullTrend: buildFullTrend(attempts),
+      sectionalTrends: buildSectionalTrends(attempts),
       subjectAccuracy: buildSubjectAccuracy(attempts),
       weakTopics: buildWeakTopics(attempts),
       strongTopics: buildStrongTopics(attempts),

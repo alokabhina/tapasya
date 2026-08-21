@@ -1,6 +1,8 @@
 // src/components/mocktest/AttemptsBreakdownChart.jsx
 // Donut chart — Full Mocks vs Sectional Tests split, so it's clear at a
 // glance how attempts are distributed for this exam.
+import { FULL_MOCK_SCORE_COLOR, SECTIONAL_ACCURACY_COLOR } from '@/utils/sectionColors'
+
 export default function AttemptsBreakdownChart({ full = 0, sectional = 0 }) {
   const total = full + sectional
   if (total === 0) {
@@ -19,13 +21,13 @@ export default function AttemptsBreakdownChart({ full = 0, sectional = 0 }) {
         <circle cx={CX} cy={CY} r={R} fill="none" stroke="#1e293b" strokeWidth={STROKE} />
         {full > 0 && (
           <circle
-            cx={CX} cy={CY} r={R} fill="none" stroke="#fb923c" strokeWidth={STROKE}
+            cx={CX} cy={CY} r={R} fill="none" stroke={FULL_MOCK_SCORE_COLOR} strokeWidth={STROKE}
             strokeDasharray={`${fullLen} ${circumference - fullLen}`} strokeLinecap="butt"
           />
         )}
         {sectional > 0 && (
           <circle
-            cx={CX} cy={CY} r={R} fill="none" stroke="#60a5fa" strokeWidth={STROKE}
+            cx={CX} cy={CY} r={R} fill="none" stroke={SECTIONAL_ACCURACY_COLOR} strokeWidth={STROKE}
             strokeDasharray={`${sectionalLen} ${circumference - sectionalLen}`}
             strokeDashoffset={-fullLen}
             strokeLinecap="butt"
@@ -34,12 +36,12 @@ export default function AttemptsBreakdownChart({ full = 0, sectional = 0 }) {
       </svg>
       <div className="space-y-2.5">
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-orange-500 shrink-0" />
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: FULL_MOCK_SCORE_COLOR }} />
           <span className="text-xs text-slate-300">Full Mocks</span>
           <span className="text-xs font-semibold text-slate-200">{full}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-blue-400 shrink-0" />
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: SECTIONAL_ACCURACY_COLOR }} />
           <span className="text-xs text-slate-300">Sectional Tests</span>
           <span className="text-xs font-semibold text-slate-200">{sectional}</span>
         </div>
