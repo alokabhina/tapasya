@@ -17,12 +17,21 @@ function str(v) { return v == null ? '' : String(v) }
 const norm = (s) => (s || '').trim().toLowerCase()
 
 // AI-parsed section names won't always match the exam's saved section names
-// exactly (different casing/whitespace). Snap to the real one when there's
-// a normalized match, so results land under the right subject tab later —
-// otherwise the data only ever shows up in "All", not the specific subject.
+// exactly — sometimes it's just casing/whitespace ("english " vs "English"),
+// but sometimes the AI returns a fuller phrase ("English Language" vs the
+// exam's own "English"). Either way, letting that raw text through breaks
+// subject-tab filtering later (saved sectionName never equals any tab's
+// name, so the result only ever shows under "All"). So this ALWAYS snaps to
+// a real exam section: exact match first, then a substring match in either
+// direction, and if genuinely nothing matches, falls back to the exam's
+// first section rather than leaving the field pointing at free text the
+// <select> can't represent (which is what silently broke it before).
 function snapSectionName(name, examSections) {
-  const match = examSections.find((s) => norm(s.name) === norm(name))
-  return match ? match.name : name
+  if (!examSections.length) return name || ''
+  const n = norm(name)
+  let match = examSections.find((s) => norm(s.name) === n)
+  if (!match && n) match = examSections.find((s) => n.includes(norm(s.name)) || norm(s.name).includes(n))
+  return (match || examSections[0]).name
 }
 
 export default function AddMockResultModal({ examSections = [], onClose, onSaved, examId }) {
@@ -40,6 +49,7 @@ export default function AddMockResultModal({ examSections = [], onClose, onSaved
 
   const [mode, setMode] = useState('full') // 'full' | 'sectional'
   const [sectionalName, setSectionalName] = useState(examSections[0]?.name || '')
+  const [sectionSnapNote, setSectionSnapNote] = useState('') // shown when an AI-parsed section name got auto-corrected to an existing exam section
   const [title, setTitle] = useState('')
   const [platform, setPlatform] = useState('')
   const [customPlatform, setCustomPlatform] = useState('')
@@ -97,13 +107,20 @@ export default function AddMockResultModal({ examSections = [], onClose, onSaved
         rank: str(o.rank), outOf: str(o.outOf),
       })
 
-      const parsedSections = (data.sections || []).map((s) => ({
-        sectionName: snapSectionName(s.sectionName || '', examSections),
-        score: str(s.score), maxScore: str(s.maxScore), attempted: str(s.attempted),
-        totalQuestions: str(s.totalQuestions), correct: str(s.correct), incorrect: str(s.incorrect),
-        accuracy: str(s.accuracy), timeTakenSec: str(s.timeTakenSec),
-        topics: (s.topics || []).map((t) => ({ name: t.name || '', correctPct: str(t.correctPct), correct: str(t.correct), total: str(t.total) })),
-      }))
+      const parsedSections = (data.sections || []).map((s) => {
+        const originalName = (s.sectionName || '').trim()
+        const snapped = snapSectionName(originalName, examSections)
+        return {
+          sectionName: snapped,
+          _originalName: originalName, // kept only in memory for the correction hint below, never saved
+          score: str(s.score), maxScore: str(s.maxScore), attempted: str(s.attempted),
+          totalQuestions: str(s.totalQuestions), correct: str(s.correct), incorrect: str(s.incorrect),
+          accuracy: str(s.accuracy), timeTakenSec: str(s.timeTakenSec),
+          topics: (s.topics || []).map((t) => ({ name: t.name || '', correctPct: str(t.correctPct), correct: str(t.correct), total: str(t.total) })),
+        }
+      })
+      const corrected = parsedSections.find((s) => s._originalName && norm(s._originalName) !== norm(s.sectionName))
+      setSectionSnapNote(corrected ? `"${corrected._originalName}" ko "${corrected.sectionName}" section se match kiya gaya — check kar lo sahi hai` : '')
       if (parsedSections.length) {
         setSections(parsedSections)
         if (data.mode === 'sectional') setSectionalName(parsedSections[0].sectionName)
@@ -275,6 +292,7 @@ export default function AddMockResultModal({ examSections = [], onClose, onSaved
                 {examSections.length === 0 && <option value="">Koi section nahi hai</option>}
                 {examSections.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
               </select>
+              {sectionSnapNote && <p className="text-[10px] text-amber-500/80 mt-1">{sectionSnapNote}</p>}
             </div>
           )}
 
