@@ -5,6 +5,7 @@
     { "path": "/api/cron/push/check?slot=afternoon",  "schedule": "30 8 * * *" },
     { "path": "/api/cron/push/check?slot=lateafternoon", "schedule": "30 11 * * *" },
     { "path": "/api/cron/push/check?slot=evening",    "schedule": "0 14 * * *" },
-    { "path": "/api/cron/push/check?slot=night",      "schedule": "0 16 * * *" }
+    { "path": "/api/cron/push/check?slot=night",      "schedule": "0 16 * * *" },
+    { "path": "/api/cron/current-affairs",            "schedule": "30 1 * * *" }
   ]
 }

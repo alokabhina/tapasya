@@ -57,6 +57,9 @@ const SpeedMathStats     = lazy(() => import('./pages/SpeedMathStats'));
 // ── YT Study Hub (personal YouTube watchlist) ───────────────────────────────
 const YTHub = lazy(() => import('./pages/YTHub'));
 const PdfLibrary = lazy(() => import('./pages/PdfLibrary'));
+const CurrentAffairs = lazy(() => import('./pages/CurrentAffairs'));
+const CAQuiz = lazy(() => import('./pages/CAQuiz'));
+const ClassNotes = lazy(() => import('./pages/ClassNotes'));
 const OtherTools = lazy(() => import('./pages/OtherTools'));
 const MockTracker = lazy(() => import('./pages/MockTracker'));
 const MockExamDashboard = lazy(() => import('./pages/MockExamDashboard'));
@@ -167,6 +170,9 @@ export default function App() {
             ['/syllabus',           <Syllabus />],
             ['/yt-hub',             <YTHub />],
             ['/pdf-library',        <PdfLibrary />],
+            ['/current-affairs',    <CurrentAffairs />],
+            ['/current-affairs/quiz', <CAQuiz />],
+            ['/class-notes',        <ClassNotes />],
             ['/other-tools',        <OtherTools />],
             ['/mock-tracker',       <MockTracker />],
             ['/mock-tracker/:examId', <MockExamDashboard />],

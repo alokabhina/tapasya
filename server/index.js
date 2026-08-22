@@ -23,6 +23,10 @@ import channelRoutes  from './routes/channels.js'
 import folderRoutes   from './routes/folders.js'
 import pdfRoutes      from './routes/pdfs.js'
 import mockExamsRoutes from './routes/mockExams.js'
+import currentAffairsRoutes from './routes/currentAffairs.js'
+import { cronCurrentAffairsRouter } from './routes/cronCurrentAffairs.js'
+import classNotesRoutes from './routes/classNotes.js'
+import caQuestionsRoutes from './routes/caQuestions.js'
 import { checkAndFetchVocab } from './utils/opentdbFetcher.js'
 import { connectDB } from './utils/db.js'
 
@@ -75,6 +79,10 @@ app.use('/api/channels',  channelRoutes)
 app.use('/api/folders',   folderRoutes)
 app.use('/api/pdfs',      pdfRoutes)
 app.use('/api/mock-exams', mockExamsRoutes)
+app.use('/api/current-affairs', currentAffairsRoutes)
+app.use('/api/cron/current-affairs', cronCurrentAffairsRouter)
+app.use('/api/class-notes', classNotesRoutes)
+app.use('/api/ca-questions', caQuestionsRoutes)
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ ok: true }))
