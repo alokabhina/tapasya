@@ -180,7 +180,7 @@ export default function CurrentAffairs() {
           <div className={`mb-3 text-[12px] rounded-lg px-3 py-2 border ${fetchResult.error ? 'bg-red-950/30 border-red-800 text-red-400' : 'bg-emerald-950/30 border-emerald-800 text-emerald-400'}`}>
             {fetchResult.error
               ? `Fetch failed: ${fetchResult.error}`
-              : `Fetched ${fetchResult.fetched} items from RSS · ${fetchResult.inserted} new added · ${fetchResult.skipped} already existed`}
+              : `Fetched ${fetchResult.fetched} from RSS · ${fetchResult.inserted} new added · ${fetchResult.skipped} duplicates skipped · ${fetchResult.filteredNoise || 0} noisy/technical items filtered out`}
           </div>
         )}
 

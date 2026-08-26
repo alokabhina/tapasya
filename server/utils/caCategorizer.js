@@ -16,6 +16,49 @@ const RULES = [
   { category: 'National',    re: /government of india|cabinet|ministry|parliament|president|prime minister/i },
 ]
 
+// Headlines matching any of these are routine administrative/technical
+// notices — auction results, treasury-bill notifications, circular
+// amendment titles, weekly statistical bulletins, sanctions-list entity
+// updates, lead-bank-responsibility assignments, etc. They're real RBI/PIB
+// publications, but essentially never show up as an actual exam question
+// (no memorable fact, just a reference number and a procedural title), so
+// they're filtered out at fetch time instead of cluttering the feed. The
+// admin can always add one back manually via "+ Add" if a specific one
+// turns out to matter.
+const NOISE_PATTERNS = [
+  /auction results?/i,
+  /auction of.*treasury bills?/i,
+  /government stock.*auction/i,
+  /variable rate reverse repo/i,
+  /\bvrrr\b/i,
+  /amendment directions?,?\s*\d{4}/i,
+  /weekly statistical supplement/i,
+  /section 51a of uapa/i,
+  /unsc.*sanctions list/i,
+  /lead bank responsibility/i,
+  /^auction of /i,
+  /notified amount/i,
+  /cut-?off/i,
+  /^government stock/i,
+]
+
+// item: { headline, oneLiner }
+export function isNoise(item) {
+  const text = item.headline || ''
+  return NOISE_PATTERNS.some((re) => re.test(text))
+}
+
+// Loose de-duplication for headlines that are word-for-word (or near
+// enough) reprints across sources/RSS entries — link-based dedup alone
+// misses these since each source has its own URL for the "same" story.
+export function normalizeHeadline(headline) {
+  return String(headline || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')   // strip punctuation
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 // item: { headline, oneLiner, defaultCategory }
 // Returns { category, entity, action, value, blankableFact } — all best-effort.
 export function guessTags(item) {

@@ -5,15 +5,28 @@
 // something only Vercel's infra can trigger).
 import CurrentAffair from '../models/CurrentAffair.js'
 import { fetchAllFeeds } from '../utils/rssFetcher.js'
-import { guessTags, toMonthKey } from '../utils/caCategorizer.js'
+import { guessTags, toMonthKey, isNoise, normalizeHeadline } from '../utils/caCategorizer.js'
 
 export async function syncCurrentAffairsFromFeeds() {
   const fetched = await fetchAllFeeds()
-  let inserted = 0, skipped = 0
+  let inserted = 0, skipped = 0, filteredNoise = 0
+
+  // Pull recent normalized headlines once up front (last 60 days is plenty)
+  // instead of a DB round-trip per item — used to catch the same story
+  // reprinted with a different URL across sources.
+  const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+  const recent = await CurrentAffair.find({ date: { $gte: cutoff } }).select('headline')
+  const seenHeadlines = new Set(recent.map((r) => normalizeHeadline(r.headline)))
 
   for (const item of fetched) {
+    if (isNoise(item)) { filteredNoise++; continue }
+
     const exists = await CurrentAffair.findOne({ dedupeKey: item.dedupeKey })
     if (exists) { skipped++; continue }
+
+    const normalized = normalizeHeadline(item.headline)
+    if (seenHeadlines.has(normalized)) { skipped++; continue }
+    seenHeadlines.add(normalized)
 
     const tags = guessTags(item)
     await CurrentAffair.create({
@@ -34,5 +47,5 @@ export async function syncCurrentAffairsFromFeeds() {
     inserted++
   }
 
-  return { fetched: fetched.length, inserted, skipped }
+  return { fetched: fetched.length, inserted, skipped, filteredNoise }
 }
