@@ -26,6 +26,10 @@ import { saveAnnotatedPdf } from '@/api/pdfs'
 const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
 const PDFJS_WORKER_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
 const PDFLIB_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js'
+// Single draft "kind" now — there's only ever one live editable copy per
+// doc (always built on the original + persisted strokes), no more
+// original-vs-annotated split to key drafts by.
+const DRAFT_KIND = 'live'
 
 const COLORS = [
   { name: 'Yellow', hex: '#facc15' },
@@ -39,6 +43,33 @@ const COLORS = [
   { name: 'White', hex: '#f8fafc' },
   { name: 'Black', hex: '#1e293b' },
 ]
+
+// ── Local draft backup (crash-safe autosave) ────────────────────────────────
+// Strokes are backed up to localStorage the instant they change, so a tab
+// crash/kill/accidental close never loses work — separate from the actual
+// "Save" which uploads a merged PDF + the raw strokes to the server.
+function draftKey(docId, source) {
+  return `pdfDraft:${docId}:${source}`
+}
+function loadDraft(docId, source) {
+  try {
+    const raw = localStorage.getItem(draftKey(docId, source))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed && parsed.annotations && Object.keys(parsed.annotations).length) return parsed
+    return null
+  } catch {
+    return null
+  }
+}
+function saveDraft(docId, source, annotations) {
+  try {
+    localStorage.setItem(draftKey(docId, source), JSON.stringify({ annotations, savedAt: Date.now() }))
+  } catch { /* storage full/unavailable — draft backup is best-effort only */ }
+}
+function clearDraft(docId, source) {
+  try { localStorage.removeItem(draftKey(docId, source)) } catch { /* ignore */ }
+}
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -100,7 +131,7 @@ function drawStroke(ctx, stroke, w, h) {
 
 // ── One page: lazily rendered when it scrolls near the viewport ────────────
 function PageBlock({
-  pageNum, pdfDoc, zoom, containerWidth, tool, color, penWidth, markerWidth, markerOpacity, eraserSize,
+  pageNum, pdfDoc, zoom, containerWidth, tool, color, penWidth, penOpacity, markerWidth, markerOpacity, eraserSize,
   strokes, onStroke, onErase, registerRenderObserver, registerViewObserver,
 }) {
   const wrapRef = useRef(null)
@@ -109,6 +140,7 @@ function PageBlock({
   const renderTaskRef = useRef(null)
   const drawingRef = useRef(false)
   const currentStrokeRef = useRef(null)
+  const cssSizeRef = useRef({ w: 0, h: 0 }) // canvas CSS (logical) size — backing-store pixels are this × devicePixelRatio
   const [rendered, setRendered] = useState(false)
   const [shouldRender, setShouldRender] = useState(false)
 
@@ -134,18 +166,28 @@ function PageBlock({
     const unscaledViewport = page.getViewport({ scale: 1 })
     const fitScale = Math.min(containerWidth, 1100) / unscaledViewport.width
     const viewport = page.getViewport({ scale: fitScale * zoom })
+    // Mobile screens have a devicePixelRatio > 1 (often 2–3x). If we only
+    // give the canvas as many backing-store pixels as CSS pixels, the
+    // browser has to upscale it to fill the physical screen — that's the
+    // "PDF looks blurry on mobile" bug. Fix: render at CSS-size × DPR into
+    // the canvas's actual pixel buffer, then scale the drawing context
+    // back down so all our existing coordinate math (viewport.width/height
+    // etc.) still lines up, while keeping the on-screen CSS size the same.
+    const dpr = Math.min(window.devicePixelRatio || 1, 3) // cap at 3x — plenty sharp, avoids huge canvases
     const base = baseCanvasRef.current
     const overlay = overlayCanvasRef.current
     for (const canvas of [base, overlay]) {
-      canvas.width = viewport.width
-      canvas.height = viewport.height
+      canvas.width = Math.round(viewport.width * dpr)
+      canvas.height = Math.round(viewport.height * dpr)
       canvas.style.width = `${viewport.width}px`
       canvas.style.height = `${viewport.height}px`
     }
     if (renderTaskRef.current) {
       try { renderTaskRef.current.cancel() } catch { /* previous task already done */ }
     }
-    const task = page.render({ canvasContext: base.getContext('2d'), viewport })
+    const baseCtx = base.getContext('2d')
+    baseCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    const task = page.render({ canvasContext: baseCtx, viewport })
     renderTaskRef.current = task
     try {
       await task.promise
@@ -153,9 +195,11 @@ function PageBlock({
       return // cancelled by a newer render (e.g. rapid zoom change)
     }
     setRendered(true)
+    cssSizeRef.current = { w: viewport.width, h: viewport.height }
     const ctx = overlay.getContext('2d')
-    ctx.clearRect(0, 0, overlay.width, overlay.height)
-    for (const s of strokes) drawStroke(ctx, s, overlay.width, overlay.height)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, viewport.width, viewport.height)
+    for (const s of strokes) drawStroke(ctx, s, viewport.width, viewport.height)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfDoc, pageNum, zoom, containerWidth])
 
@@ -166,9 +210,10 @@ function PageBlock({
     if (!rendered) return
     const overlay = overlayCanvasRef.current
     if (!overlay) return
+    const { w, h } = cssSizeRef.current
     const ctx = overlay.getContext('2d')
-    ctx.clearRect(0, 0, overlay.width, overlay.height)
-    for (const s of strokes) drawStroke(ctx, s, overlay.width, overlay.height)
+    ctx.clearRect(0, 0, w, h)
+    for (const s of strokes) drawStroke(ctx, s, w, h)
   }, [strokes, rendered])
 
   function getNormalizedPoint(e) {
@@ -189,7 +234,7 @@ function PageBlock({
     }
     drawingRef.current = true
     const width = tool === 'marker' ? markerWidth : penWidth
-    const opacity = tool === 'marker' ? markerOpacity : 1
+    const opacity = tool === 'marker' ? markerOpacity : penOpacity
     currentStrokeRef.current = { tool, color, width, opacity, points: [pt] }
     overlayCanvasRef.current.setPointerCapture(e.pointerId)
   }
@@ -200,7 +245,7 @@ function PageBlock({
     if (tool === 'eraser') { onErase(pageNum, pt); return }
     currentStrokeRef.current.points.push(pt)
     const ctx = overlayCanvasRef.current.getContext('2d')
-    const w = overlayCanvasRef.current.width, h = overlayCanvasRef.current.height
+    const { w, h } = cssSizeRef.current
     const seg = { ...currentStrokeRef.current, points: currentStrokeRef.current.points.slice(-2) }
     drawStroke(ctx, seg, w, h)
   }
@@ -265,8 +310,10 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   const [containerWidth, setContainerWidth] = useState(800)
   const [zoom, setZoom] = useState(1)
   const [tool, setTool] = useState('none') // 'none' = read/scroll mode (default) — pen kabhi apne aap select nahi rehta
+  const [showMarks, setShowMarks] = useState(true) // "Clean" view toggle — strokes stay in data either way, just hidden
   const [color, setColor] = useState(COLORS[0].hex)
   const [penWidth, setPenWidth] = useState(3)
+  const [penOpacity, setPenOpacity] = useState(1)
   const [markerWidth, setMarkerWidth] = useState(16)
   const [markerOpacity, setMarkerOpacity] = useState(0.35)
   const [eraserSize, setEraserSize] = useState(3) // 1–10, eraser ki "size" (chota/bada)
@@ -278,12 +325,39 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false) // any unsaved strokes since last save
   const [downloading, setDownloading] = useState(false)
+  const [autoSaveStatus, setAutoSaveStatus] = useState('idle') // 'idle' | 'saving' | 'saved' | 'restored'
+  const autoSaveTimerRef = useRef(null)
+  // ── Top-bar tap → whole page scrolls in Y direction (mobile quirk) ──────
+  // Some mobile browsers auto-scroll the nearest scrollable ancestor into
+  // view whenever a button inside a horizontally-scrolling toolbar gets
+  // focus (e.g. tapping the Pen icon). There's no clean single CSS/DOM fix
+  // for this across browsers, so instead we guard against it directly:
+  // remember the scroll position the instant a toolbar tap starts, then for
+  // a short window afterwards, snap the reading area straight back if
+  // anything nudges it — the jump never becomes visible to the user.
+  const scrollGuardUntilRef = useRef(0)
+  const scrollGuardTopRef = useRef(0)
+  function armScrollGuard() {
+    scrollGuardTopRef.current = viewerContainerRef.current?.scrollTop || 0
+    scrollGuardUntilRef.current = Date.now() + 450
+  }
+  function handleViewerScroll() {
+    if (Date.now() < scrollGuardUntilRef.current && viewerContainerRef.current) {
+      viewerContainerRef.current.scrollTop = scrollGuardTopRef.current
+    }
+  }
   // Which file we're viewing/building on top of. Default to continuing on
   // the existing annotated version (if any) so previous markup isn't lost —
   // new strokes just add to it, and saving updates that SAME file. Switch
   // to 'original' to start fresh from the clean, untouched copy instead.
-  const [editingSource, setEditingSource] = useState(doc.annotatedUrl ? 'annotated' : 'original')
-  const sourceUrl = editingSource === 'annotated' && doc.annotatedUrl ? doc.annotatedUrl : doc.originalUrl
+  // We ALWAYS edit on top of the untouched original PDF now — never a
+  // previously-flattened "annotated" export. Old strokes come back as real,
+  // still-erasable vector data (doc.annotationsData, loaded below), so
+  // there's no more "eraser can't touch marks from a past save" problem,
+  // and no more surprise auto-switch into a baked/flattened copy after
+  // saving. annotatedUrl still gets produced on every save purely as a
+  // downloadable/shareable flattened copy — it's just never read back in.
+  const sourceUrl = doc.originalUrl
 
   // ── Load pdf.js + pdf-lib, then the PDF itself ──────────────────────────
   useEffect(() => {
@@ -299,7 +373,10 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     let cancelled = false
     setLoading(true)
     setPdfReady(false)
-    setAnnotations({}) // fresh strokes for this editing session — the base PDF already carries prior markup if 'annotated' was picked
+    // Seed with whatever was saved last time (real, still-editable/erasable
+    // strokes) instead of wiping to blank — old marks come back exactly as
+    // they were, not baked into the page.
+    setAnnotations(doc.annotationsData || {})
     fetch(sourceUrl)
       .then((r) => {
         if (!r.ok) throw new Error(`PDF fetch failed: HTTP ${r.status}`)
@@ -314,6 +391,16 @@ export default function PdfReader({ doc, onClose, onSaved }) {
         setError(false)
         setPdfReady(true)
         viewerContainerRef.current?.scrollTo({ top: 0 })
+        // Restore any local draft left over from a crash/interrupted session
+        // for this exact doc, so marks are never silently lost — this can
+        // be newer than what the server has, so it takes priority.
+        const draft = loadDraft(doc._id, DRAFT_KIND)
+        if (draft) {
+          setAnnotations(draft.annotations)
+          setDirty(true)
+          setAutoSaveStatus('restored')
+          setTimeout(() => setAutoSaveStatus((s) => (s === 'restored' ? 'idle' : s)), 3000)
+        }
       })
       .catch((err) => {
         // eslint-disable-next-line no-console
@@ -463,70 +550,134 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [undoStack, redoStack, annotations])
 
+  // ── Auto-save #1: instant local backup (debounced) ──────────────────────
+  // Every time strokes change, back them up to localStorage a moment later
+  // — cheap, synchronous, and survives a crash/tab-kill even before the
+  // server autosave below gets a chance to run.
+  useEffect(() => {
+    if (!dirty) return undefined
+    const t = setTimeout(() => saveDraft(doc._id, DRAFT_KIND, annotations), 600)
+    return () => clearTimeout(t)
+  }, [annotations, dirty, doc._id])
+
+  // ── Auto-save #2: periodic real save to the server ──────────────────────
+  // Mirrors how Google Docs / Notion autosave: no need to remember to hit
+  // "Save" — every ~25s (and whenever you leave/hide the tab) any unsaved
+  // marks are quietly pushed up in the background. Manual Save still works
+  // for "save it right now".
+  useEffect(() => {
+    autoSaveTimerRef.current = setInterval(() => {
+      setDirty((isDirty) => {
+        if (isDirty) runAutoSave()
+        return isDirty
+      })
+    }, 25000)
+    return () => clearInterval(autoSaveTimerRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === 'hidden' && dirty) runAutoSave()
+    }
+    window.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', onVisibility)
+    return () => {
+      window.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', onVisibility)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty])
+
+  async function runAutoSave() {
+    if (saving) return // manual save already in flight, don't double up
+    setAutoSaveStatus('saving')
+    try {
+      await handleSaveAnnotated(true)
+      setAutoSaveStatus('saved')
+      setTimeout(() => setAutoSaveStatus((s) => (s === 'saved' ? 'idle' : s)), 2500)
+    } catch {
+      setAutoSaveStatus('idle') // silent — manual Save button is still right there if this keeps failing
+    }
+  }
+
   // ── Export: builds on top of the current editing base (original or the
   // existing annotated copy) so previous markup isn't lost — new strokes
   // just add to it. The base is only ever READ here, never modified; the
   // export always goes out as a brand new blob to the SAME annotated slot
   // (server overwrites it in place — see routes/pdfs.js), so re-saving
   // never creates extra files, just updates the one "annotated" copy.
-  async function handleSaveAnnotated() {
-    setSaving(true)
-    try {
-      const { PDFDocument, rgb, LineCapStyle } = window.PDFLib
-      const bytes = await fetch(sourceUrl).then((r) => r.arrayBuffer())
-      const pdfLibDoc = await PDFDocument.load(bytes)
-      const pages = pdfLibDoc.getPages()
+  // Renders the ORIGINAL PDF + current strokes into one flattened PDF's
+  // bytes — shared by Save (uploads it) and Download (just hands it to the
+  // browser), so both always reflect exactly what's on screen right now,
+  // strokes included.
+  async function buildFlattenedPdfBytes() {
+    const { PDFDocument, rgb, LineCapStyle } = window.PDFLib
+    const bytes = await fetch(sourceUrl).then((r) => r.arrayBuffer())
+    const pdfLibDoc = await PDFDocument.load(bytes)
+    const pages = pdfLibDoc.getPages()
 
-      for (const [pStr, strokes] of Object.entries(annotations)) {
-        const idx = Number(pStr) - 1
-        const page = pages[idx]
-        if (!page || !strokes.length) continue
-        const { width, height } = page.getSize()
+    for (const [pStr, strokes] of Object.entries(annotations)) {
+      const idx = Number(pStr) - 1
+      const page = pages[idx]
+      if (!page || !strokes.length) continue
+      const { width, height } = page.getSize()
 
-        for (const stroke of strokes) {
-          const { r, g, b } = hexToRgb01(stroke.color)
-          for (let i = 0; i < stroke.points.length - 1; i++) {
-            const p1 = stroke.points[i], p2 = stroke.points[i + 1]
-            page.drawLine({
-              start: { x: p1.x * width, y: height - p1.y * height },
-              end: { x: p2.x * width, y: height - p2.y * height },
-              thickness: stroke.width ?? (stroke.tool === 'marker' ? 16 : 3),
-              color: rgb(r, g, b),
-              opacity: stroke.opacity ?? (stroke.tool === 'marker' ? 0.35 : 1),
-              lineCap: LineCapStyle.Round,
-            })
-          }
+      for (const stroke of strokes) {
+        const { r, g, b } = hexToRgb01(stroke.color)
+        for (let i = 0; i < stroke.points.length - 1; i++) {
+          const p1 = stroke.points[i], p2 = stroke.points[i + 1]
+          page.drawLine({
+            start: { x: p1.x * width, y: height - p1.y * height },
+            end: { x: p2.x * width, y: height - p2.y * height },
+            thickness: stroke.width ?? (stroke.tool === 'marker' ? 16 : 3),
+            color: rgb(r, g, b),
+            opacity: stroke.opacity ?? (stroke.tool === 'marker' ? 0.35 : 1),
+            lineCap: LineCapStyle.Round,
+          })
         }
       }
-
-      const outBytes = await pdfLibDoc.save()
-      const blob = new Blob([outBytes], { type: 'application/pdf' })
-      const updated = await saveAnnotatedPdf(doc._id, blob)
-      onSaved?.(updated)
-      setDirty(false)
-    } catch {
-      alert('Save nahi ho paya, dobara try karo')
-    } finally {
-      setSaving(false)
     }
+    return pdfLibDoc.save()
   }
 
-  function switchSource(next) {
-    if (next === editingSource) return
-    if (dirty && !confirm('Abhi ke unsaved marks chhoot jayenge agar switch karo. Continue?')) return
-    setEditingSource(next)
+  // Every save (a) uploads a freshly-flattened PDF (for Download/sharing/
+  // opening outside the app) built from the ORIGINAL + every stroke, old
+  // and new, and (b) persists the raw stroke data itself, so the NEXT
+  // session reloads real, still-erasable strokes rather than the flattened
+  // pixels — that's what makes old marks stay erasable forever, and what
+  // stops the reader from ever auto-switching into a separate "annotated"
+  // file after a save (there's only ever the one live editable copy now).
+  async function handleSaveAnnotated(silent = false) {
+    if (!silent) setSaving(true)
+    try {
+      const outBytes = await buildFlattenedPdfBytes()
+      const blob = new Blob([outBytes], { type: 'application/pdf' })
+      const updated = await saveAnnotatedPdf(doc._id, blob, annotations)
+      onSaved?.(updated)
+      setDirty(false)
+      clearDraft(doc._id, DRAFT_KIND)
+    } catch (err) {
+      if (!silent) alert('Save nahi ho paya, dobara try karo')
+      throw err
+    } finally {
+      if (!silent) setSaving(false)
+    }
   }
 
   async function handleDownload() {
     setDownloading(true)
     try {
-      // fetch + blob + object URL — works reliably regardless of whether
-      // Cloudinary's response sets Content-Disposition:attachment or not.
-      const blob = await fetch(sourceUrl).then((r) => r.blob())
+      // Downloads exactly what's on screen — original + every stroke —
+      // built fresh client-side rather than trusting a possibly-stale
+      // server copy, so it's correct even before you've hit Save.
+      const hasMarks = Object.values(annotations).some((s) => s.length)
+      const outBytes = hasMarks ? await buildFlattenedPdfBytes() : await fetch(sourceUrl).then((r) => r.arrayBuffer())
+      const blob = new Blob([outBytes], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${doc.title}${editingSource === 'annotated' ? ' (marked)' : ''}.pdf`
+      a.download = `${doc.title}${hasMarks ? ' (marked)' : ''}.pdf`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -546,7 +697,10 @@ export default function PdfReader({ doc, onClose, onSaved }) {
       {/* Single merged top bar — header + toolbar together so the PDF gets
           all the remaining vertical space. Scrolls horizontally on narrow
           screens instead of wrapping to a second row. */}
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-800 overflow-x-auto no-scrollbar shrink-0">
+      <div
+        className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-800 overflow-x-auto no-scrollbar shrink-0"
+        onPointerDownCapture={armScrollGuard}
+      >
         <button onClick={onClose} className="text-slate-400 hover:text-white w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center shrink-0">
           <i className="ti ti-arrow-left text-xl" />
         </button>
@@ -554,19 +708,19 @@ export default function PdfReader({ doc, onClose, onSaved }) {
 
         <div className="w-px h-6 bg-slate-700 mx-1 shrink-0" />
 
-        {doc.annotatedUrl && (
+        {Object.values(annotations).some((s) => s.length) && (
           <div className="flex items-center rounded-lg bg-slate-800 border border-slate-700 p-0.5 text-xs shrink-0">
             <button
-              onClick={() => switchSource('original')}
-              className={`px-2.5 py-1.5 rounded-md transition-colors ${editingSource === 'original' ? 'bg-slate-700 text-slate-100' : 'text-slate-400'}`}
+              onClick={() => setShowMarks(true)}
+              className={`px-2.5 py-1.5 rounded-md transition-colors flex items-center gap-1 ${showMarks ? 'bg-orange-500/20 text-orange-400' : 'text-slate-400'}`}
             >
-              Original
+              <i className="ti ti-pencil text-xs" /> Marks
             </button>
             <button
-              onClick={() => switchSource('annotated')}
-              className={`px-2.5 py-1.5 rounded-md transition-colors flex items-center gap-1 ${editingSource === 'annotated' ? 'bg-orange-500/20 text-orange-400' : 'text-slate-400'}`}
+              onClick={() => { setShowMarks(false); setTool('none') }}
+              className={`px-2.5 py-1.5 rounded-md transition-colors ${!showMarks ? 'bg-slate-700 text-slate-100' : 'text-slate-400'}`}
             >
-              <i className="ti ti-pencil text-xs" /> Annotated
+              Clean
             </button>
           </div>
         )}
@@ -583,7 +737,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
         ].map((t) => (
           <button
             key={t.id}
-            onClick={() => { setTool((prev) => (t.id !== 'none' && prev === t.id ? 'none' : t.id)); setPanelOpen(null) }}
+            onClick={() => { setTool((prev) => (t.id !== 'none' && prev === t.id ? 'none' : t.id)); setPanelOpen(null); if (t.id !== 'none') setShowMarks(true) }}
             title={t.label}
             className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border transition-colors ${
               tool === t.id ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-slate-800/60 border-slate-700 text-slate-400'
@@ -692,32 +846,35 @@ export default function PdfReader({ doc, onClose, onSaved }) {
               </button>
             </div>
 
-            {/* Darkness (opacity) — marker only, like a highlighter's ink strength */}
-            {tool === 'marker' && (
-              <div className="relative shrink-0">
-                <button
-                  onClick={() => setPanelOpen((p) => (p === 'opacity' ? null : 'opacity'))}
-                  title="Darkness"
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-colors ${panelOpen === 'opacity' ? 'bg-orange-500/20 border-orange-500/50' : 'bg-slate-800/60 border-slate-700'}`}
-                >
-                  <i className="ti ti-droplet-half text-sm text-slate-300" />
-                </button>
-                {panelOpen === 'opacity' && (
-                  <div className="absolute top-11 left-0 z-20 bg-slate-800 border border-slate-700 rounded-lg p-3 w-40 shadow-xl">
-                    <p className="text-[10px] text-slate-400 mb-1.5">Darkness</p>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="0.8"
-                      step="0.05"
-                      value={markerOpacity}
-                      onChange={(e) => setMarkerOpacity(+e.target.value)}
-                      className="w-full accent-orange-500"
-                    />
+            {/* Darkness (opacity) — works for BOTH pen and marker now. Pen
+                defaults to fully opaque (1) but can be made lighter/faded
+                just like a marker's ink strength. */}
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setPanelOpen((p) => (p === 'opacity' ? null : 'opacity'))}
+                title="Opacity / Darkness"
+                className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-colors ${panelOpen === 'opacity' ? 'bg-orange-500/20 border-orange-500/50' : 'bg-slate-800/60 border-slate-700'}`}
+              >
+                <i className="ti ti-droplet-half text-sm text-slate-300" />
+              </button>
+              {panelOpen === 'opacity' && (
+                <div className="absolute top-11 left-0 z-20 bg-slate-800 border border-slate-700 rounded-lg p-3 w-40 shadow-xl">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-[10px] text-slate-400">Opacity</p>
+                    <p className="text-[10px] text-slate-300 tabular-nums">{Math.round((tool === 'marker' ? markerOpacity : penOpacity) * 100)}%</p>
                   </div>
-                )}
-              </div>
-            )}
+                  <input
+                    type="range"
+                    min={tool === 'marker' ? '0.1' : '0.15'}
+                    max={tool === 'marker' ? '0.8' : '1'}
+                    step="0.05"
+                    value={tool === 'marker' ? markerOpacity : penOpacity}
+                    onChange={(e) => (tool === 'marker' ? setMarkerOpacity(+e.target.value) : setPenOpacity(+e.target.value))}
+                    className="w-full accent-orange-500"
+                  />
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -822,13 +979,22 @@ export default function PdfReader({ doc, onClose, onSaved }) {
           {downloading ? <div className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" /> : <i className="ti ti-download text-base" />}
         </button>
         <button
-          onClick={handleSaveAnnotated}
+          onClick={() => handleSaveAnnotated(false)}
           disabled={saving || !dirty}
           className="px-3 sm:px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-xs sm:text-sm font-semibold flex items-center gap-1.5 shrink-0"
         >
           {saving ? <div className="w-3.5 h-3.5 rounded-full border-2 border-white/50 border-t-white animate-spin" /> : <i className="ti ti-device-floppy" />}
           Save
         </button>
+
+        {/* Quiet autosave status — no action needed from the user */}
+        {autoSaveStatus !== 'idle' && (
+          <span className="text-[10px] text-slate-500 flex items-center gap-1 shrink-0 pl-0.5">
+            {autoSaveStatus === 'saving' && (<><div className="w-2.5 h-2.5 rounded-full border-2 border-slate-600 border-t-orange-400 animate-spin" /> Saving…</>)}
+            {autoSaveStatus === 'saved' && (<><i className="ti ti-cloud-check text-emerald-400 text-xs" /> Saved</>)}
+            {autoSaveStatus === 'restored' && (<><i className="ti ti-history text-orange-400 text-xs" /> Draft restored</>)}
+          </span>
+        )}
       </div>
 
       {/* Continuous scroll area — goes all the way to the bottom edge of the
@@ -838,6 +1004,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
         ref={viewerContainerRef}
         className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-6 py-4"
         onPointerDownCapture={() => panelOpen && setPanelOpen(null)}
+        onScroll={handleViewerScroll}
       >
         {loading && (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500">
@@ -862,10 +1029,11 @@ export default function PdfReader({ doc, onClose, onSaved }) {
             tool={tool}
             color={color}
             penWidth={penWidth}
+            penOpacity={penOpacity}
             markerWidth={markerWidth}
             markerOpacity={markerOpacity}
             eraserSize={eraserSize}
-            strokes={annotations[pn] || []}
+            strokes={showMarks ? (annotations[pn] || []) : []}
             onStroke={handleStroke}
             onErase={handleErase}
             registerRenderObserver={registerRenderObserver}

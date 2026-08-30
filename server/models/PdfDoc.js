@@ -13,6 +13,14 @@ const pdfDocSchema = new mongoose.Schema({
   annotatedUrl:        { type: String, default: null },
   annotatedPublicId:   { type: String, default: null },
   annotatedAt:         { type: Date, default: null },
+  // Persisted VECTOR strokes (NOT a flattened image) — { [pageNum]: Stroke[] }.
+  // This is what the reader loads back so old marks stay fully editable and
+  // ERASABLE in every future session; annotatedUrl above is only a flattened
+  // "export" copy for downloading/opening outside the app, and is never used
+  // to re-open the doc for editing (that would bake old strokes permanently
+  // into the page's pixels, making them impossible to erase — the exact bug
+  // this field exists to avoid).
+  annotationsData:     { type: mongoose.Schema.Types.Mixed, default: null },
   fileSizeBytes:       { type: Number, default: 0 },
   pageCount:           { type: Number, default: 0 },
   // Freeform folder name for organizing the library (e.g. "Quant",
@@ -28,6 +36,14 @@ const pdfDocSchema = new mongoose.Schema({
   // original and its `annotatedUrl` field here stay exactly as the admin
   // left them, untouched by anyone else's markup.
   isGlobal:            { type: Boolean, default: false },
+  // Scheduled release ("timer lock") — if set and in the future, non-owners
+  // can see the card (title/size/folder) but the API withholds the actual
+  // file URLs until this time passes, so it can't be opened yet. A live
+  // countdown to this timestamp is shown on the card. Lets an admin upload
+  // a whole batch of PDFs today and have each one unlock automatically on
+  // its own date/time. The owner (whoever uploaded it) always has full
+  // access regardless, to preview/edit before release.
+  unlockAt:            { type: Date, default: null },
 }, { timestamps: true })
 
 pdfDocSchema.index({ userId: 1, createdAt: -1 })
@@ -43,6 +59,9 @@ const pdfAnnotationSchema = new mongoose.Schema({
   annotatedUrl:      { type: String, required: true },
   annotatedPublicId: { type: String, required: true },
   annotatedAt:       { type: Date, default: Date.now },
+  // Same reasoning as PdfDoc.annotationsData above, just for a global doc's
+  // personal per-user markup layer.
+  annotationsData:   { type: mongoose.Schema.Types.Mixed, default: null },
 }, { timestamps: true })
 
 pdfAnnotationSchema.index({ userId: 1, pdfDocId: 1 }, { unique: true })

@@ -73,7 +73,12 @@ async function isPdfAdmin(userId) {
 function withMyAnnotation(doc, annotation) {
   const obj = doc.toObject ? doc.toObject() : doc
   if (!annotation) return obj
-  return { ...obj, annotatedUrl: annotation.annotatedUrl, annotatedAt: annotation.annotatedAt }
+  return {
+    ...obj,
+    annotatedUrl: annotation.annotatedUrl,
+    annotatedAt: annotation.annotatedAt,
+    annotationsData: annotation.annotationsData ?? null,
+  }
 }
 
 const router = express.Router()
@@ -89,7 +94,7 @@ router.get('/is-admin', async (req, res) => {
   }
 })
 
-// POST /api/pdfs/upload   multipart: file, title, global ('true'/'false'), folder
+// POST /api/pdfs/upload   multipart: file, title, global ('true'/'false'), folder, unlockAt (optional ISO string)
 router.post('/upload', handleUpload, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
@@ -100,6 +105,14 @@ router.post('/upload', handleUpload, async (req, res) => {
     // sending the flag just gets a normal private upload, silently.
     const wantsGlobal = req.body.global === 'true'
     const isGlobal = wantsGlobal && await isPdfAdmin(req.user.id)
+
+    // unlockAt is a datetime-local string like "2026-09-05T09:00" from the
+    // browser — only kept if it's actually still in the future.
+    let unlockAt = null
+    if (req.body.unlockAt) {
+      const d = new Date(req.body.unlockAt)
+      if (!isNaN(d) && d.getTime() > Date.now()) unlockAt = d
+    }
 
     const publicId = `${req.user.id}-${Date.now()}-original`
     const result = await uploadPdfToCloudinary(req.file.buffer, publicId)
@@ -112,12 +125,24 @@ router.post('/upload', handleUpload, async (req, res) => {
       originalPublicId: result.public_id,
       fileSizeBytes: req.file.size,
       isGlobal,
+      unlockAt,
     })
     res.json(doc)
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
 })
+
+// Strips file URLs from a doc that's scheduled to unlock later, for anyone
+// other than its owner — the card (title/size/folder/unlockAt) still shows
+// so the countdown renders, but there's nothing to actually open yet.
+function withLockApplied(docObj) {
+  if (!docObj.unlockAt || new Date(docObj.unlockAt).getTime() <= Date.now()) {
+    return { ...docObj, locked: false }
+  }
+  const { originalUrl, originalPublicId, annotatedUrl, annotatedPublicId, annotationsData, ...safe } = docObj
+  return { ...safe, locked: true }
+}
 
 // GET /api/pdfs   → my own PDFs + every global PDF (with MY annotation, if any)
 router.get('/', async (req, res) => {
@@ -138,8 +163,8 @@ router.get('/', async (req, res) => {
     }
 
     const all = [
-      ...own.map((d) => ({ ...d.toObject(), isMine: true })),
-      ...globalWithMine.map((d) => ({ ...d, isMine: false })),
+      ...own.map((d) => ({ ...d.toObject(), isMine: true, locked: false })), // owner always has full access
+      ...globalWithMine.map((d) => ({ ...withLockApplied(d), isMine: false })),
     ]
     all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     res.json(all)
@@ -148,9 +173,10 @@ router.get('/', async (req, res) => {
   }
 })
 
-// PATCH /api/pdfs/:id   body: { title?, folder? } — owner only. Used to
-// rename a PDF or move it into a different folder (or out to "Ungrouped"
-// by sending folder: '' / null).
+// PATCH /api/pdfs/:id   body: { title?, folder?, unlockAt? } — owner only.
+// Used to rename a PDF, move it into a different folder (or out to
+// "Ungrouped" by sending folder: '' / null), or set/change/clear its
+// scheduled-unlock time (send unlockAt: '' or null to unlock immediately).
 router.patch('/:id', async (req, res) => {
   try {
     const doc = await PdfDoc.findOne({ _id: req.params.id })
@@ -159,8 +185,38 @@ router.patch('/:id', async (req, res) => {
 
     if (req.body.title != null) doc.title = String(req.body.title).trim() || doc.title
     if (req.body.folder !== undefined) doc.folder = (req.body.folder || '').trim() || null
+    if (req.body.unlockAt !== undefined) {
+      if (!req.body.unlockAt) {
+        doc.unlockAt = null
+      } else {
+        const d = new Date(req.body.unlockAt)
+        doc.unlockAt = isNaN(d) ? null : d
+      }
+    }
     await doc.save()
     res.json(doc)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// PATCH /api/pdfs/folder/rename   body: { oldName, newName } — owner only.
+// Folders aren't a separate collection (see PdfDoc.folder comment above), so
+// "renaming a folder" means bulk-updating every PDF of this user's that's
+// currently in oldName to point at newName instead. Global PDFs uploaded by
+// someone else are left untouched even if they happen to share the name.
+router.patch('/folder/rename', async (req, res) => {
+  try {
+    const oldName = String(req.body.oldName || '').trim()
+    const newName = String(req.body.newName || '').trim()
+    if (!oldName || !newName) return res.status(400).json({ error: 'oldName aur newName dono chahiye' })
+    if (oldName === newName) return res.json({ renamed: 0 })
+
+    const result = await PdfDoc.updateMany(
+      { userId: req.user.id, folder: oldName },
+      { $set: { folder: newName } }
+    )
+    res.json({ renamed: result.modifiedCount ?? result.nModified ?? 0, folder: newName })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -174,20 +230,24 @@ router.get('/:id', async (req, res) => {
     if (String(doc.userId) !== req.user.id && !doc.isGlobal) {
       return res.status(404).json({ error: 'Not found' })
     }
-    if (String(doc.userId) === req.user.id) return res.json(doc)
+    if (String(doc.userId) === req.user.id) return res.json({ ...doc.toObject(), locked: false })
 
     const mine = await PdfAnnotation.findOne({ userId: req.user.id, pdfDocId: doc._id })
-    res.json(withMyAnnotation(doc, mine))
+    res.json(withLockApplied(withMyAnnotation(doc, mine)))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
 })
 
-// POST /api/pdfs/:id/annotated   multipart: file
+// POST /api/pdfs/:id/annotated   multipart: file, annotationsJson (optional)
 // Saves the annotated export as a SEPARATE Cloudinary resource. Never
 // touches originalUrl/originalPublicId. For a doc you own, updates it
 // directly; for a global doc you DON'T own, your markup goes into your own
 // PdfAnnotation row instead — the shared doc is completely unaffected.
+// `annotationsJson` (if sent) is the RAW stroke data — { [pageNum]: Stroke[]
+// } as JSON — saved alongside the flattened PDF so the reader can reload
+// the actual editable/erasable strokes next time instead of the flattened
+// pixels (see PdfDoc.annotationsData comment).
 router.post('/:id/annotated', handleUpload, async (req, res) => {
   try {
     const doc = await PdfDoc.findOne({ _id: req.params.id })
@@ -196,6 +256,11 @@ router.post('/:id/annotated', handleUpload, async (req, res) => {
       return res.status(404).json({ error: 'Not found' })
     }
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+
+    let annotationsData
+    if (req.body.annotationsJson) {
+      try { annotationsData = JSON.parse(req.body.annotationsJson) } catch { annotationsData = undefined }
+    }
 
     // Stable public_id (no timestamp) + overwrite — every save from now on
     // replaces this SAME Cloudinary file in place. Doesn't matter how many
@@ -210,14 +275,17 @@ router.post('/:id/annotated', handleUpload, async (req, res) => {
       doc.annotatedUrl = result.secure_url
       doc.annotatedPublicId = result.public_id
       doc.annotatedAt = new Date()
+      if (annotationsData !== undefined) doc.annotationsData = annotationsData
       await doc.save()
       return res.json(doc)
     }
 
     // Global doc, not mine — personal annotation layer only.
+    const update = { annotatedUrl: result.secure_url, annotatedPublicId: result.public_id, annotatedAt: new Date() }
+    if (annotationsData !== undefined) update.annotationsData = annotationsData
     const annotation = await PdfAnnotation.findOneAndUpdate(
       { userId: req.user.id, pdfDocId: doc._id },
-      { annotatedUrl: result.secure_url, annotatedPublicId: result.public_id, annotatedAt: new Date() },
+      update,
       { upsert: true, new: true }
     )
     res.json(withMyAnnotation(doc, annotation))

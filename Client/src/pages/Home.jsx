@@ -7,6 +7,7 @@ import useSubjectStore from '@/store/subjectStore';
 import useUserStore from '@/store/userStore';
 import useTimerStore from '@/store/timerStore';
 import { useTimer } from '@/hooks/useTimer';
+import { useDragReorder } from '@/hooks/useDragReorder';
 import { formatDuration, formatHours, getStudyDayString } from '@/utils/time';
 import { getSubjects, addSubject, updateSubject, deleteSubject } from '@/api/subjects';
 import { getTodos, updateTodo } from '@/api/todos';
@@ -527,7 +528,7 @@ function SubjectModal({ subject, onClose, onSave }) {
 }
 
 // ── Compact Subject Card ──────────────────────────────────────────────────────
-function SubjectCard({ subject, index, onEdit, onDelete, onStart }) {
+function SubjectCard({ subject, index, onEdit, onDelete, onStart, reorderId, itemRef, dragHandleProps, isDragging }) {
   const isRunning = useTimerStore((s) => s.isRunning);
   const activeId  = useTimerStore((s) => s.subjectId);
   const isActive  = isRunning && activeId === (subject.id || subject._id);
@@ -541,7 +542,7 @@ function SubjectCard({ subject, index, onEdit, onDelete, onStart }) {
   const accentColor = subject.color || '#f97316';
 
   return (
-    <div className="relative group">
+    <div className={`relative group transition-opacity ${isDragging ? 'opacity-40' : ''}`} ref={itemRef} data-reorder-id={reorderId}>
       <div
         className="rounded-2xl p-3.5 border border-white/10 relative overflow-hidden cursor-pointer transition-all active:scale-95 hover:border-white/20"
         style={{ background: bg }}
@@ -569,6 +570,18 @@ function SubjectCard({ subject, index, onEdit, onDelete, onStart }) {
           >
             <i className="ti ti-dots-vertical text-white/70 text-[10px]" />
           </button>
+        )}
+
+        {/* Drag handle — grab and drag over another card to reorder */}
+        {!isActive && (
+          <span
+            {...dragHandleProps}
+            onClick={(e) => e.stopPropagation()}
+            title="Drag to reorder"
+            className="absolute top-2.5 left-2.5 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 text-white/70"
+          >
+            <i className="ti ti-grip-vertical text-[11px]" />
+          </span>
         )}
 
         {/* Icon */}
@@ -683,6 +696,10 @@ function QuickStatCard({ icon, label, value, iconBg, iconColor }) {
 // ── Main Home Page ────────────────────────────────────────────────────────────
 export default function Home() {
   const { subjects, setSubjects } = useSubjectStore();
+  // Drag a subject card's grip over another to reorder — order is
+  // remembered per-browser and stays put across reloads.
+  const { orderedItems: orderedSubjects, dragId: draggedSubjectId, dragHandleProps: subjectDragHandleProps, itemRef: subjectItemRef } =
+    useDragReorder({ items: subjects, getId: (s) => s.id || s._id, storageKey: 'homeSubjectOrder' });
   const displayName      = useUserStore((s) => s.displayName);
   const dailyGoalSeconds = useUserStore((s) => s.dailyGoalSeconds);
   const streakDays       = useUserStore((s) => s.streakDays);
@@ -1032,16 +1049,23 @@ export default function Home() {
 
           {/* Compact 3-column grid for many subjects */}
           <div className={`grid gap-2.5 mb-5 ${subjects.length > 4 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-            {subjects.map((subject, i) => (
-              <SubjectCard
-                key={subject.id || subject._id}
-                subject={subject}
-                index={i}
-                onStart={handleStart}
-                onEdit={(s) => setModal(s)}
-                onDelete={handleDelete}
-              />
-            ))}
+            {orderedSubjects.map((subject, i) => {
+              const sid = subject.id || subject._id;
+              return (
+                <SubjectCard
+                  key={sid}
+                  subject={subject}
+                  index={i}
+                  onStart={handleStart}
+                  onEdit={(s) => setModal(s)}
+                  onDelete={handleDelete}
+                  reorderId={sid}
+                  itemRef={subjectItemRef(sid)}
+                  dragHandleProps={subjectDragHandleProps(sid)}
+                  isDragging={draggedSubjectId === sid}
+                />
+              );
+            })}
           </div>
 
           {/* Quick Stats */}

@@ -6,6 +6,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useUserStore } from '../../store/userStore';
 import { useTimerStore } from '../../store/timerStore';
+import { useDragReorder } from '../../hooks/useDragReorder';
 import { formatHours } from '../../utils/time';
 import StreakBadge from '../ui/StreakBadge';
 import Avatar from '../ui/Avatar';
@@ -39,6 +40,11 @@ export default function Sidebar() {
   const elapsed = useTimerStore((s) => s.elapsed);
 
   const [collapsed, setCollapsed] = useState(false);
+
+  // Drag any nav item's grip up/down to reorder the whole sidebar — order
+  // is remembered per-browser (localStorage), same list every visit.
+  const { orderedItems: orderedNavItems, dragId, dragHandleProps, itemRef } =
+    useDragReorder({ items: NAV_ITEMS, getId: (i) => i.to, storageKey: 'sidebarNavOrder' });
 
   return (
     <aside
@@ -125,47 +131,66 @@ export default function Sidebar() {
         className="flex-1 px-2 py-3 space-y-1 overflow-y-auto"
         style={{ scrollBehavior: 'smooth' }}
       >
-        {NAV_ITEMS.map(({ to, icon, label }) => (
-          <NavLink
+        {orderedNavItems.map(({ to, icon, label }) => (
+          <div
             key={to}
-            to={to}
-            end={to === '/'}
-            title={collapsed ? label : undefined}
-            className={({ isActive }) =>
-              `
-                flex items-center gap-3
-                px-3 py-2.5 rounded-xl
-                text-sm transition-all duration-200
-
-                ${collapsed ? 'justify-center' : ''}
-
-                ${
-                  isActive
-                    ? 'bg-orange-500/15 text-orange-400 border border-orange-500/20'
-                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
-                }
-              `
-            }
+            ref={itemRef(to)}
+            data-reorder-id={to}
+            className={`group/navitem relative rounded-xl transition-opacity ${dragId === to ? 'opacity-40' : ''}`}
           >
-            {({ isActive }) => (
-              <>
-                <i
-                  className={`
-                    ti ${icon} text-[18px] flex-shrink-0
-                    ${isActive ? 'text-orange-400' : ''}
-                  `}
-                />
+            <NavLink
+              to={to}
+              end={to === '/'}
+              title={collapsed ? label : undefined}
+              className={({ isActive }) =>
+                `
+                  flex items-center gap-3
+                  px-3 py-2.5 rounded-xl
+                  text-sm transition-all duration-200
 
-                {!collapsed && (
-                  <span className="truncate font-medium flex-1">
-                    {label}
-                  </span>
-                )}
+                  ${collapsed ? 'justify-center' : ''}
 
-                {!collapsed && to === '/achievements' && <BadgeCountPill />}
-              </>
-            )}
-          </NavLink>
+                  ${
+                    isActive
+                      ? 'bg-orange-500/15 text-orange-400 border border-orange-500/20'
+                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                  }
+                `
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <i
+                    className={`
+                      ti ${icon} text-[18px] flex-shrink-0
+                      ${isActive ? 'text-orange-400' : ''}
+                    `}
+                  />
+
+                  {!collapsed && (
+                    <span className="truncate font-medium flex-1">
+                      {label}
+                    </span>
+                  )}
+
+                  {!collapsed && to === '/achievements' && <BadgeCountPill />}
+
+                  {/* Drag handle — grab and drag up/down to reorder. Only
+                      shown expanded (collapsed sidebar has no room) and on
+                      hover, so it stays out of the way otherwise. */}
+                  {!collapsed && (
+                    <span
+                      {...dragHandleProps(to)}
+                      title="Drag to reorder"
+                      className="shrink-0 px-1 -mr-1 text-slate-600 opacity-0 group-hover/navitem:opacity-100 hover:text-slate-300 transition-opacity"
+                    >
+                      <i className="ti ti-grip-vertical text-[16px]" />
+                    </span>
+                  )}
+                </>
+              )}
+            </NavLink>
+          </div>
         ))}
 
         {/* Admin Panel — sirf alokabhiii9@gmail.com ke liye visible */}
