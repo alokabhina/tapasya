@@ -1,7 +1,7 @@
 // public/sw.js — Tapasya Service Worker
 // Direct file, no bundler, no imports — pure browser SW
 
-const CACHE = 'tapasya-v4'
+const CACHE = 'tapasya-v5' // v5: hashed-asset fetch failures (offline + not cached) now resolve to a real Response instead of leaving the fetch event's promise rejected
 const STATIC_ASSETS = ['/', '/index.html', '/icons/icon-192.png', '/icons/icon-512.png', '/manifest.json']
 
 // ── Install ───────────────────────────────────────────────────────────────────
@@ -80,6 +80,18 @@ self.addEventListener('fetch', (event) => {
             caches.open(CACHE).then(c => c.put(event.request, clone))
           }
           return res
+        }).catch(() => {
+          // Offline AND this exact chunk was never cached (e.g. a page
+          // that's never been opened online yet, or a stale reference to
+          // a chunk from before the latest deploy). Without this .catch,
+          // the fetch event's promise itself rejects, which the browser
+          // surfaces as an unhandled network error — and for a JS module
+          // fetched via a lazy import(), that turns into an uncaught
+          // exception that can crash the whole page. A real (if empty)
+          // Response lets that fail as an ordinary caught promise
+          // rejection in app code instead, which RouteErrorBoundary
+          // catches gracefully rather than the whole app going blank.
+          return new Response('', { status: 503, statusText: 'Offline — asset not cached' })
         })
       })
     )

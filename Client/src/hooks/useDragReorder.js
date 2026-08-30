@@ -26,7 +26,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 export function useDragReorder({ items, getId, storageKey }) {
-  const idsFromItems = items.map(getId)
+  // Defensive: if items isn't ready yet (e.g. still loading from a store,
+  // or briefly undefined during an offline/online transition), don't crash
+  // the whole page — just render nothing to reorder until it shows up.
+  const safeItems = Array.isArray(items) ? items : []
+  const idsFromItems = safeItems.map(getId)
 
   const [order, setOrder] = useState(() => {
     if (!storageKey) return idsFromItems
@@ -59,7 +63,7 @@ export function useDragReorder({ items, getId, storageKey }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsFromItems.join('|')])
 
-  const byId = new Map(items.map((it) => [getId(it), it]))
+  const byId = new Map(safeItems.map((it) => [getId(it), it]))
   const orderedItems = order.map((id) => byId.get(id)).filter(Boolean)
 
   const [dragId, setDragId] = useState(null)

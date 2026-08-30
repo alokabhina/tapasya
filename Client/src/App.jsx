@@ -9,6 +9,7 @@ import { useBootstrap } from './hooks/useBootstrap';
 
 // Layout
 import PageLoader from './components/layout/PageLoader';
+import RouteErrorBoundary from './components/layout/RouteErrorBoundary';
 import Sidebar    from './components/layout/Sidebar';
 import BottomNav  from './components/layout/BottomNav';
 import MiniPlayer from './components/layout/MiniPlayer';
@@ -19,7 +20,7 @@ import VideoPlayerModal from './components/watch/VideoPlayerModal';
 import useWatchPlayerStore from './store/watchPlayerStore';
 
 // Pages (lazy imports for code-splitting)
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 const Login        = lazy(() => import('./pages/Login'));
@@ -122,12 +123,31 @@ export default function App() {
   // Global online status — auto-flushes sync queue when back online
   useOnlineStatus();
   const theme = useUserStore((s) => s.theme);
+  const location = useLocation(); // used to auto-reset the error boundary on navigation
   useBootstrap(); // FIX: login ke baad subjects fetch + todaySeconds calculate
+
+  // Warm the offline cache for pages that matter offline (PDF Library
+  // especially) WITHOUT requiring the user to manually open them online
+  // first. import() here fetches the exact same hashed chunk file the
+  // lazy() route below would — the Service Worker's cache-first strategy
+  // then keeps it around for offline use. Fires a few seconds after
+  // mount, quietly, so it never competes with whatever the user actually
+  // opened first.
+  useEffect(() => {
+    if (!navigator.onLine) return;
+    const id = setTimeout(() => {
+      import('./pages/PdfLibrary').catch(() => {});
+      import('./pages/Todo').catch(() => {});
+      import('./pages/YTHub').catch(() => {});
+    }, 3000);
+    return () => clearTimeout(id);
+  }, []);
 
   return (
     <div className={theme === 'light' ? 'light' : ''}>
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
+      <RouteErrorBoundary locationKey={location.pathname}>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
           {/* Public */}
           <Route path="/login" element={<Login />} />
 
@@ -233,6 +253,7 @@ export default function App() {
             exactly like YouTube's own miniplayer. */}
         <GlobalWatchPlayer />
       </Suspense>
+      </RouteErrorBoundary>
     </div>
   );
 }
