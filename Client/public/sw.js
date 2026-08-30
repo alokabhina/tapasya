@@ -1,7 +1,7 @@
 // public/sw.js — Tapasya Service Worker
 // Direct file, no bundler, no imports — pure browser SW
 
-const CACHE = 'tapasya-v5' // v5: hashed-asset fetch failures (offline + not cached) now resolve to a real Response instead of leaving the fetch event's promise rejected
+const CACHE = 'tapasya-v4' // NOTE: do NOT bump this casually — activate() deletes every cache except this one, so changing it wipes everything the user had cached for offline use. Only bump when static-asset caching strategy itself changes AND you're OK with users needing one fresh online load to rebuild the cache.
 const STATIC_ASSETS = ['/', '/index.html', '/icons/icon-192.png', '/icons/icon-512.png', '/manifest.json']
 
 // ── Install ───────────────────────────────────────────────────────────────────
