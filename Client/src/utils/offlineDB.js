@@ -1,13 +1,15 @@
 // src/utils/offlineDB.js
-// Lightweight IndexedDB wrapper — subjects, sessions, todos cache karo
+// Lightweight IndexedDB wrapper — subjects, sessions, todos, pdfs cache karo
 
 const DB_NAME    = 'tapasya_offline'
-const DB_VERSION = 1
+const DB_VERSION = 2 // v2: added pdfs (metadata) + pdfFiles (actual bytes) stores
 
 const STORES = {
   subjects: 'subjects',   // { id, name, color, todaySeconds }
   sessions: 'sessions',   // { id, subjectId, date, duration, ... }
   todos:    'todos',      // { id/\_id, text, done, date, ... }
+  pdfs:     'pdfs',       // { id, title, folder, originalUrl, annotationsData, ... } — same shape as GET /api/pdfs
+  pdfFiles: 'pdfFiles',   // { id, blob, cachedAt } — the actual PDF bytes, so it opens with zero internet
 }
 
 let _db = null
@@ -28,6 +30,12 @@ async function getDB() {
       if (!db.objectStoreNames.contains(STORES.todos)) {
         const t = db.createObjectStore(STORES.todos, { keyPath: 'id' })
         t.createIndex('date', 'date', { unique: false })
+      }
+      if (!db.objectStoreNames.contains(STORES.pdfs)) {
+        db.createObjectStore(STORES.pdfs, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORES.pdfFiles)) {
+        db.createObjectStore(STORES.pdfFiles, { keyPath: 'id' })
       }
     }
     req.onsuccess  = (e) => { _db = e.target.result; resolve(_db) }
@@ -128,4 +136,64 @@ export async function putTodoOffline(todo) {
 export async function deleteTodoOffline(id) {
   const { store } = await tx(STORES.todos, 'readwrite')
   return promisify(store.delete(String(id)))
+}
+
+// ── PDFs (metadata) ──────────────────────────────────────────────────────────
+// Same shape as what GET /api/pdfs returns — title, folder, originalUrl,
+// annotationsData (the actual strokes, see PdfReader), unlockAt, etc. This
+// is what lets PDF Library show your list of PDFs even with zero internet.
+
+export async function savePdfsOffline(docs) {
+  const { store } = await tx(STORES.pdfs, 'readwrite')
+  store.clear()
+  for (const d of docs) {
+    store.put({ ...d, id: String(d._id || d.id) })
+  }
+}
+
+export async function getPdfsOffline() {
+  const { store } = await tx(STORES.pdfs)
+  return promisify(store.getAll())
+}
+
+export async function deletePdfOffline(id) {
+  const { store } = await tx(STORES.pdfs, 'readwrite')
+  return promisify(store.delete(String(id)))
+}
+
+// ── PDF files (actual bytes) ─────────────────────────────────────────────────
+// Stored as real Blobs — IndexedDB supports these natively, no base64
+// encoding needed. This is what makes a PDF actually OPENABLE offline, not
+// just visible in the list.
+
+export async function savePdfFileOffline(id, blob) {
+  const { store } = await tx(STORES.pdfFiles, 'readwrite')
+  return promisify(store.put({ id: String(id), blob, cachedAt: Date.now() }))
+}
+
+export async function getPdfFileOffline(id) {
+  const { store } = await tx(STORES.pdfFiles)
+  try {
+    return await promisify(store.get(String(id)))
+  } catch {
+    return null
+  }
+}
+
+export async function hasPdfFileOffline(id) {
+  const rec = await getPdfFileOffline(id)
+  return !!rec
+}
+
+export async function deletePdfFileOffline(id) {
+  const { store } = await tx(STORES.pdfFiles, 'readwrite')
+  return promisify(store.delete(String(id)))
+}
+
+// Roughly how much space all cached PDF files are taking up — handy for a
+// "X PDFs available offline (~Y MB)" indicator in the UI.
+export async function getPdfFilesOfflineStats() {
+  const { store } = await tx(STORES.pdfFiles)
+  const all = await promisify(store.getAll())
+  return { count: all.length, bytes: all.reduce((sum, r) => sum + (r.blob?.size || 0), 0) }
 }

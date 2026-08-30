@@ -22,6 +22,7 @@
 //   annotator shown in the reference screenshot.
 import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react'
 import { saveAnnotatedPdf } from '@/api/pdfs'
+import { getPdfFileOffline, savePdfFileOffline } from '@/utils/offlineDB'
 
 const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
 const PDFJS_WORKER_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
@@ -359,6 +360,27 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   // downloadable/shareable flattened copy — it's just never read back in.
   const sourceUrl = doc.originalUrl
 
+  // Offline-aware fetch of the original PDF's bytes: try the network first
+  // (and refresh the offline copy on success, so it stays current), but if
+  // there's no internet — or the fetch just fails — fall back to whatever
+  // got cached the last time this PDF was opened online. Only when NEITHER
+  // exists does the caller actually see an error. Shared by the initial
+  // load, Save (needs the original to build the flattened export) and
+  // Download, so all three keep working with zero internet.
+  async function loadPdfBytes() {
+    try {
+      const r = await fetch(sourceUrl)
+      if (!r.ok) throw new Error(`PDF fetch failed: HTTP ${r.status}`)
+      const buf = await r.arrayBuffer()
+      savePdfFileOffline(doc._id, new Blob([buf], { type: 'application/pdf' })).catch(() => {})
+      return buf
+    } catch (networkErr) {
+      const offline = await getPdfFileOffline(doc._id).catch(() => null)
+      if (offline?.blob) return offline.blob.arrayBuffer()
+      throw networkErr
+    }
+  }
+
   // ── Load pdf.js + pdf-lib, then the PDF itself ──────────────────────────
   useEffect(() => {
     let cancelled = false
@@ -377,11 +399,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     // strokes) instead of wiping to blank — old marks come back exactly as
     // they were, not baked into the page.
     setAnnotations(doc.annotationsData || {})
-    fetch(sourceUrl)
-      .then((r) => {
-        if (!r.ok) throw new Error(`PDF fetch failed: HTTP ${r.status}`)
-        return r.arrayBuffer()
-      })
+    loadPdfBytes()
       .then((buf) => window.pdfjsLib.getDocument({ data: buf }).promise)
       .then((pdf) => {
         if (cancelled) return
@@ -613,7 +631,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   // strokes included.
   async function buildFlattenedPdfBytes() {
     const { PDFDocument, rgb, LineCapStyle } = window.PDFLib
-    const bytes = await fetch(sourceUrl).then((r) => r.arrayBuffer())
+    const bytes = await loadPdfBytes()
     const pdfLibDoc = await PDFDocument.load(bytes)
     const pages = pdfLibDoc.getPages()
 
@@ -672,7 +690,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
       // built fresh client-side rather than trusting a possibly-stale
       // server copy, so it's correct even before you've hit Save.
       const hasMarks = Object.values(annotations).some((s) => s.length)
-      const outBytes = hasMarks ? await buildFlattenedPdfBytes() : await fetch(sourceUrl).then((r) => r.arrayBuffer())
+      const outBytes = hasMarks ? await buildFlattenedPdfBytes() : await loadPdfBytes()
       const blob = new Blob([outBytes], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

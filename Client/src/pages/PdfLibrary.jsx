@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getPdfs, uploadPdfsBulk, updatePdf, deletePdf, checkPdfAdmin, renamePdfFolder } from '@/api/pdfs'
 import PdfReader from '@/components/pdf/PdfReader'
+import { getPdfsOffline, savePdfsOffline, getPdfFileOffline, savePdfFileOffline, deletePdfFileOffline, deletePdfOffline } from '@/utils/offlineDB'
 
 const UNGROUPED = '__ungrouped__' // sentinel for docs with no folder
 
@@ -171,15 +172,67 @@ export default function PdfLibrary() {
   const fileInputRef = useRef(null)
   const newFolderInputRef = useRef(null)
   const pendingUploadFolder = useRef('') // folder the next file-picker selection should land in
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
+
+  useEffect(() => {
+    function goOnline() { setIsOnline(true); load() } // back online — pull the real list + resume background caching
+    function goOffline() { setIsOnline(false) }
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     load()
     checkPdfAdmin().then(setIsAdmin).catch(() => {})
   }, [])
 
+  // Offline-first: show whatever's cached in IndexedDB instantly (works
+  // with zero internet), then if we're online, get the real list from the
+  // server, show that instead, refresh the cache, and quietly start
+  // downloading every PDF's actual file in the background so the whole
+  // library — not just ones you've opened before — stays readable offline.
   function load() {
     setLoading(true)
-    getPdfs().then(setDocs).catch(() => {}).finally(() => setLoading(false))
+    getPdfsOffline()
+      .then((cached) => { if (cached.length) setDocs(cached) })
+      .catch(() => {})
+      .finally(() => {
+        if (!navigator.onLine) { setLoading(false); return }
+        getPdfs()
+          .then((fresh) => {
+            setDocs(fresh)
+            savePdfsOffline(fresh).catch(() => {})
+            cachePdfFilesInBackground(fresh)
+          })
+          .catch(() => { /* network blip — keep showing whatever was cached above */ })
+          .finally(() => setLoading(false))
+      })
+  }
+
+  // Sequentially downloads each not-yet-cached, unlocked PDF's bytes into
+  // IndexedDB — one at a time (not Promise.all) so it doesn't hammer
+  // Cloudinary or hog a slow/metered connection all at once. Silently
+  // skips locked PDFs (no file URL to fetch yet anyway) and anything that
+  // fails, and just moves on to the next.
+  async function cachePdfFilesInBackground(docsToCache) {
+    for (const d of docsToCache) {
+      if (!d.originalUrl || d.locked) continue
+      try {
+        const already = await getPdfFileOffline(d._id)
+        if (already) continue
+        const res = await fetch(d.originalUrl)
+        if (!res.ok) continue
+        const blob = await res.blob()
+        await savePdfFileOffline(d._id, blob)
+      } catch {
+        // offline mid-batch, or this one file failed — just move on
+      }
+    }
   }
 
   // --- Folder grouping (derived purely from docs — no separate Folder
@@ -310,6 +363,8 @@ export default function PdfLibrary() {
     await deletePdf(doc._id)
     if (isOwnUpload) {
       setDocs((prev) => prev.filter((d) => d._id !== doc._id))
+      deletePdfFileOffline(doc._id).catch(() => {})
+      deletePdfOffline(doc._id).catch(() => {})
     } else {
       setDocs((prev) => prev.map((d) => (d._id === doc._id ? { ...d, annotatedUrl: null, annotatedAt: null } : d)))
     }
@@ -319,6 +374,11 @@ export default function PdfLibrary() {
 
   return (
     <div className="p-3 sm:p-6 max-w-6xl mx-auto pb-24">
+      {!isOnline && (
+        <div className="mb-3 px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs flex items-center gap-2">
+          <i className="ti ti-wifi-off text-sm" /> Offline ho — pehle jo PDFs cache ho chuke the wahi dikh rahe hain. Naye upload/changes internet aane pe sync ho jayenge.
+        </div>
+      )}
       <div className="relative mb-5 rounded-2xl overflow-hidden border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-orange-950/30">
         <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
         <div className="relative px-4 sm:px-6 py-4 sm:py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
