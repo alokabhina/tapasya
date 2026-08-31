@@ -132,9 +132,9 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg mx-0 sm:mx-4 mb-0 sm:mb-0 bg-[#151f2e] rounded-t-2xl sm:rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-lg mx-0 sm:mx-4 mb-28 sm:mb-0 bg-[#151f2e] rounded-t-2xl sm:rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden">
         <div className="h-0.5 w-full bg-gradient-to-r from-orange-500 via-orange-400 to-orange-600" />
         <div className="p-5">
           <div className="flex items-center justify-between mb-4">
@@ -269,8 +269,8 @@ function GoalModal({ goal, subjects, onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-[#151f2e] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md border border-slate-700 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-[#151f2e] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md border border-slate-700 shadow-2xl overflow-hidden mb-28 sm:mb-0">
         <div className="h-0.5 w-full bg-gradient-to-r from-orange-500 to-orange-400" />
         <div className="flex items-center justify-between p-5 border-b border-slate-800">
           <h3 className="font-semibold text-white">{goal?.id ? "Edit Goal" : "New Long-term Goal"}</h3>
@@ -511,11 +511,19 @@ function TodayOverview({ todayTasks, streakDays }) {
 }
 
 // ── History Section with Day Navigation ──────────────────────────────────────
-function HistorySection({ tasks, onToggle }) {
+function HistorySection({ tasks, onToggle, onAddToToday }) {
   const todayStr = getStudyDayString();
   const [viewDate, setViewDate] = useState(todayStr);
   const [filterSubject, setFilterSubject] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all"); // 'all' | 'done' | 'undone'
+  const [addedIds, setAddedIds] = useState(() => new Set()); // tasks already copied to Today this session — shows a check instead of re-adding
+
+  function handleAddToToday(task) {
+    const id = task._id || task.id;
+    if (addedIds.has(id)) return; // already copied — don't duplicate on a double-click
+    setAddedIds((prev) => new Set(prev).add(id));
+    onAddToToday?.(task);
+  }
 
   const canGoNext = viewDate < todayStr;
 
@@ -615,6 +623,18 @@ function HistorySection({ tasks, onToggle }) {
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  {viewDate !== todayStr && onAddToToday && (
+                    <button
+                      onClick={() => handleAddToToday(task)}
+                      disabled={addedIds.has(task._id || task.id)}
+                      title={addedIds.has(task._id || task.id) ? "Aaj mein add ho gaya" : "Aaj ke liye add karo"}
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors
+                        ${addedIds.has(task._id || task.id)
+                          ? 'bg-green-500/15 text-green-400'
+                          : 'bg-slate-800/60 text-slate-400 hover:bg-orange-500/20 hover:text-orange-400'}`}>
+                      <i className={`ti ${addedIds.has(task._id || task.id) ? 'ti-check' : 'ti-calendar-plus'} text-xs`} />
+                    </button>
+                  )}
                   {task.priority && (
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border hidden sm:inline-flex items-center gap-1 ${p.bgBadge} ${p.badge}`}>
                       {task.priority}
@@ -873,6 +893,23 @@ export default function Todo() {
     catch (e) { console.error("Add todo error:", e); }
   };
 
+  // Copies a task from some past day (History) into Today — fresh, unticked,
+  // as its own new task. The original stays exactly where it was in
+  // History, untouched, so nothing gets "moved away" from its day's record.
+  const handleAddToToday = async (task) => {
+    await handleAdd({
+      text: task.text,
+      subjectId: task.subjectId || null,
+      subjectName: task.subjectName || null,
+      subjectColor: task.subjectColor || null,
+      priority: task.priority || "Medium",
+      estMins: task.estMins || null,
+      done: false,
+      date: todayStr,
+      linkedWatchItem: task.linkedWatchItem || null,
+    });
+  };
+
   const handleToggle = async (taskId, done) => {
     try {
       const newDone = !done;
@@ -1010,7 +1047,7 @@ export default function Todo() {
             </div>
 
             {/* History */}
-            <HistorySection tasks={tasks} onToggle={handleToggle} />
+            <HistorySection tasks={tasks} onToggle={handleToggle} onAddToToday={handleAddToToday} />
           </div>
 
           {/* Sidebar */}

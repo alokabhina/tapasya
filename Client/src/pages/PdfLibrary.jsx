@@ -3,6 +3,7 @@
 // into folders (e.g. "Quant", "English"), and open them to read/mark up
 // (see PdfReader.jsx) without ever touching the original file.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { getPdfs, uploadPdfsBulk, updatePdf, deletePdf, checkPdfAdmin, renamePdfFolder } from '@/api/pdfs'
 import PdfReader from '@/components/pdf/PdfReader'
 import { getPdfsOffline, savePdfsOffline, getPdfFileOffline, savePdfFileOffline, deletePdfFileOffline, deletePdfOffline } from '@/utils/offlineDB'
@@ -152,6 +153,8 @@ function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, hand
 }
 
 export default function PdfLibrary() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -190,6 +193,20 @@ export default function PdfLibrary() {
     load()
     checkPdfAdmin().then(setIsAdmin).catch(() => {})
   }, [])
+
+  // Auto-open a PDF handed off from elsewhere (e.g. tapping the "Recent
+  // PDF" card on the home page passes { openDocId } via navigation state).
+  // Waits for docs to actually be loaded (offline cache or server) so the
+  // match can succeed, then clears the state so it doesn't re-fire if the
+  // user navigates back to this page later.
+  useEffect(() => {
+    const targetId = location.state?.openDocId
+    if (!targetId || !docs.length) return
+    const match = docs.find((d) => d._id === targetId)
+    if (match) setOpenDoc(match)
+    navigate(location.pathname, { replace: true, state: {} })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs, location.state])
 
   // Offline-first: show whatever's cached in IndexedDB instantly (works
   // with zero internet), then if we're online, get the real list from the

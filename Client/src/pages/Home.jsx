@@ -25,6 +25,7 @@ import { fetchWordOfDay } from '@/api/Vocab';
 import { useBadges } from '@/hooks/useBadges';
 import { getBadgeProgress, getBadgeById } from '@/utils/badges';
 import ContinueWatchingCard from '@/components/home/ContinueWatchingCard';
+import RecentPdfCard from '@/components/home/RecentPdfCard';
 import useWatchPlayerStore from '@/store/watchPlayerStore';
 import useStopwatchStore from '@/store/stopwatchStore';
 import useClockTimerStore from '@/store/clockTimerStore';
@@ -1002,8 +1003,13 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Continue Watching — most recently watched YT Study Pathsala video, resumable */}
-          <ContinueWatchingCard onPlay={(item) => playWatchItem(item)} refreshKey={recentVideoRefreshKey} />
+          {/* Continue Watching (YT) + Recent PDF — side by side on wider
+              screens, stacked on mobile. Each card hides itself if there's
+              nothing to show, so this row collapses cleanly either way. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <ContinueWatchingCard onPlay={(item) => playWatchItem(item)} refreshKey={recentVideoRefreshKey} />
+            <RecentPdfCard />
+          </div>
 
           {/* Study Time Card — aesthetic background */}
           <div className="relative rounded-2xl mb-5 border border-slate-800/50" style={{ isolation: 'isolate' }}>

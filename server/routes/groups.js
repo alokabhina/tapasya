@@ -185,28 +185,54 @@ router.get('/:id/members/:userId/stats', async (req, res) => {
 })
 
 // PUT /api/groups/:id/hours
+// Called periodically (checkpoint auto-save + on session end) for every
+// studying member — so in an active group, several members can hit this
+// for the SAME group document within moments of each other. The old
+// version did a plain read → modify in JS → save(), which is NOT atomic:
+// two concurrent requests can both read the same starting value, each add
+// their own seconds on top of it, and then whichever saves LAST silently
+// overwrites the other's update — a classic lost-update race. That's what
+// made the leaderboard look erratic (numbers not matching what was
+// actually studied, sometimes looking more like a fraction of the real
+// weekly total). Every write below uses MongoDB's atomic operators
+// instead, so concurrent requests can never step on each other.
 router.put('/:id/hours', async (req, res) => {
   try {
     const { addSeconds } = req.body
     if (!addSeconds || addSeconds <= 0) return res.json({ ok: true })
-    const group = await Group.findById(req.params.id)
-    if (!group) return res.status(404).json({ error: 'Group not found' })
 
-    // Weekly reset — agar last reset 7+ din pehle tha toh sab ka weeklySeconds 0 karo
     const now = new Date()
-    const lastReset = group.weeklyResetAt || group.createdAt || now
-    const daysSinceReset = (now - lastReset) / (1000 * 60 * 60 * 24)
-    if (daysSinceReset >= 7) {
-      group.members.forEach(m => { m.weeklySeconds = 0 })
-      group.weeklyResetAt = now
-    }
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+    const staleBefore = new Date(now.getTime() - SEVEN_DAYS_MS)
 
-    const member = group.members.find(m => m.userId.toString() === req.user.id)
-    if (member) {
-      member.weeklySeconds = (member.weeklySeconds || 0) + addSeconds
-      member.totalSeconds  = (member.totalSeconds  || 0) + addSeconds
-      await group.save()
-    }
+    // Weekly reset — atomic & race-safe. The filter (weeklyResetAt older
+    // than 7 days ago, or missing on old data) is evaluated by MongoDB at
+    // the instant each request's update actually executes. MongoDB
+    // serializes concurrent writes to the same document, so if two
+    // members' requests land at nearly the same moment, whichever runs
+    // first resets everyone to 0 and stamps weeklyResetAt = now; the
+    // second one then re-checks the SAME filter against the now-updated
+    // document, sees weeklyResetAt is fresh, and simply doesn't match —
+    // so it can never double-reset or race with itself.
+    await Group.updateOne(
+      {
+        _id: req.params.id,
+        $or: [{ weeklyResetAt: { $lte: staleBefore } }, { weeklyResetAt: null }],
+      },
+      { $set: { 'members.$[].weeklySeconds': 0, weeklyResetAt: now } }
+    )
+
+    // Atomic increment — $inc is applied directly by MongoDB against
+    // whatever the current value is at the moment it runs, so concurrent
+    // increments from different members (or the same member from two
+    // tabs/devices) always both land correctly instead of one clobbering
+    // the other.
+    const result = await Group.updateOne(
+      { _id: req.params.id, 'members.userId': req.user.id },
+      { $inc: { 'members.$.weeklySeconds': addSeconds, 'members.$.totalSeconds': addSeconds } }
+    )
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'Group ya member nahi mila' })
+
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
