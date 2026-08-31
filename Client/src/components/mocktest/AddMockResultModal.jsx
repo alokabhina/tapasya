@@ -199,6 +199,14 @@ export default function AddMockResultModal({ examSections = [], onClose, onSaved
 
   const inputCls = "w-full px-2.5 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 text-xs focus:outline-none focus:border-orange-500/50"
   const labelCls = "text-[11px] text-slate-500 mb-1 block"
+  // For inputs sitting SIDE BY SIDE in a flex row (the topic name + % pair
+  // below) — inputCls's own "w-full" fights with flex-1/w-16 sizing (two
+  // width rules on the same element, and w-full ends up winning in the
+  // compiled CSS regardless of which comes later in the class string).
+  // That's what was making the topic name box collapse to a sliver while
+  // the % box stretched to fill the row. Building these two without the
+  // conflicting "w-full" fixes it.
+  const topicInputBase = inputCls.replace('w-full ', '')
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -349,8 +357,8 @@ export default function AddMockResultModal({ examSections = [], onClose, onSaved
 
               {s.topics.map((t, ti) => (
                 <div key={ti} className="flex items-center gap-1.5 mb-1.5">
-                  <input type="text" placeholder="Topic naam" value={t.name} onChange={(e) => updateTopic(i, ti, 'name', e.target.value)} className={inputCls + ' flex-1'} />
-                  <input type="number" placeholder="%" value={t.correctPct} onChange={(e) => updateTopic(i, ti, 'correctPct', e.target.value)} className={inputCls + ' w-16'} />
+                  <input type="text" placeholder="Topic naam" value={t.name} onChange={(e) => updateTopic(i, ti, 'name', e.target.value)} className={topicInputBase + ' flex-1 min-w-0'} />
+                  <input type="number" placeholder="%" value={t.correctPct} onChange={(e) => updateTopic(i, ti, 'correctPct', e.target.value)} className={topicInputBase + ' w-16 shrink-0'} />
                   <button onClick={() => removeTopic(i, ti)} className="w-7 h-7 rounded-md bg-slate-800 text-slate-500 hover:text-red-400 flex items-center justify-center shrink-0"><i className="ti ti-x text-xs" /></button>
                 </div>
               ))}
@@ -366,8 +374,8 @@ export default function AddMockResultModal({ examSections = [], onClose, onSaved
               <p className="text-xs font-semibold text-slate-300 mb-2">Topic-wise (optional)</p>
               {(sections[0]?.topics || []).map((t, ti) => (
                 <div key={ti} className="flex items-center gap-1.5 mb-1.5">
-                  <input type="text" placeholder="Topic naam" value={t.name} onChange={(e) => updateTopic(0, ti, 'name', e.target.value)} className={inputCls + ' flex-1'} />
-                  <input type="number" placeholder="%" value={t.correctPct} onChange={(e) => updateTopic(0, ti, 'correctPct', e.target.value)} className={inputCls + ' w-16'} />
+                  <input type="text" placeholder="Topic naam" value={t.name} onChange={(e) => updateTopic(0, ti, 'name', e.target.value)} className={topicInputBase + ' flex-1 min-w-0'} />
+                  <input type="number" placeholder="%" value={t.correctPct} onChange={(e) => updateTopic(0, ti, 'correctPct', e.target.value)} className={topicInputBase + ' w-16 shrink-0'} />
                   <button onClick={() => removeTopic(0, ti)} className="w-7 h-7 rounded-md bg-slate-800 text-slate-500 hover:text-red-400 flex items-center justify-center shrink-0"><i className="ti ti-x text-xs" /></button>
                 </div>
               ))}

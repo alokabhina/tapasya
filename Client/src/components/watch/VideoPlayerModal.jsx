@@ -9,6 +9,7 @@ import { updateWatchProgress, toggleWatchComplete } from '@/api/watch'
 import { useAutoLandscapeFullscreen } from '@/hooks/useAutoLandscapeFullscreen'
 import { useTimerStore } from '@/store/timerStore'
 import useSubjectStore from '@/store/subjectStore'
+import useWatchPlayerStore from '@/store/watchPlayerStore'
 import StartTimerPrompt from './StartTimerPrompt'
 
 const PROGRESS_SAVE_INTERVAL_MS = 15000
@@ -149,6 +150,7 @@ export default function VideoPlayerModal({ item, queue = [], minimized = false, 
 
   function handleTimerPromptPick(subject) {
     useTimerStore.getState().start(subject)
+    useWatchPlayerStore.getState().setTimerStartedForVideo(true) // so closing this video can offer to stop it too
     promptDecidedRef.current = true
     setShowTimerPrompt(false)
   }

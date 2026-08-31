@@ -12,13 +12,20 @@ const useWatchPlayerStore = create((set) => ({
   queue: [],         // sibling items, for "Next in list"
   minimized: false,
   lastCompleted: null, // { itemId, at } — pages watch this to refresh their own list/stats
+  // True only when the study timer was started FROM the 30s "start timer?"
+  // nudge for the video currently playing — lets closing the video offer
+  // to stop that same timer too, without nagging when the running timer
+  // has nothing to do with this video (e.g. started earlier for something
+  // else entirely).
+  timerStartedForVideo: false,
 
-  play: (item, queue = []) => set({ item, queue, minimized: false }),
-  playNext: (item) => set({ item, minimized: false }),
+  play: (item, queue = []) => set({ item, queue, minimized: false, timerStartedForVideo: false }),
+  playNext: (item) => set({ item, minimized: false, timerStartedForVideo: false }),
   minimize: () => set({ minimized: true }),
   expand: () => set({ minimized: false }),
   close: () => set({ item: null, queue: [], minimized: false }),
   markCompleted: (itemId) => set({ lastCompleted: { itemId, at: Date.now() } }),
+  setTimerStartedForVideo: (v) => set({ timerStartedForVideo: v }),
 }))
 
 export default useWatchPlayerStore

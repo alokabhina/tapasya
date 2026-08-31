@@ -8,8 +8,10 @@
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useTimerStore from '@/store/timerStore';
+import useWatchPlayerStore from '@/store/watchPlayerStore';
 import { useTimer } from '@/hooks/useTimer';
 import { formatDuration } from '@/utils/time';
+import StopTimerPrompt from '@/components/watch/StopTimerPrompt';
 
 const PIP_SUPPORTED = 'documentPictureInPicture' in window;
 
@@ -26,6 +28,36 @@ export default function MiniPlayer() {
   const navigate  = useNavigate();
   const location  = useLocation();
   const isTimerPage = location.pathname === '/timer';
+
+  // ── "Timer bhi stop karu?" — shown right after closing a video that the
+  // 30s "start timer?" nudge was used on, since that's exactly the moment
+  // it's easiest to forget the timer is still quietly running.
+  const watchItem = useWatchPlayerStore((s) => s.item);
+  const timerStartedForVideo = useWatchPlayerStore((s) => s.timerStartedForVideo);
+  const clearTimerStartedForVideo = useWatchPlayerStore((s) => s.setTimerStartedForVideo);
+  const [showStopPrompt, setShowStopPrompt] = useState(false);
+  const prevWatchItemRef = useRef(null);
+
+  useEffect(() => {
+    const wasPlaying = prevWatchItemRef.current;
+    prevWatchItemRef.current = watchItem;
+    // Video just closed (had an item, now doesn't) — and it was this exact
+    // video that started the currently-running timer.
+    if (wasPlaying && !watchItem && timerStartedForVideo && isRunning) {
+      setShowStopPrompt(true);
+    }
+  }, [watchItem, timerStartedForVideo, isRunning]);
+
+  function handleStopTimerFromPrompt() {
+    setShowStopPrompt(false);
+    clearTimerStartedForVideo(false);
+    stop();
+  }
+
+  function handleKeepGoingFromPrompt() {
+    setShowStopPrompt(false);
+    clearTimerStartedForVideo(false);
+  }
 
   const [pipOpen, setPipOpen]     = useState(false);
   const pipWindowRef  = useRef(null);
@@ -166,6 +198,16 @@ export default function MiniPlayer() {
     window.removeEventListener('mouseup', onMouseUp);
   }
 
+  if (showStopPrompt) {
+    return (
+      <StopTimerPrompt
+        subjectName={subjectName}
+        elapsedLabel={formatDuration(elapsed)}
+        onStop={handleStopTimerFromPrompt}
+        onKeepGoing={handleKeepGoingFromPrompt}
+      />
+    );
+  }
   if (!isRunning && !isPaused) return null;
   if (isTimerPage) return null;
 
