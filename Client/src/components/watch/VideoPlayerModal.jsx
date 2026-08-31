@@ -7,8 +7,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { updateWatchProgress, toggleWatchComplete } from '@/api/watch'
 import { useAutoLandscapeFullscreen } from '@/hooks/useAutoLandscapeFullscreen'
+import { useTimerStore } from '@/store/timerStore'
+import useSubjectStore from '@/store/subjectStore'
+import StartTimerPrompt from './StartTimerPrompt'
 
 const PROGRESS_SAVE_INTERVAL_MS = 15000
+const TIMER_PROMPT_AFTER_SECONDS = 30 // of actual PLAYING time, not just "video open"
 
 export default function VideoPlayerModal({ item, queue = [], minimized = false, onClose, onCompleted, onPlayNext, onMinimize, onExpand }) {
   const containerRef = useRef(null)
@@ -18,6 +22,13 @@ export default function VideoPlayerModal({ item, queue = [], minimized = false, 
   const intervalRef = useRef(null)
   const [ready, setReady] = useState(false)
 
+  // ── Nudge to start the study timer after 30s of actually watching ────────
+  const playingTicksRef = useRef(null)     // setInterval handle, only runs while state === PLAYING
+  const playedSecondsRef = useRef(0)       // cumulative PLAYING time for this video, resets per item
+  const [showTimerPrompt, setShowTimerPrompt] = useState(false)
+  const promptDecidedRef = useRef(false)   // user already picked a subject or hit Skip for this video
+  const subjects = useSubjectStore((s) => s.subjects)
+
   // Auto-landscape-fullscreen only makes sense for the full player, not
   // while it's a small floating corner box.
   useAutoLandscapeFullscreen()
@@ -25,6 +36,10 @@ export default function VideoPlayerModal({ item, queue = [], minimized = false, 
   useEffect(() => {
     if (!item) return
     setReady(false)
+    // Fresh 30s countdown + prompt state for every new video.
+    playedSecondsRef.current = 0
+    promptDecidedRef.current = false
+    setShowTimerPrompt(false)
     // Resume from where the user left off — but only for a video that
     // isn't already marked complete (a finished video should replay from
     // the start). Back up a couple seconds so we don't drop the last bit
@@ -49,8 +64,23 @@ export default function VideoPlayerModal({ item, queue = [], minimized = false, 
           onReady: () => setReady(true),
           onStateChange: (e) => {
             clearInterval(intervalRef.current) // avoid stacking intervals on repeated play events
+            clearInterval(playingTicksRef.current)
             if (e.data === window.YT.PlayerState.PLAYING) {
               intervalRef.current = setInterval(saveProgress, PROGRESS_SAVE_INTERVAL_MS)
+              // Only counts while genuinely PLAYING — pausing or buffering
+              // stops this tick, so "30s" means 30s actually watched, not
+              // 30s since the modal opened.
+              playingTicksRef.current = setInterval(() => {
+                if (promptDecidedRef.current || useTimerStore.getState().isRunning) {
+                  clearInterval(playingTicksRef.current)
+                  return
+                }
+                playedSecondsRef.current += 1
+                if (playedSecondsRef.current >= TIMER_PROMPT_AFTER_SECONDS) {
+                  clearInterval(playingTicksRef.current)
+                  setShowTimerPrompt(true)
+                }
+              }, 1000)
             }
             if (e.data === window.YT.PlayerState.ENDED) {
               saveProgress() // capture the last few seconds before marking complete
@@ -75,6 +105,7 @@ export default function VideoPlayerModal({ item, queue = [], minimized = false, 
 
     return () => {
       clearInterval(intervalRef.current)
+      clearInterval(playingTicksRef.current)
       saveProgress()
       playerRef.current?.destroy?.()
       playerRef.current = null
@@ -114,6 +145,17 @@ export default function VideoPlayerModal({ item, queue = [], minimized = false, 
       await toggleWatchComplete(item._id, true)
       onCompleted?.(item)
     } catch {}
+  }
+
+  function handleTimerPromptPick(subject) {
+    useTimerStore.getState().start(subject)
+    promptDecidedRef.current = true
+    setShowTimerPrompt(false)
+  }
+
+  function handleTimerPromptSkip() {
+    promptDecidedRef.current = true
+    setShowTimerPrompt(false)
   }
 
   if (!item) return null
@@ -170,6 +212,15 @@ export default function VideoPlayerModal({ item, queue = [], minimized = false, 
             Next in list <i className="ti ti-player-track-next" />
           </button>
         </div>
+      )}
+
+      {showTimerPrompt && (
+        <StartTimerPrompt
+          subjects={subjects}
+          minimized={minimized}
+          onPick={handleTimerPromptPick}
+          onSkip={handleTimerPromptSkip}
+        />
       )}
     </div>
   )
