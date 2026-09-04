@@ -327,7 +327,11 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   const [dirty, setDirty] = useState(false) // any unsaved strokes since last save
   const [downloading, setDownloading] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState('idle') // 'idle' | 'saving' | 'saved' | 'restored'
+  const [showUnsavedPrompt, setShowUnsavedPrompt] = useState(false) // back/close pe "save karoge?" modal
   const autoSaveTimerRef = useRef(null)
+  // Always points at the LATEST runAutoSave closure (fresh `annotations` etc.)
+  // — see note on the periodic-autosave effect below for why this ref exists.
+  const runAutoSaveRef = useRef(null)
   // ── Top-bar tap → whole page scrolls in Y direction (mobile quirk) ──────
   // Some mobile browsers auto-scroll the nearest scrollable ancestor into
   // view whenever a button inside a horizontally-scrolling toolbar gets
@@ -578,35 +582,6 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     return () => clearTimeout(t)
   }, [annotations, dirty, doc._id])
 
-  // ── Auto-save #2: periodic real save to the server ──────────────────────
-  // Mirrors how Google Docs / Notion autosave: no need to remember to hit
-  // "Save" — every ~25s (and whenever you leave/hide the tab) any unsaved
-  // marks are quietly pushed up in the background. Manual Save still works
-  // for "save it right now".
-  useEffect(() => {
-    autoSaveTimerRef.current = setInterval(() => {
-      setDirty((isDirty) => {
-        if (isDirty) runAutoSave()
-        return isDirty
-      })
-    }, 25000)
-    return () => clearInterval(autoSaveTimerRef.current)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    function onVisibility() {
-      if (document.visibilityState === 'hidden' && dirty) runAutoSave()
-    }
-    window.addEventListener('visibilitychange', onVisibility)
-    window.addEventListener('pagehide', onVisibility)
-    return () => {
-      window.removeEventListener('visibilitychange', onVisibility)
-      window.removeEventListener('pagehide', onVisibility)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty])
-
   async function runAutoSave() {
     if (saving) return // manual save already in flight, don't double up
     setAutoSaveStatus('saving')
@@ -617,6 +592,84 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     } catch {
       setAutoSaveStatus('idle') // silent — manual Save button is still right there if this keeps failing
     }
+  }
+
+  // Keep a ref pointed at the CURRENT render's runAutoSave (no deps → runs
+  // after every render). This is the actual fix for "autosave kabhi kabhi
+  // kaam nahi karta": the 25s interval below is set up ONCE (empty deps),
+  // so calling `runAutoSave()` directly inside it would keep calling the
+  // very first render's closure forever — which still had `annotations`
+  // frozen at its mount-time value (often `{}`, before doc.annotationsData
+  // even loaded). Every periodic tick would then upload that STALE, mostly
+  // empty snapshot instead of whatever the user had actually drawn since —
+  // silently discarding real marks. Going through this ref instead means
+  // the interval always calls whichever `runAutoSave` was built on the
+  // latest `annotations`.
+  useEffect(() => { runAutoSaveRef.current = runAutoSave })
+
+  // ── Auto-save #2: periodic real save to the server ──────────────────────
+  // Mirrors how Google Docs / Notion autosave: no need to remember to hit
+  // "Save" — every ~25s (and whenever you leave/hide the tab) any unsaved
+  // marks are quietly pushed up in the background. Manual Save still works
+  // for "save it right now".
+  useEffect(() => {
+    autoSaveTimerRef.current = setInterval(() => {
+      setDirty((isDirty) => {
+        if (isDirty) runAutoSaveRef.current?.()
+        return isDirty
+      })
+    }, 25000)
+    return () => clearInterval(autoSaveTimerRef.current)
+  }, [])
+
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === 'hidden' && dirty) runAutoSaveRef.current?.()
+    }
+    window.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', onVisibility)
+    return () => {
+      window.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', onVisibility)
+    }
+  }, [dirty])
+
+  // ── Warn on tab close / refresh with an unsaved checkpoint ──────────────
+  // Browsers don't allow a custom message here anymore — they show their
+  // own generic "leave site?" prompt — but this stops an accidental tab
+  // close/refresh from silently dropping marks that haven't reached the
+  // server yet.
+  useEffect(() => {
+    function onBeforeUnload(e) {
+      if (!dirty) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [dirty])
+
+  // ── Back button inside the app: ask before discarding an unsaved
+  // checkpoint instead of just closing straight away. ────────────────────
+  function handleBackClick() {
+    if (dirty) { setShowUnsavedPrompt(true); return }
+    onClose()
+  }
+
+  async function handleSaveAndClose() {
+    try {
+      await handleSaveAnnotated(false)
+    } catch {
+      return // handleSaveAnnotated already alerted — stay open so the user can retry
+    }
+    setShowUnsavedPrompt(false)
+    onClose()
+  }
+
+  function handleDiscardAndClose() {
+    clearDraft(doc._id, DRAFT_KIND)
+    setShowUnsavedPrompt(false)
+    onClose()
   }
 
   // ── Export: builds on top of the current editing base (original or the
@@ -719,7 +772,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
         className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-800 overflow-x-auto no-scrollbar shrink-0"
         onPointerDownCapture={armScrollGuard}
       >
-        <button onClick={onClose} className="text-slate-400 hover:text-white w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center shrink-0">
+        <button onClick={handleBackClick} className="text-slate-400 hover:text-white w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center shrink-0">
           <i className="ti ti-arrow-left text-xl" />
         </button>
         <p className="text-sm text-slate-200 truncate max-w-[84px] sm:max-w-[200px] shrink-0">{doc.title}</p>
@@ -1067,6 +1120,41 @@ export default function PdfReader({ doc, onClose, onSaved }) {
           </div>
         )}
       </div>
+
+      {/* "Checkpoint" prompt — shown instead of closing straight away when
+          Back is tapped with unsaved marks still pending. */}
+      {showUnsavedPrompt && (
+        <div className="fixed inset-0 z-[130] bg-black/70 flex items-center justify-center px-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-xs shadow-2xl">
+            <p className="text-sm text-slate-100 font-semibold mb-1">Unsaved marks</p>
+            <p className="text-xs text-slate-400 mb-4">Kuch marks abhi save nahi hue hain. Save karke jaana hai?</p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleSaveAndClose}
+                disabled={saving}
+                className="w-full py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-semibold flex items-center justify-center gap-1.5"
+              >
+                {saving ? <div className="w-3.5 h-3.5 rounded-full border-2 border-white/50 border-t-white animate-spin" /> : <i className="ti ti-device-floppy" />}
+                Save & Close
+              </button>
+              <button
+                onClick={handleDiscardAndClose}
+                disabled={saving}
+                className="w-full py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-sm disabled:opacity-50"
+              >
+                Bina save kiye band karo
+              </button>
+              <button
+                onClick={() => setShowUnsavedPrompt(false)}
+                disabled={saving}
+                className="w-full py-1.5 rounded-lg text-slate-500 text-xs disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
