@@ -1,13 +1,16 @@
 // src/components/pdf/PdfReader.jsx
 // Full-screen PDF reader with freehand annotation:
-// - Base canvas renders the actual PDF page (via pdf.js, loaded from CDN).
+// - Base canvas renders the actual PDF page (via pdf.js, bundled from npm —
+//   see the `pdfjsLib` import below). Bundling instead of loading an old
+//   CDN build gets us pdf.js's current rendering/font pipeline, which is
+//   noticeably crisper than the 2023-era 3.11.174 build this used to pin.
 // - A transparent overlay canvas sits on top and captures pen/marker/eraser
 //   strokes. Strokes are stored as normalized (0–1) points per page, so they
 //   stay correctly positioned regardless of zoom/canvas size.
-// - "Save annotated" uses pdf-lib (also CDN) to load a FRESH copy of the
-//   ORIGINAL PDF bytes and draw the strokes onto it as vector lines, then
-//   exports a brand new PDF file. The original Cloudinary resource is never
-//   re-uploaded to, so it can't be corrupted by a save.
+// - "Save annotated" uses pdf-lib (still CDN-loaded) to load a FRESH copy of
+//   the ORIGINAL PDF bytes and draw the strokes onto it as vector lines,
+//   then exports a brand new PDF file. The original Cloudinary resource is
+//   never re-uploaded to, so it can't be corrupted by a save.
 //
 // UX notes (Edge-style continuous reader):
 // - All pages are stacked vertically in one scrollable column. Pages lazily
@@ -23,9 +26,13 @@
 import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react'
 import { saveAnnotatedPdf } from '@/api/pdfs'
 import { getPdfFileOffline, savePdfFileOffline } from '@/utils/offlineDB'
+import * as pdfjsLib from 'pdfjs-dist'
+// Vite: `?url` gives us a hashed, served URL for the worker file instead of
+// inlining it, which is what pdf.js's own worker loader expects.
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
-const PDFJS_WORKER_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
+
 const PDFLIB_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js'
 // Single draft "kind" now — there's only ever one live editable copy per
 // doc (always built on the original + persisted strokes), no more
@@ -84,10 +91,9 @@ function loadScript(src) {
 }
 
 async function loadLibs() {
-  if (!window.pdfjsLib) {
-    await loadScript(PDFJS_CDN)
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_CDN
-  }
+  // pdf.js is now a bundled npm import (see top of file) — only pdf-lib
+  // (used for the "save annotated copy" export, not for on-screen
+  // rendering) still needs to come from the CDN.
   if (!window.PDFLib) await loadScript(PDFLIB_CDN)
 }
 
@@ -174,7 +180,13 @@ function PageBlock({
     // the canvas's actual pixel buffer, then scale the drawing context
     // back down so all our existing coordinate math (viewport.width/height
     // etc.) still lines up, while keeping the on-screen CSS size the same.
-    const dpr = Math.min(window.devicePixelRatio || 1, 3) // cap at 3x — plenty sharp, avoids huge canvases
+    // Supersample beyond the screen's raw devicePixelRatio. pdf.js draws glyphs as
+    // canvas paths without the hinting a native PDF engine (e.g. Edge/PDFium) applies,
+    // so a 1:1 backing-store render at DPR=1 looks visibly softer/greyer than the same
+    // page in a real browser tab even though the CSS size matches exactly. Rendering
+    // ~1.5x oversized and letting the browser's own downscale do the anti-aliasing
+    // closes most of that gap. Cap at 4x so we don't blow up canvas memory on 3x+ panels.
+    const dpr = Math.min((window.devicePixelRatio || 1) * 1.5, 4)
     const base = baseCanvasRef.current
     const overlay = overlayCanvasRef.current
     for (const canvas of [base, overlay]) {
@@ -187,6 +199,8 @@ function PageBlock({
       try { renderTaskRef.current.cancel() } catch { /* previous task already done */ }
     }
     const baseCtx = base.getContext('2d')
+    baseCtx.imageSmoothingEnabled = true
+    baseCtx.imageSmoothingQuality = 'high'
     baseCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
     const task = page.render({ canvasContext: baseCtx, viewport })
     renderTaskRef.current = task
@@ -198,6 +212,8 @@ function PageBlock({
     setRendered(true)
     cssSizeRef.current = { w: viewport.width, h: viewport.height }
     const ctx = overlay.getContext('2d')
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, viewport.width, viewport.height)
     for (const s of strokes) drawStroke(ctx, s, viewport.width, viewport.height)
@@ -404,7 +420,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     // they were, not baked into the page.
     setAnnotations(doc.annotationsData || {})
     loadPdfBytes()
-      .then((buf) => window.pdfjsLib.getDocument({ data: buf }).promise)
+      .then((buf) => pdfjsLib.getDocument({ data: buf }).promise)
       .then((pdf) => {
         if (cancelled) return
         pdfDocRef.current = pdf

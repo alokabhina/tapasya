@@ -1,21 +1,14 @@
 // components/syllabus/PDFParser.jsx
 import { useState, useRef } from 'react'
 import api from '@/api/client'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-const PDFJSURL  = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
-const PDFWORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
 async function extractTextFromPDF(file) {
-  if (!window.pdfjsLib) {
-    await new Promise((res, rej) => {
-      const s = document.createElement('script')
-      s.src = PDFJSURL; s.onload = res; s.onerror = rej
-      document.head.appendChild(s)
-    })
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFWORKER
-  }
   const ab  = await file.arrayBuffer()
-  const pdf = await window.pdfjsLib.getDocument({ data: ab }).promise
+  const pdf = await pdfjsLib.getDocument({ data: ab }).promise
   let lines = []
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i)
