@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { getPracticeSolutions } from '@/api/practiceAttempts'
 import { sanitizeHtml } from '@/utils/sanitizeHtml'
+import { formatReasoningText } from '@/utils/formatDirectionText'
 import AttemptSwitcher from '@/components/practicetest/AttemptSwitcher'
 
 const STATUS_META = {
@@ -47,7 +48,7 @@ function QuestionCard({ q, highlighted }) {
         <span className="text-xs font-bold text-slate-500">Q{q.qNo}</span>
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${meta.className}`}>{meta.label}</span>
       </div>
-      <p className="text-sm text-slate-200 mb-3 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.questionText) }} />
+      <p className="text-sm text-slate-200 mb-3 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatReasoningText(q.questionText)) }} />
       <div className="space-y-1.5 mb-3">
         {q.options.map((opt) => {
           const isCorrect = opt.key === q.correctKey
@@ -181,7 +182,7 @@ export default function PracticeTestSolutions() {
               {direction && (
                 <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
                   {direction.title && <p className="text-xs font-bold text-slate-200 mb-1">{direction.title}</p>}
-                  <div className="text-xs text-slate-400 whitespace-pre-wrap [&_table]:whitespace-normal" dangerouslySetInnerHTML={{ __html: sanitizeHtml(direction.content) }} />
+                  <div className="text-xs text-slate-400 whitespace-pre-wrap [&_table]:whitespace-normal" dangerouslySetInnerHTML={{ __html: sanitizeHtml(insertInstructionLineBreak(direction.content)) }} />
                 </div>
               )}
               {g.questions.map((q) => (

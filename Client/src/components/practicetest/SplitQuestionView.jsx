@@ -42,6 +42,7 @@
 
 import { useMemo } from 'react'
 import { sanitizeHtml } from '@/utils/sanitizeHtml'
+import { formatReasoningText } from '@/utils/formatDirectionText'
 
 const FONT_LEVELS = [
   { question: 16, option: 14, direction: 13 },
@@ -60,8 +61,14 @@ export default function SplitQuestionView({
   onSelectOption,
   fontScale = 1,
 }) {
-  const safeDirectionHtml = useMemo(() => sanitizeHtml(direction?.content), [direction?.content])
-  const safeQuestionHtml = useMemo(() => sanitizeHtml(question?.questionText), [question?.questionText])
+  const safeDirectionHtml = useMemo(
+    () => sanitizeHtml(formatReasoningText(direction?.content, { isDirection: true })),
+    [direction?.content],
+  )
+  const safeQuestionHtml = useMemo(
+    () => sanitizeHtml(formatReasoningText(question?.questionText)),
+    [question?.questionText],
+  )
   const sizes = FONT_LEVELS[Math.min(Math.max(fontScale, 0), FONT_LEVELS.length - 1)]
 
   if (!question) return null
