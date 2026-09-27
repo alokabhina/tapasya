@@ -88,6 +88,29 @@ RULES:
    whole minute (e.g. 20 questions × 50s ≈ 1000s → use 1020 or a clean 1200 for a 20-min slot).
    Always give a positive number in seconds, never null/0/omitted.
 
+9. "marksWrong" is a MAGNITUDE, not a signed adjustment — always give it as a POSITIVE number
+   (e.g. 0.25 for "-0.25 negative marking"), never negative. The app subtracts this value itself
+   at scoring time, so a negative number here would flip wrong answers into bonus marks instead
+   of penalties.
+
+10. OUTPUT VALIDITY — the JSON you return must be complete and syntactically valid all by itself:
+    - No trailing commas after the last item in any array or object.
+    - Straight double quotes only (") for every key and string — never curly/smart quotes
+      (" " ' '), even if the source paper text contains them; convert those to a plain apostrophe
+      or straight quote inside the string.
+    - Coding-Decoding / word-quoting questions often need a quoted word or phrase INSIDE a
+      questionText or direction content, e.g. "MARKET" is coded as "LZSLDS". Every such internal
+      double-quote must be escaped as \" — never leave a raw " character inside a JSON string
+      value, that alone breaks the whole JSON (this is the single most common real-world cause
+      of a failed parse for reasoning papers).
+    - Do not cut your response off partway through. If the paper has many questions (30+) and
+      you are not confident the ENTIRE valid JSON will fit in one response, say so in plain text
+      instead of silently returning a half-finished JSON object — suggest splitting the paper
+      into 2+ batches (e.g. by section) rather than truncating mid-array.
+    - Before finalizing, mentally check that every opening brace has a matching closing brace
+      and every opening bracket has a matching closing bracket — the whole reply must be one
+      single parseable JSON object, nothing after the final closing brace.
+
 SCHEMA:
 {
   "title": string,
@@ -130,18 +153,32 @@ attachment instead):
 
 // Pulls a JSON object out of the AI's reply even if it added extra text or
 // a \`\`\`json fence around it — so a slightly messy paste doesn't just fail.
+// Keeps the real JSON.parse error (message + position) from every attempt so
+// the caller can show *why* it failed instead of a flat "parse nahi hua" —
+// that position number is usually enough to find the broken spot by hand.
 export function extractJson(raw) {
   const trimmed = raw.trim()
-  try { return JSON.parse(trimmed) } catch { /* try to salvage below */ }
+  let lastErr = null
+
+  try { return JSON.parse(trimmed) } catch (e) { lastErr = e }
+
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
   if (fenced) {
-    try { return JSON.parse(fenced[1].trim()) } catch { /* fall through */ }
+    try { return JSON.parse(fenced[1].trim()) } catch (e) { lastErr = e }
   }
+
   const braceMatch = trimmed.match(/\{[\s\S]*\}/)
   if (braceMatch) {
-    try { return JSON.parse(braceMatch[0]) } catch { /* give up */ }
+    try { return JSON.parse(braceMatch[0]) } catch (e) { lastErr = e }
   }
-  throw new Error('JSON parse nahi ho paya')
+
+  const reason = lastErr?.message || 'invalid JSON'
+  throw new Error(
+    `JSON parse nahi ho paya — ${reason}. Common wajah: (1) AI ka response beech mein kat gaya `
+    + `(truncated — "Unexpected end of JSON input" isi ka sign hai, response bahut lamba tha), `
+    + `(2) trailing comma kisi array/object ke last item ke baad, (3) curly/smart quotes ("  " ' ') `
+    + `seedhe quotes (") ki jagah. Poora AI response paste hua hai (shuru se end tak) yeh check karo.`
+  )
 }
 
 // A question's explanation is tagged with this exact prefix by the prompt

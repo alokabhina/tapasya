@@ -34,6 +34,18 @@ export function validatePracticeTestPayload(payload, existingTopics = []) {
       errors.push(`${label}: kam se kam ek question chahiye`)
     }
 
+    // marksCorrect/marksWrong are MAGNITUDES, not signed adjustments —
+    // scoring.js does `score += marksCorrect` and `score -= marksWrong`
+    // itself, so a negative value here silently flips correct answers
+    // into penalties or wrong answers into bonus marks. Catch that at
+    // upload time instead of finding out from a broken result page later.
+    if (section?.marksCorrect != null && Number(section.marksCorrect) <= 0) {
+      errors.push(`${label}: marksCorrect positive hona chahiye (0 se zyada) — yeh ek magnitude hai, sign nahi`)
+    }
+    if (section?.marksWrong != null && Number(section.marksWrong) < 0) {
+      errors.push(`${label}: marksWrong negative nahi ho sakta — "-0.25" ki jagah "0.25" likho, app khud subtract karta hai scoring ke time`)
+    }
+
     const directions = Array.isArray(section?.directions) ? section.directions : []
     const directionIds = new Set()
     directions.forEach((d, dIdx) => {
@@ -67,6 +79,15 @@ export function validatePracticeTestPayload(payload, existingTopics = []) {
         errors.push(`${qLabel}: difficulty in mein se ek honi chahiye — ${DIFFICULTIES.join(', ')}`)
       }
       if (!q.topic?.trim()) errors.push(`${qLabel}: topic required hai`)
+
+      // Same magnitude-not-sign rule as the section-level marks, applied to
+      // the rare per-question override fields.
+      if (q.marksCorrectOverride != null && Number(q.marksCorrectOverride) <= 0) {
+        errors.push(`${qLabel}: marksCorrectOverride positive hona chahiye`)
+      }
+      if (q.marksWrongOverride != null && Number(q.marksWrongOverride) < 0) {
+        errors.push(`${qLabel}: marksWrongOverride negative nahi ho sakta — magnitude do, sign nahi`)
+      }
     })
 
     // Topic normalization sirf tab chalta hai jab yeh section otherwise clean
