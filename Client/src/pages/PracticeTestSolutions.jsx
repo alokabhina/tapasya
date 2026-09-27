@@ -47,7 +47,7 @@ function QuestionCard({ q, highlighted }) {
         <span className="text-xs font-bold text-slate-500">Q{q.qNo}</span>
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${meta.className}`}>{meta.label}</span>
       </div>
-      <p className="text-sm text-slate-200 mb-3" dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.questionText) }} />
+      <p className="text-sm text-slate-200 mb-3 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.questionText) }} />
       <div className="space-y-1.5 mb-3">
         {q.options.map((opt) => {
           const isCorrect = opt.key === q.correctKey
@@ -58,7 +58,7 @@ function QuestionCard({ q, highlighted }) {
           return (
             <div key={opt.key} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${cls}`}>
               <span className="font-bold w-4">{opt.key}</span>
-              <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(opt.text) }} />
+              <span className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(opt.text) }} />
               {isCorrect && <i className="ti ti-check ml-auto text-emerald-400" />}
               {isUser && !isCorrect && <i className="ti ti-x ml-auto text-red-400" />}
             </div>
@@ -68,7 +68,7 @@ function QuestionCard({ q, highlighted }) {
       {q.explanation && (
         <div className="rounded-lg bg-slate-800/50 border border-slate-800 px-3 py-2 text-xs text-slate-300 mb-2">
           <span className="font-bold text-slate-100">Explanation: </span>
-          <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.explanation) }} />
+          <span className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.explanation) }} />
         </div>
       )}
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -181,7 +181,7 @@ export default function PracticeTestSolutions() {
               {direction && (
                 <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
                   {direction.title && <p className="text-xs font-bold text-slate-200 mb-1">{direction.title}</p>}
-                  <div className="text-xs text-slate-400" dangerouslySetInnerHTML={{ __html: sanitizeHtml(direction.content) }} />
+                  <div className="text-xs text-slate-400 whitespace-pre-wrap [&_table]:whitespace-normal" dangerouslySetInnerHTML={{ __html: sanitizeHtml(direction.content) }} />
                 </div>
               )}
               {g.questions.map((q) => (

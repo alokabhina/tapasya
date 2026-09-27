@@ -36,7 +36,7 @@ export default function SectionTabs({
   const secs = Math.floor((questionTimeSec || 0) % 60)
 
   return (
-    <div className="flex flex-wrap items-center gap-3 px-3 sm:px-5 py-2.5 bg-white border-b border-slate-200">
+    <div className="flex flex-wrap items-center gap-4 px-3 sm:px-5 py-3 bg-white border-b border-slate-200">
       <div className="flex items-center gap-5 overflow-x-auto">
         {sections.map((section, i) => {
           const isCurrent = i === currentSectionIndex
@@ -61,7 +61,7 @@ export default function SectionTabs({
         })}
       </div>
 
-      <div className="flex items-center gap-3 ml-auto text-xs text-slate-500 whitespace-nowrap">
+      <div className="flex items-center gap-4 ml-auto text-xs text-slate-500 whitespace-nowrap">
         <span className="flex items-center gap-1.5">
           {showTimer ? (
             <>

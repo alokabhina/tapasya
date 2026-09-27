@@ -57,3 +57,28 @@ export async function getPracticeLeaderboard(testId) {
   const res = await api.get(`/practice-leaderboard/${testId}`)
   return res.data
 }
+
+// Red-flag button in TestHeader — flag the current question or the whole
+// paper as having an issue. scope: 'question' | 'test'.
+export async function reportPracticeIssue(attemptId, { scope, sectionIndex, qNo, message }) {
+  const res = await api.post(`/practice-attempts/${attemptId}/report`, { scope, sectionIndex, qNo, message })
+  return res.data
+}
+
+// Generic "Report" bottom-nav button (see BottomNav.jsx) — not tied to a
+// test/attempt, just a page path + free-text message.
+export async function reportAppIssue(page, message) {
+  const res = await api.post('/practice-attempts/report-general', { page, message })
+  return res.data
+}
+
+// Admin-only — list/resolve red-flag reports (practice-tests/admin/reports).
+export async function getPracticeReports(status) {
+  const res = await api.get('/practice-attempts/admin/reports', { params: status ? { status } : {} })
+  return res.data
+}
+
+export async function resolvePracticeReport(reportId, status) {
+  const res = await api.patch(`/practice-attempts/admin/reports/${reportId}`, { status })
+  return res.data
+}

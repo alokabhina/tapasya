@@ -12,7 +12,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import useCountdown from '@/hooks/useCountdown'
 import usePracticeTestStore from '@/store/practiceTestStore'
-import { getPracticeAttempt, savePracticeProgress, submitPracticeSection } from '@/api/practiceAttempts'
+import { getPracticeAttempt, savePracticeProgress, submitPracticeSection, reportPracticeIssue } from '@/api/practiceAttempts'
 
 import TestHeader from '@/components/practicetest/TestHeader'
 import SectionTabs from '@/components/practicetest/SectionTabs'
@@ -23,8 +23,10 @@ import PauseOverlay from '@/components/practicetest/PauseOverlay'
 import SectionSubmitModal from '@/components/practicetest/SectionSubmitModal'
 import FinalSubmitModal from '@/components/practicetest/FinalSubmitModal'
 import OnScreenCalculator from '@/components/practicetest/OnScreenCalculator'
+import ReportQuestionModal from '@/components/practicetest/ReportQuestionModal'
 
 const AUTOSAVE_INTERVAL_MS = 15000
+const FONT_SCALE_KEY = 'practiceTestFontScale'
 
 function countsFromResponses(responses) {
   const c = { answered: 0, notAnswered: 0, notVisited: 0, marked: 0, answeredMarked: 0 }
@@ -51,6 +53,19 @@ export default function PracticeTestPlay() {
   const [submitModal, setSubmitModal] = useState(null)         // null | 'section' | 'final'
   const [submitting, setSubmitting] = useState(false)
   const [showCalculator, setShowCalculator] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [fontScale, setFontScale] = useState(() => {
+    const saved = Number(localStorage.getItem(FONT_SCALE_KEY))
+    return Number.isInteger(saved) && saved >= 0 && saved <= 3 ? saved : 1
+  })
+
+  function adjustFontScale(delta) {
+    setFontScale((v) => {
+      const next = Math.min(3, Math.max(0, v + delta))
+      localStorage.setItem(FONT_SCALE_KEY, String(next))
+      return next
+    })
+  }
 
   const submittingRef = useRef(false)
   const questionStartRef = useRef(Date.now())
@@ -263,6 +278,9 @@ export default function PracticeTestPlay() {
           else document.documentElement.requestFullscreen?.()
         }}
         onExitClick={handleExitTest}
+        onReportClick={() => setShowReportModal(true)}
+        fontScale={fontScale}
+        onFontScaleChange={adjustFontScale}
       />
 
       <SectionTabs
@@ -283,6 +301,7 @@ export default function PracticeTestPlay() {
             qNo={question.qNo}
             selectedKey={responses[question.qNo]?.selectedKey ?? null}
             onSelectOption={(key) => store.selectOption(question.qNo, key)}
+            fontScale={fontScale}
           />
           <ActionBar
             onMarkForReview={() => goNext(true)}
@@ -306,6 +325,15 @@ export default function PracticeTestPlay() {
       </div>
 
       {showCalculator && <OnScreenCalculator onClose={() => setShowCalculator(false)} />}
+
+      {showReportModal && (
+        <ReportQuestionModal
+          qNo={question.qNo}
+          sectionIndex={store.currentSectionIndex}
+          onSubmit={(payload) => reportPracticeIssue(store.attemptId, payload)}
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
 
       <PauseOverlay
         mode={pauseMode}

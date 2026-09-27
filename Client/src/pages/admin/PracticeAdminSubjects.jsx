@@ -88,14 +88,22 @@ export default function PracticeAdminSubjects() {
         <i className="ti ti-arrow-left" /> Practice Tests
       </button>
 
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <h1 className="text-xl font-black text-white flex items-center gap-2"><i className="ti ti-shield-lock text-tapasya-orange" /> Practice Test Admin</h1>
-        <button
-          onClick={() => navigate('/practice-tests/admin/upload')}
-          className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-tapasya-orange text-white hover:bg-tapasya-orange-dark"
-        >
-          <i className="ti ti-upload" /> Upload Test
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/practice-tests/admin/reports')}
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-red-500/40 text-red-400 hover:bg-red-500/10"
+          >
+            <i className="ti ti-flag-3" /> Reports
+          </button>
+          <button
+            onClick={() => navigate('/practice-tests/admin/upload')}
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-tapasya-orange text-white hover:bg-tapasya-orange-dark"
+          >
+            <i className="ti ti-upload" /> Upload Test
+          </button>
+        </div>
       </div>
 
       {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-sm px-4 py-3 mb-4">{error}</div>}

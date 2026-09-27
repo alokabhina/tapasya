@@ -58,18 +58,30 @@ export function buildTopicBreakdown(test, attempt) {
       const r = responseMap.get(q.qNo)
       const isAttempted = !!(r && r.selectedKey != null && (r.status === 'answered' || r.status === 'answered-marked'))
       const isCorrect = isAttempted && r.selectedKey === q.correctKey
+      const qStatus = !r || r.status === 'not-visited' ? 'unseen' : !isAttempted ? 'skipped' : isCorrect ? 'correct' : 'wrong'
 
-      if (!topics[q.topic]) topics[q.topic] = { name: q.topic, correct: 0, total: 0, questions: [] }
+      if (!topics[q.topic]) topics[q.topic] = { name: q.topic, correct: 0, wrong: 0, skipped: 0, unseen: 0, total: 0, questions: [] }
       topics[q.topic].total++
-      if (isCorrect) topics[q.topic].correct++
+      if (qStatus === 'correct') topics[q.topic].correct++
+      else if (qStatus === 'wrong') topics[q.topic].wrong++
+      else if (qStatus === 'skipped') topics[q.topic].skipped++
+      else topics[q.topic].unseen++
       topics[q.topic].questions.push({
         qNo: q.qNo,
-        status: !r || r.status === 'not-visited' ? 'unseen' : !isAttempted ? 'skipped' : isCorrect ? 'correct' : 'wrong',
+        status: qStatus,
         timeSpentSec: r?.timeSpentSec || 0,
       })
     }
 
-    const topicList = Object.values(topics).map((t) => ({ ...t, correctPct: t.total ? +((t.correct / t.total) * 100).toFixed(1) : 0 }))
+    // correctPct is accuracy on *attempted* questions only — a topic where
+    // the student mostly skipped shouldn't look identical to one where they
+    // attempted everything and got it wrong; buildStrongWeakZones below
+    // uses skipped/wrong/unseen counts (not just this %) to tell those apart
+    // and label the weak-zone reason accordingly.
+    const topicList = Object.values(topics).map((t) => {
+      const attempted = t.correct + t.wrong
+      return { ...t, correctPct: attempted ? +((t.correct / attempted) * 100).toFixed(1) : 0 }
+    })
     bySection[section.name] = {
       weakness: [...topicList].sort((a, b) => a.correctPct - b.correctPct),
       strength: [...topicList].sort((a, b) => b.correctPct - a.correctPct),
@@ -113,16 +125,35 @@ export function buildTimeSplit(test, attempt) {
 }
 
 // "Strong Zones & Weak Zones" — per-section need-improvement topic chips
-// (plan doc Image 16). Anything below the accuracy threshold is flagged
-// "need improvement", the rest count as strengths.
+// (plan doc Image 16). A topic lands in "need improvement" either because
+// the student answered it wrong too often (accuracy-on-attempted below
+// weakThreshold) OR because they mostly skipped/never visited it — those
+// are different problems (concept gap vs time management), so each
+// need-improvement entry carries a `reason` the UI can label instead of
+// lumping every weak topic under one unspecific chip.
 export function buildStrongWeakZones(test, attempt, weakThreshold = 60) {
   const breakdown = buildTopicBreakdown(test, attempt)
   const result = {}
   for (const [sectionName, { weakness }] of Object.entries(breakdown)) {
-    result[sectionName] = {
-      needImprovement: weakness.filter((t) => t.correctPct < weakThreshold).map((t) => t.name),
-      strong: weakness.filter((t) => t.correctPct >= weakThreshold).map((t) => t.name),
+    const needImprovement = []
+    const strong = []
+    for (const t of weakness) {
+      const attempted = t.correct + t.wrong
+      const skippedOrUnseen = t.skipped + t.unseen
+      const mostlySkipped = attempted === 0 || skippedOrUnseen > attempted
+      const isWeak = mostlySkipped || t.correctPct < weakThreshold
+      if (isWeak) {
+        needImprovement.push({
+          name: t.name,
+          reason: mostlySkipped ? 'skipped' : 'wrong',
+          skipped: skippedOrUnseen,
+          wrong: t.wrong,
+        })
+      } else {
+        strong.push({ name: t.name })
+      }
     }
+    result[sectionName] = { needImprovement, strong }
   }
   return result
 }

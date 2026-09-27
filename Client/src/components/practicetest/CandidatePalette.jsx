@@ -53,7 +53,7 @@ export default function CandidatePalette({
         <span className="text-sm font-semibold text-slate-800 truncate">{userName || 'Aspirant'}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 px-4 py-3 border-b border-slate-200 text-xs">
+      <div className="grid grid-cols-2 gap-2.5 px-4 py-3.5 border-b border-slate-200 text-xs">
         <CountPill color="bg-emerald-500" label="Answered" value={counts.answered} />
         <CountPill color="bg-red-500" label="Not Answered" value={counts.notAnswered} />
         <CountPill color="bg-slate-300" label="Not Visited" value={counts.notVisited} />
@@ -61,9 +61,9 @@ export default function CandidatePalette({
         <CountPill color="bg-purple-500" label="Answered &amp; Marked" value={counts.answeredMarked} full />
       </div>
 
-      <p className="px-4 pt-3 pb-1 text-xs font-bold text-slate-500 uppercase tracking-wide">{sectionName}</p>
+      <p className="px-4 pt-4 pb-1.5 text-xs font-bold text-slate-500 uppercase tracking-wide">{sectionName}</p>
 
-      <div className="grid grid-cols-4 gap-2 px-4 py-3">
+      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-4 gap-2.5 px-4 py-3">
         {questions.map((q, i) => {
           const status = statusOf(responses, q.qNo)
           const isCurrent = q.qNo === currentQNo

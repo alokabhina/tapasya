@@ -27,7 +27,16 @@ export default function StrongWeakZones({ strongWeakZones }) {
                   <div className="flex flex-wrap gap-1.5">
                     {needImprovement.length === 0 && <span className="text-slate-500 text-xs">None 🎉</span>}
                     {needImprovement.map((t) => (
-                      <span key={t} className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-red-500/10 text-red-400 border border-red-500/25">{t}</span>
+                      <span
+                        key={t.name}
+                        title={t.reason === 'skipped' ? `Mostly skipped (${t.skipped} question${t.skipped === 1 ? '' : 's'})` : `Wrong answers (${t.wrong})`}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg bg-red-500/10 text-red-400 border border-red-500/25"
+                      >
+                        {t.name}
+                        <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${t.reason === 'skipped' ? 'bg-amber-500/15 text-amber-400' : 'bg-red-500/20 text-red-300'}`}>
+                          {t.reason === 'skipped' ? 'Skipped' : 'Wrong'}
+                        </span>
+                      </span>
                     ))}
                   </div>
                 </div>
@@ -36,7 +45,7 @@ export default function StrongWeakZones({ strongWeakZones }) {
                   <div className="flex flex-wrap gap-1.5">
                     {strong.length === 0 && <span className="text-slate-500 text-xs">—</span>}
                     {strong.map((t) => (
-                      <span key={t} className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">{t}</span>
+                      <span key={t.name} className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">{t.name}</span>
                     ))}
                   </div>
                 </div>

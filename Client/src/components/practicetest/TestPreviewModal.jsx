@@ -236,7 +236,7 @@ export default function TestPreviewModal({ sections, onClose, onChange }) {
                   {unverified && <i className="ti ti-alert-triangle" />}
                   Correct: {question.correctKey}
                 </span>
-                {question.explanation && <p className="mt-1 opacity-80">{question.explanation}</p>}
+                {question.explanation && <p className="mt-1 opacity-80 whitespace-pre-wrap">{question.explanation}</p>}
                 <p className="mt-1 opacity-60">{question.topic}{question.subTopic ? ` · ${question.subTopic}` : ''} · {question.difficulty}</p>
               </div>
             </div>

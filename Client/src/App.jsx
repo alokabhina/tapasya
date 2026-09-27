@@ -74,6 +74,7 @@ const PracticeTestPlay = lazy(() => import('./pages/PracticeTestPlay'));
 const PracticeAdminSubjects = lazy(() => import('./pages/admin/PracticeAdminSubjects'));
 const PracticeAdminUpload = lazy(() => import('./pages/admin/PracticeAdminUpload'));
 const PracticeAdminLeaderboard = lazy(() => import('./pages/admin/PracticeAdminLeaderboard'));
+const PracticeAdminReports = lazy(() => import('./pages/admin/PracticeAdminReports'));
 const PracticeTestResult = lazy(() => import('./pages/PracticeTestResult'));
 const PracticeTestAnalysis = lazy(() => import('./pages/PracticeTestAnalysis'));
 const PracticeTestSolutions = lazy(() => import('./pages/PracticeTestSolutions'));
@@ -224,6 +225,7 @@ export default function App() {
             ['/practice-tests/admin/upload',                <PracticeAdminUpload />],
             ['/practice-tests/admin/:testId/edit',          <PracticeAdminUpload />],
             ['/practice-tests/admin/:testId/leaderboard',   <PracticeAdminLeaderboard />],
+            ['/practice-tests/admin/reports',               <PracticeAdminReports />],
             ['/practice-tests/result/:attemptId',           <PracticeTestResult />],
             ['/practice-tests/analysis/:attemptId',         <PracticeTestAnalysis />],
             ['/practice-tests/solutions/:attemptId',        <PracticeTestSolutions />],

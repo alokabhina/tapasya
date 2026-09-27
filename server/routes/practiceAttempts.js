@@ -1,8 +1,10 @@
 // server/routes/practiceAttempts.js
 import express from 'express'
 import authMiddleware from '../middleware/auth.js'
+import practiceAdminMiddleware from '../middleware/practiceAdmin.js'
 import PracticeAttempt from '../models/PracticeAttempt.js'
 import PracticeTest from '../models/PracticeTest.js'
+import PracticeReport from '../models/PracticeReport.js'
 import { scoreSection, scoreOverall } from '../utils/practiceScoring.js'
 import {
   buildSectionalSummary, buildTopicBreakdown, buildTimeSplit,
@@ -95,6 +97,86 @@ router.patch('/:id/progress', async (req, res) => {
 
     await attempt.save()
     res.json({ saved: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// POST /api/practice-attempts/:id/report — the in-test red-flag button.
+// Body: { scope: 'question'|'test', sectionIndex?, qNo?, message? }. Student
+// flags a specific question (wrong option/typo/etc.) or the whole paper as
+// having an issue; admin reviews these via the /admin/reports endpoints
+// below. Doesn't block or alter the attempt in any way — pure side-channel.
+router.post('/:id/report', async (req, res) => {
+  try {
+    const attempt = await PracticeAttempt.findOne({ _id: req.params.id, userId: req.user.id })
+    if (!attempt) return res.status(404).json({ error: 'Not found' })
+
+    const { scope, sectionIndex = null, qNo = null, message = '' } = req.body
+    if (!['question', 'test'].includes(scope)) return res.status(400).json({ error: 'Invalid scope' })
+
+    const report = await PracticeReport.create({
+      userId: req.user.id,
+      testId: attempt.testId,
+      attemptId: attempt._id,
+      scope,
+      sectionIndex: scope === 'question' ? sectionIndex : null,
+      qNo: scope === 'question' ? qNo : null,
+      message: (message || '').slice(0, 1000),
+    })
+    res.json({ reported: true, reportId: report._id })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// POST /api/practice-attempts/report-general — the "Report" bottom-nav
+// button (replaces the old "Math" shortcut there, see BottomNav.jsx).
+// Works anywhere in the app, not just mid-test. Body: { page, message }.
+router.post('/report-general', async (req, res) => {
+  try {
+    const { page = '', message = '' } = req.body
+    if (!message || !message.trim()) return res.status(400).json({ error: 'Message zaroori hai' })
+    const report = await PracticeReport.create({
+      userId: req.user.id,
+      scope: 'app',
+      page: page.slice(0, 200),
+      message: message.slice(0, 1000),
+    })
+    res.json({ reported: true, reportId: report._id })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── Admin — red-flag reports (practice-tests/admin/reports page) ────────
+
+// GET /api/practice-attempts/admin/reports?status=open — newest first,
+// enriched with the test title and reporting user's name/email so the
+// admin list doesn't need N+1 lookups client-side.
+router.get('/admin/reports', practiceAdminMiddleware, async (req, res) => {
+  try {
+    const filter = {}
+    if (req.query.status && ['open', 'resolved'].includes(req.query.status)) filter.status = req.query.status
+    const reports = await PracticeReport.find(filter)
+      .sort({ createdAt: -1 })
+      .populate('testId', 'title')
+      .populate('userId', 'displayName email')
+      .lean()
+    res.json(reports)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// PATCH /api/practice-attempts/admin/reports/:reportId — toggle open/resolved.
+router.patch('/admin/reports/:reportId', practiceAdminMiddleware, async (req, res) => {
+  try {
+    const { status } = req.body
+    if (!['open', 'resolved'].includes(status)) return res.status(400).json({ error: 'Invalid status' })
+    const report = await PracticeReport.findByIdAndUpdate(req.params.reportId, { status }, { new: true })
+    if (!report) return res.status(404).json({ error: 'Not found' })
+    res.json(report)
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

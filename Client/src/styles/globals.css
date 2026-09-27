@@ -102,6 +102,30 @@ nav {
   -webkit-overflow-scrolling: touch;
 }
 
+/* ─── Exam-style scrollbar (practice-test left passage panel) ───
+   Wheel/trackpad scrolling on that panel is blocked in JS (see
+   SplitQuestionView.jsx) — this makes the native scrollbar thick and
+   visible enough to actually grab and drag, since dragging it is the
+   only way to scroll that panel. ─── */
+.exam-scrollbar {
+  scrollbar-width: thick;
+  scrollbar-color: #f97316 #f1f5f9;
+}
+.exam-scrollbar::-webkit-scrollbar {
+  width: 12px;
+}
+.exam-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.exam-scrollbar::-webkit-scrollbar-thumb {
+  background: #f97316;
+  border-radius: 999px;
+  border: 2px solid #f1f5f9;
+}
+.exam-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #ea580c;
+}
+
 /* ─── Hide scrollbar but keep scrollability (chip rows, stat strips) ─── */
 .no-scrollbar {
   scrollbar-width: none;

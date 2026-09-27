@@ -33,17 +33,54 @@ export default function TestHeader({
   onPauseClick,
   onToggleFullscreen,
   onExitClick,
+  onReportClick,
+  fontScale,
+  onFontScaleChange,
 }) {
   const isLow = secondsLeft <= lowTimeThresholdSec
 
   return (
-    <div className="flex items-center justify-between gap-3 px-3 sm:px-5 py-2.5 bg-white border-b border-slate-200 shadow-sm">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 sm:px-5 py-3 bg-white border-b border-slate-200 shadow-sm">
       <div className="flex items-center gap-2.5 min-w-0">
         <div className="w-8 h-8 rounded-full bg-tapasya-orange text-white font-black text-xs flex items-center justify-center shrink-0">TP</div>
         <h1 className="text-sm sm:text-base font-bold text-slate-800 truncate">{title}</h1>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-2 sm:gap-2.5">
+        {onFontScaleChange && (
+          <div className="flex items-center rounded-lg border border-slate-300 overflow-hidden mr-1">
+            <button
+              type="button"
+              onClick={() => onFontScaleChange(-1)}
+              title="Decrease question text size"
+              disabled={fontScale <= 0}
+              className="w-8 h-9 flex items-center justify-center text-slate-600 text-xs font-bold hover:bg-slate-50 disabled:opacity-30 border-r border-slate-300"
+            >
+              A-
+            </button>
+            <button
+              type="button"
+              onClick={() => onFontScaleChange(1)}
+              title="Increase question text size"
+              disabled={fontScale >= 3}
+              className="w-8 h-9 flex items-center justify-center text-slate-600 text-sm font-bold hover:bg-slate-50 disabled:opacity-30"
+            >
+              A+
+            </button>
+          </div>
+        )}
+
+        {onReportClick && (
+          <button
+            type="button"
+            onClick={onReportClick}
+            title="Report an issue with this question/test"
+            className="w-9 h-9 rounded-lg flex items-center justify-center border border-slate-300 text-slate-500 hover:text-red-500 hover:border-red-300 hover:bg-red-50"
+          >
+            <i className="ti ti-flag-3 text-lg" />
+          </button>
+        )}
+
         {hasCalculator && (
           <button
             type="button"

@@ -111,6 +111,18 @@ RULES:
       and every opening bracket has a matching closing bracket — the whole reply must be one
       single parseable JSON object, nothing after the final closing brace.
 
+11. WHITESPACE / LINE BREAKS — questionText and direction "content" are rendered exactly as
+    given (the app preserves literal spaces and line breaks, doesn't collapse them), so:
+    - If the source paper aligns items with multiple spaces (very common in Coding-Decoding —
+      e.g. a row of letters lined up above a row of codes/numbers), keep that spacing exactly as
+      it appears in the source text. Don't "clean it up" into single spaces.
+    - If a direction's shared passage/puzzle description is followed by a blank line before the
+      actual puzzle statement/question set in the source paper, preserve that as a blank line
+      (two \n\n) inside the "content" string — don't run everything into one paragraph.
+    - This applies to every topic, not just Coding-Decoding/Puzzles — any question or direction
+      whose layout in the source paper carries meaning (tables, seating diagrams, number grids,
+      aligned columns) should keep its original spacing/line breaks in the JSON string.
+
 SCHEMA:
 {
   "title": string,

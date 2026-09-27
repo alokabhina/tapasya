@@ -9,6 +9,7 @@ import { useUserStore } from '../../store/userStore';
 import Avatar from '../ui/Avatar';
 
 const SECONDARY_NAV = [
+  { to: '/speedmath',    icon: 'ti-bolt',      label: 'Speed Math',       desc: 'Tables, Squares, Cubes, %-Fraction drills' },
   { to: '/stats',        icon: 'ti-chart-bar', label: 'Stats',            desc: 'Study performance & insights' },
   { to: '/yt-hub',       icon: 'ti-brand-youtube', label: 'YT Study Pathsala', desc: 'Subject-wise video watchlist' },
   { to: '/pdf-library',  icon: 'ti-file-text', label: 'PDF Library',     desc: 'Read & mark up your PDFs' },
