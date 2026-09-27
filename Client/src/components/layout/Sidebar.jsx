@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { to: '/current-affairs', icon: 'ti-news',           label: 'Current Affairs' },
   { to: '/class-notes',  icon: 'ti-notebook',          label: 'Class Notes' },
   { to: '/mock-tracker', icon: 'ti-clipboard-data',   label: 'Mock Tracker' },
+  { to: '/practice-tests', icon: 'ti-clipboard-text', label: 'Practice Tests' }, // NEW — live test-taking engine
   { to: '/group',        icon: 'ti-users',            label: 'Study Group' },
   // Calendar, Syllabus, History, Achievements, Wellbeing, Money moved here to declutter the sidebar
   { to: '/other-tools',  icon: 'ti-apps',              label: 'Other Tools' },

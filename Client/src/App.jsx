@@ -65,6 +65,19 @@ const OtherTools = lazy(() => import('./pages/OtherTools'));
 const MockTracker = lazy(() => import('./pages/MockTracker'));
 const MockExamDashboard = lazy(() => import('./pages/MockExamDashboard'));
 
+// ── Practice Tests (live test-taking engine — separate from Mock Tracker's
+// self-report flow, see practice-test-feature-plan.md Section 0) ──────────
+const PracticeTests = lazy(() => import('./pages/PracticeTests'));
+const PracticeSubjectTests = lazy(() => import('./pages/PracticeSubjectTests'));
+const PracticeTestInstructions = lazy(() => import('./pages/PracticeTestInstructions'));
+const PracticeTestPlay = lazy(() => import('./pages/PracticeTestPlay'));
+const PracticeAdminSubjects = lazy(() => import('./pages/admin/PracticeAdminSubjects'));
+const PracticeAdminUpload = lazy(() => import('./pages/admin/PracticeAdminUpload'));
+const PracticeAdminLeaderboard = lazy(() => import('./pages/admin/PracticeAdminLeaderboard'));
+const PracticeTestResult = lazy(() => import('./pages/PracticeTestResult'));
+const PracticeTestAnalysis = lazy(() => import('./pages/PracticeTestAnalysis'));
+const PracticeTestSolutions = lazy(() => import('./pages/PracticeTestSolutions'));
+
 // ── Vocab Master (personal dictionary + quiz) ────────────────────────────────
 const VocabMaster = lazy(() => import('./pages/VocabMaster'));
 const VocabQuiz    = lazy(() => import('./pages/VocabQuiz'));
@@ -171,6 +184,15 @@ export default function App() {
               </PrivateRoute>
             }
           />
+          <Route
+            path="/practice-tests/:subjectId/:testId/attempt/:attemptId"
+            element={
+              <PrivateRoute>
+                {/* Live engine is full-screen, no sidebar — same reasoning as /timer above */}
+                <PracticeTestPlay />
+              </PrivateRoute>
+            }
+          />
           {[
             ['/stats',              <Stats />],
             ['/calendar',           <Calendar />],
@@ -196,6 +218,17 @@ export default function App() {
             ['/other-tools',        <OtherTools />],
             ['/mock-tracker',       <MockTracker />],
             ['/mock-tracker/:examId', <MockExamDashboard />],
+            // ── Practice Tests routes ──────────────────────────────────────
+            ['/practice-tests',                            <PracticeTests />],
+            ['/practice-tests/admin',                       <PracticeAdminSubjects />],
+            ['/practice-tests/admin/upload',                <PracticeAdminUpload />],
+            ['/practice-tests/admin/:testId/edit',          <PracticeAdminUpload />],
+            ['/practice-tests/admin/:testId/leaderboard',   <PracticeAdminLeaderboard />],
+            ['/practice-tests/result/:attemptId',           <PracticeTestResult />],
+            ['/practice-tests/analysis/:attemptId',         <PracticeTestAnalysis />],
+            ['/practice-tests/solutions/:attemptId',        <PracticeTestSolutions />],
+            ['/practice-tests/:subjectId',                  <PracticeSubjectTests />],
+            ['/practice-tests/:subjectId/:testId',          <PracticeTestInstructions />],
             // ── Practice Arena routes ─────────────────────────────────────
             ['/games',              <Games />],
             ['/games/stats',        <GameStats />],

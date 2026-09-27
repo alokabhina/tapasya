@@ -62,6 +62,13 @@ const mockAttemptSchema = new mongoose.Schema({
 
   rawImportedText: { type: String, default: null }, // the AI's original reply, kept for reference
   notes:           { type: String, default: '' },
+
+  // Set only when this MockAttempt was auto-created by the Practice Test
+  // engine's submit flow (utils/practiceMockSync.js) instead of a manual
+  // AI-import — null for every existing/manual attempt, backward-compatible.
+  // Lets the Mock Tracker UI deep-link "View full analysis" straight back
+  // into /practice-tests/analysis/:sourceAttemptId.
+  sourceAttemptId: { type: mongoose.Schema.Types.ObjectId, ref: 'PracticeAttempt', default: null },
 }, { timestamps: true })
 
 mockAttemptSchema.index({ userId: 1, examProfileId: 1, attemptedOn: -1 })

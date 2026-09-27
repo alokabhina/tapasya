@@ -23,6 +23,10 @@ import channelRoutes  from './routes/channels.js'
 import folderRoutes   from './routes/folders.js'
 import pdfRoutes      from './routes/pdfs.js'
 import mockExamsRoutes from './routes/mockExams.js'
+import practiceSubjectsRoutes from './routes/practiceSubjects.js'
+import practiceTestsRoutes from './routes/practiceTests.js'
+import practiceAttemptsRoutes from './routes/practiceAttempts.js'
+import practiceLeaderboardRoutes from './routes/practiceLeaderboard.js'
 import currentAffairsRoutes from './routes/currentAffairs.js'
 import { cronCurrentAffairsRouter } from './routes/cronCurrentAffairs.js'
 import classNotesRoutes from './routes/classNotes.js'
@@ -79,6 +83,10 @@ app.use('/api/channels',  channelRoutes)
 app.use('/api/folders',   folderRoutes)
 app.use('/api/pdfs',      pdfRoutes)
 app.use('/api/mock-exams', mockExamsRoutes)
+app.use('/api/practice-subjects',   practiceSubjectsRoutes)
+app.use('/api/practice-tests',      practiceTestsRoutes)
+app.use('/api/practice-attempts',   practiceAttemptsRoutes)
+app.use('/api/practice-leaderboard', practiceLeaderboardRoutes)
 app.use('/api/current-affairs', currentAffairsRoutes)
 app.use('/api/cron/current-affairs', cronCurrentAffairsRouter)
 app.use('/api/class-notes', classNotesRoutes)
