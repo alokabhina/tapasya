@@ -111,17 +111,29 @@ RULES:
       and every opening bracket has a matching closing bracket — the whole reply must be one
       single parseable JSON object, nothing after the final closing brace.
 
-11. WHITESPACE / LINE BREAKS — questionText and direction "content" are rendered exactly as
-    given (the app preserves literal spaces and line breaks, doesn't collapse them), so:
+11. LINE BREAKS — REAL EXAM LAYOUT — questionText and direction "content" are rendered exactly
+    as given (literal \n line breaks and spaces are preserved, never collapsed), so match how a
+    real exam site actually lays these out, not a single run-on paragraph:
+    - Every distinct fact/clue/statement gets its own line. Puzzle clue dumps ("C sits second to
+      the right of H. Three persons sit between A and C. D sits immediate right of A...") →  one
+      sentence per line. Coded-language clue lists ("'A' is coded as 'x'; 'B' is coded as 'y'")
+      → one clue per line. Inequality/Syllogism statement chains ("L > M ≤ N; N ≥ Q = R") → one
+      chain-segment per line.
+    - The opening boilerplate instruction sentence ("Study the following information carefully
+      and answer the questions given below.") gets a full blank line (\n\n) before the actual
+      puzzle/passage/data starts — they're never run into the same paragraph.
+    - Section labels — "Statement:", "Conclusions:", "Assumptions:", "Courses of Action:" — each
+      start their own line (with a blank line before them), and a "Conclusions: I. ... II. ..."
+      list gets each Roman-numeral item on its own line.
     - If the source paper aligns items with multiple spaces (very common in Coding-Decoding —
       e.g. a row of letters lined up above a row of codes/numbers), keep that spacing exactly as
-      it appears in the source text. Don't "clean it up" into single spaces.
-    - If a direction's shared passage/puzzle description is followed by a blank line before the
-      actual puzzle statement/question set in the source paper, preserve that as a blank line
-      (two \n\n) inside the "content" string — don't run everything into one paragraph.
-    - This applies to every topic, not just Coding-Decoding/Puzzles — any question or direction
-      whose layout in the source paper carries meaning (tables, seating diagrams, number grids,
-      aligned columns) should keep its original spacing/line breaks in the JSON string.
+      it appears. Don't "clean it up" into single spaces.
+    - This applies to every topic, not just Coding-Decoding/Puzzles/Inequality — any question or
+      direction whose layout carries meaning (tables, seating diagrams, number grids, aligned
+      columns, multi-fact lists) should read the way it would in an actual exam booklet.
+    - Note: the app also auto-inserts these breaks at render time as a safety net (so slightly
+      imperfect output here isn't catastrophic) — but get it right in the JSON directly where you
+      can, since that's more reliable than any regex-based cleanup.
 
 SCHEMA:
 {

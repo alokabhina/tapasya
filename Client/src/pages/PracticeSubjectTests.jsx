@@ -38,6 +38,8 @@ export default function PracticeSubjectTests() {
   useEffect(() => {
     getPracticeSubject(subjectId).then(setSubject).catch(() => setError('Subject nahi mila'))
     getPracticeTests(subjectId).then(setTests).catch(() => setError('Tests load nahi ho paye'))
+    import('./PracticeTestInstructions').catch(() => {})
+    import('./PracticeTestResult').catch(() => {})
   }, [subjectId])
 
   return (

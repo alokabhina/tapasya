@@ -23,24 +23,76 @@
 import { useState } from 'react'
 import { extractJson } from '@/constants/practiceTestImportPrompt'
 
-function NumberField({ label, value, onChange, step = '1', allowEmpty = false }) {
+// Controlled number input jo kabhi galat value state me nahi jaane deta:
+//  - min/max: arrows aur typing dono me clamp (minus time/cutoff ab possible nahi)
+//  - step: sirf arrows ka jump (typing me koi bhi decimal chalega, e.g. 0.33)
+//  - 2 decimals tak round (0.1+0.2 jaisi 0.30000000000000004 float garbage nahi)
+//  - draft text: typing ke beech "0." / "" jaisi intermediate state na toote;
+//    blur pe value normalize hoti hai (empty -> fallback / null)
+function roundTo2(n) { return Math.round(n * 100) / 100 }
+
+function NumberField({ label, value, onChange, step = 1, min = 0, max, allowEmpty = false, fallback = min, hint }) {
+  const [draft, setDraft] = useState(null) // typing ke dauran ka raw text, warna null
+
+  // typing ke dauran sirf negative aur upper limit rokte hain (taaki "0.5" type
+  // karte waqt pehle "0" pe value uchhal ke 1 na ho jaye); asli minimum blur pe lagta hai.
+  function clamp(n, floor = min) {
+    let v = roundTo2(n)
+    if (v < floor) v = floor
+    if (max != null && v > max) v = max
+    return v
+  }
+
+  function handleChange(e) {
+    const raw = e.target.value
+    setDraft(raw)
+    if (raw === '') { if (allowEmpty) onChange(null); return } // blur pe fallback lagega
+    const n = parseFloat(raw)
+    if (Number.isNaN(n)) return
+    onChange(clamp(n, 0))
+  }
+
+  function handleBlur() {
+    setDraft(null)
+    if (value == null || Number.isNaN(Number(value))) {
+      onChange(allowEmpty ? null : clamp(fallback))
+    } else {
+      onChange(clamp(Number(value)))
+    }
+  }
+
+  // Draft sirf tab dikhao jab wo abhi bhi usi value ka text ho jo state me hai —
+  // warna clamp hui value (e.g. -5 -> 0) turant screen pe dikhe.
+  const shown = draft !== null && (draft === '' || parseFloat(draft) === Number(value)) ? draft : (value ?? '')
+
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[11px] text-slate-500">{label}</span>
       <input
         type="number"
+        inputMode="decimal"
         step={step}
-        value={value ?? ''}
-        onChange={(e) => {
-          const v = e.target.value
-          if (v === '' && allowEmpty) { onChange(null); return }
-          const n = parseFloat(v)
-          onChange(Number.isNaN(n) ? (allowEmpty ? null : 0) : n)
-        }}
+        min={min}
+        max={max}
+        value={shown}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault() }}
         className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 text-sm focus:outline-none focus:border-tapasya-orange/50"
       />
+      {hint && <span className="text-[10px] text-slate-500">{hint}</span>}
     </label>
   )
+}
+
+const MAX_DURATION_MIN = 600
+
+// Cutoff section ke total marks se zyada nahi ho sakta (questions x marksCorrect).
+// Naye section me abhi questions nahi hain to koi upper limit nahi.
+function cutoffMax(section) {
+  const n = section?.questions?.length || 0
+  const mc = Number(section?.marksCorrect) || 0
+  return n > 0 && mc > 0 ? roundTo2(n * mc) : undefined
 }
 
 export default function TestEditForm({ payload, onChange }) {
@@ -164,12 +216,34 @@ export default function TestEditForm({ payload, onChange }) {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <NumberField
                 label="Duration (min)"
-                value={section.durationSec ? Math.round(section.durationSec / 60) : ''}
+                min={1}
+                max={MAX_DURATION_MIN}
+                step={1}
+                fallback={1}
+                value={section.durationSec ? roundTo2(section.durationSec / 60) : ''}
                 onChange={(v) => patchSection(i, { durationSec: Math.round((v || 0) * 60) })}
               />
-              <NumberField label="Marks Correct (+)" step="0.01" value={section.marksCorrect} onChange={(v) => patchSection(i, { marksCorrect: v })} />
-              <NumberField label="Marks Wrong (−)" step="0.01" value={section.marksWrong} onChange={(v) => patchSection(i, { marksWrong: v })} />
-              <NumberField label="Cutoff" step="0.01" allowEmpty value={section.cutoff} onChange={(v) => patchSection(i, { cutoff: v })} />
+              <NumberField
+                label="Marks Correct (+)" min={0.25} max={10} step={0.5} fallback={1}
+                value={section.marksCorrect}
+                onChange={(v) => {
+                  // marks badle to cutoff ka upper limit bhi badalta hai — cutoff usse upar na reh jaye
+                  const limit = (section.questions?.length || 0) * (Number(v) || 0)
+                  const fixCutoff = section.cutoff != null && limit > 0 && section.cutoff > limit
+                  patchSection(i, fixCutoff ? { marksCorrect: v, cutoff: roundTo2(limit) } : { marksCorrect: v })
+                }}
+              />
+              <NumberField label="Marks Wrong (−)" min={0} max={10} step={0.25} fallback={0} value={section.marksWrong} onChange={(v) => patchSection(i, { marksWrong: v })} />
+              <NumberField
+                label="Cutoff"
+                min={0}
+                max={cutoffMax(section)}
+                step={1}
+                allowEmpty
+                hint={cutoffMax(section) != null ? `max ${cutoffMax(section)} (total marks)` : undefined}
+                value={section.cutoff}
+                onChange={(v) => patchSection(i, { cutoff: v })}
+              />
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] text-slate-500">Calculator</span>
                 <button

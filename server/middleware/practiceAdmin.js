@@ -28,7 +28,15 @@ export default async function practiceAdminMiddleware(req, res, next) {
 
 // Non-blocking check — frontend uses this to decide whether to show admin
 // buttons (Upload Test, Leaderboard link) without 403-ing regular users.
+// Result 5 min cache hota hai (email list static hai) — landing page pe
+// har baar DB hit nahi.
+const adminCache = new Map() // userId -> { at, value }
 export async function isPracticeAdmin(userId) {
-  const user = await User.findById(userId).select('email')
-  return !!user && ALLOWED_EMAILS.includes(user.email?.toLowerCase())
+  const key = String(userId)
+  const hit = adminCache.get(key)
+  if (hit && Date.now() - hit.at < 5 * 60_000) return hit.value
+  const user = await User.findById(userId).select('email').lean()
+  const value = !!user && ALLOWED_EMAILS.includes(user.email?.toLowerCase())
+  adminCache.set(key, { at: Date.now(), value })
+  return value
 }

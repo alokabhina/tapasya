@@ -26,17 +26,21 @@ function sanitizeTest(test) {
 router.post('/', async (req, res) => {
   try {
     const { testId } = req.body
-    const test = await PracticeTest.findById(testId)
+    // Test, existing in-progress attempt aur attempt count — teeno independent,
+    // isliye ek saath (pehle 3 sequential round-trips the). .lean() => plain object,
+    // mongoose hydration ka overhead nahi (100-question paper pe noticeable).
+    const [test, existing, lastAttemptNumber] = await Promise.all([
+      PracticeTest.findById(testId).lean(),
+      PracticeAttempt.findOne({ userId: req.user.id, testId, status: 'in-progress' }),
+      PracticeAttempt.countDocuments({ userId: req.user.id, testId }),
+    ])
     if (!test || test.status !== 'published') return res.status(404).json({ error: 'Test nahi mila' })
 
     // Ek hi user ka ek hi test pe ek se zyada "in-progress" attempt kabhi na
     // ho — refresh/re-click pe existing wahi resume ho jaye.
-    const existing = await PracticeAttempt.findOne({ userId: req.user.id, testId, status: 'in-progress' })
-    if (existing) return res.json({ attempt: existing, test: sanitizeTest(test.toObject()) })
+    if (existing) return res.json({ attempt: existing, test: sanitizeTest(test) })
 
-    const lastAttemptNumber = await PracticeAttempt.countDocuments({ userId: req.user.id, testId })
-
-    if (!test.hasAttempts) { test.hasAttempts = true; await test.save() }
+    if (!test.hasAttempts) await PracticeTest.updateOne({ _id: test._id }, { $set: { hasAttempts: true } })
 
     const attempt = await PracticeAttempt.create({
       userId: req.user.id,
@@ -50,7 +54,7 @@ router.post('/', async (req, res) => {
         responses: s.questions.map((q) => ({ qNo: q.qNo, status: 'not-visited' })),
       })),
     })
-    res.json({ attempt, test: sanitizeTest(test.toObject()) })
+    res.json({ attempt, test: sanitizeTest(test) })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -62,6 +66,7 @@ router.get('/:id', async (req, res) => {
     const attempt = await PracticeAttempt.findOne({ _id: req.params.id, userId: req.user.id })
     if (!attempt) return res.status(404).json({ error: 'Not found' })
     const test = await PracticeTest.findById(attempt.testId).lean()
+    if (!test) return res.status(404).json({ error: 'Test nahi mila' })
     res.json({ attempt, test: sanitizeTest(test) })
   } catch (e) {
     res.status(500).json({ error: e.message })
@@ -249,9 +254,11 @@ router.get('/:id/analysis', async (req, res) => {
   try {
     const attempt = await PracticeAttempt.findOne({ _id: req.params.id, userId: req.user.id })
     if (!attempt || attempt.status === 'in-progress') return res.status(404).json({ error: 'Abhi submit nahi hua hai' })
-    const test = await PracticeTest.findById(attempt.testId).lean()
-
-    const allAttempts = await PracticeAttempt.find({ userId: req.user.id, testId: attempt.testId }).lean()
+    // test + saare attempts ek saath (pehle ek ke baad ek)
+    const [test, allAttempts] = await Promise.all([
+      PracticeTest.findById(attempt.testId).lean(),
+      PracticeAttempt.find({ userId: req.user.id, testId: attempt.testId }).lean(),
+    ])
 
     res.json({
       sectionalSummary: buildSectionalSummary(test, attempt),
@@ -264,6 +271,37 @@ router.get('/:id/analysis', async (req, res) => {
     res.status(500).json({ error: e.message })
   }
 })
+
+// `${sectionIndex}:${qNo}` -> { total, count } across every submitted attempt on
+// this test. 5 min in-memory cache per testId (class average itna fresh hona
+// zaroori nahi). A response nobody opened (timeSpentSec === 0) is excluded.
+const CLASS_AGG_TTL_MS = 5 * 60_000
+const classAggCache = new Map() // testId -> { at, data }
+async function getClassTimeAggregate(testId) {
+  const key = String(testId)
+  const hit = classAggCache.get(key)
+  if (hit && Date.now() - hit.at < CLASS_AGG_TTL_MS) return hit.data
+
+  const allAttempts = await PracticeAttempt.find({ testId, status: { $ne: 'in-progress' } })
+    .select('sectionState.responses')
+    .lean()
+  const timeAgg = new Map()
+  for (const a of allAttempts) {
+    ;(a.sectionState || []).forEach((st, sIdx) => {
+      for (const r of st.responses || []) {
+        if (!r.timeSpentSec) continue
+        const k = `${sIdx}:${r.qNo}`
+        const cur = timeAgg.get(k) || { total: 0, count: 0 }
+        cur.total += r.timeSpentSec
+        cur.count += 1
+        timeAgg.set(k, cur)
+      }
+    })
+  }
+  classAggCache.set(key, { at: Date.now(), data: timeAgg })
+  if (classAggCache.size > 50) classAggCache.delete(classAggCache.keys().next().value)
+  return timeAgg
+}
 
 // GET /api/practice-attempts/:id/solutions — question-by-question review.
 // Answers/explanations are only ever revealed through this endpoint, and
@@ -279,24 +317,14 @@ router.get('/:id/solutions', async (req, res) => {
   try {
     const attempt = await PracticeAttempt.findOne({ _id: req.params.id, userId: req.user.id })
     if (!attempt || attempt.status === 'in-progress') return res.status(404).json({ error: 'Abhi submit nahi hua hai' })
-    const test = await PracticeTest.findById(attempt.testId).lean()
-
-    const allAttempts = await PracticeAttempt.find({ testId: attempt.testId, status: { $ne: 'in-progress' } })
-      .select('sectionState.responses')
-      .lean()
-    const timeAgg = new Map() // `${sectionIndex}:${qNo}` -> { total, count }
-    for (const a of allAttempts) {
-      ;(a.sectionState || []).forEach((st, sIdx) => {
-        for (const r of st.responses || []) {
-          if (!r.timeSpentSec) continue
-          const key = `${sIdx}:${r.qNo}`
-          const cur = timeAgg.get(key) || { total: 0, count: 0 }
-          cur.total += r.timeSpentSec
-          cur.count += 1
-          timeAgg.set(key, cur)
-        }
-      })
-    }
+    // Class-average aggregation sabse bhaari hissa hai (har user ke har attempt ke
+    // saare responses scan karta hai) — test ke saath parallel chalta hai aur
+    // result 5 min cache hota hai, to dobara Solutions kholne pe instant.
+    const [test, timeAgg] = await Promise.all([
+      PracticeTest.findById(attempt.testId).lean(),
+      getClassTimeAggregate(attempt.testId),
+    ])
+    if (!test) return res.status(404).json({ error: 'Test nahi mila' })
 
     const sections = test.sections.map((section, i) => {
       const responseMap = new Map((attempt.sectionState[i]?.responses || []).map((r) => [r.qNo, r]))

@@ -41,6 +41,7 @@ function QuestionCard({ q, highlighted }) {
   const status = statusOf(q)
   const meta = STATUS_META[status]
   const hasCommunityTime = q.avgTimeSec != null && q.avgTimeSampleSize >= 3
+  const options = Array.isArray(q.options) ? q.options : []
 
   return (
     <div id={`q-${q.qNo}`} className={`rounded-xl border px-4 py-3.5 ${highlighted ? 'border-tapasya-orange bg-tapasya-orange/10' : 'border-slate-800 bg-slate-900/60'}`}>
@@ -50,14 +51,14 @@ function QuestionCard({ q, highlighted }) {
       </div>
       <p className="text-sm text-slate-200 mb-3 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatReasoningText(q.questionText)) }} />
       <div className="space-y-1.5 mb-3">
-        {q.options.map((opt) => {
+        {options.map((opt, oi) => {
           const isCorrect = opt.key === q.correctKey
           const isUser = opt.key === q.userAnswer
           let cls = 'border-slate-700 text-slate-300'
           if (isCorrect) cls = 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
           else if (isUser) cls = 'border-red-500/40 bg-red-500/10 text-red-300'
           return (
-            <div key={opt.key} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${cls}`}>
+            <div key={opt.key ?? oi} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${cls}`}>
               <span className="font-bold w-4">{opt.key}</span>
               <span className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(opt.text) }} />
               {isCorrect && <i className="ti ti-check ml-auto text-emerald-400" />}
@@ -69,7 +70,7 @@ function QuestionCard({ q, highlighted }) {
       {q.explanation && (
         <div className="rounded-lg bg-slate-800/50 border border-slate-800 px-3 py-2 text-xs text-slate-300 mb-2">
           <span className="font-bold text-slate-100">Explanation: </span>
-          <span className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.explanation) }} />
+          <span className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatReasoningText(q.explanation)) }} />
         </div>
       )}
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -103,10 +104,15 @@ export default function PracticeTestSolutions() {
     setSections(null)
     scrolledRef.current = false
     getPracticeSolutions(attemptId).then((data) => {
-      setSections(data.sections)
+      const loaded = Array.isArray(data?.sections)
+        ? data.sections.map((s) => ({ ...s, questions: Array.isArray(s?.questions) ? s.questions : [], directions: Array.isArray(s?.directions) ? s.directions : [] }))
+        : []
+      if (loaded.length === 0) { setError('Is test mein solutions available nahi hain'); return }
+      setSections(loaded)
       setTestId(data.testId)
+      setActiveSection(0)
       if (jumpQNo != null) {
-        const idx = data.sections.findIndex((s) => s.questions.some((q) => q.qNo === jumpQNo))
+        const idx = loaded.findIndex((s) => s.questions.some((q) => q.qNo === jumpQNo))
         if (idx >= 0) setActiveSection(idx)
       }
     }).catch(() => setError('Solutions load nahi ho paye'))
@@ -130,7 +136,7 @@ export default function PracticeTestSolutions() {
     )
   }
 
-  const section = sections[activeSection]
+  const section = sections[activeSection] || sections[0]
 
   // Group consecutive questions by groupId so a shared passage/puzzle/table
   // renders once above the questions that point to it.
@@ -162,7 +168,7 @@ export default function PracticeTestSolutions() {
         <div className="flex gap-2 overflow-x-auto mb-4 pb-1">
           {sections.map((s, i) => (
             <button
-              key={s.name}
+              key={s.name ?? i}
               onClick={() => { setActiveSection(i); scrolledRef.current = true }}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
                 activeSection === i ? 'bg-tapasya-orange text-white' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'
@@ -176,13 +182,13 @@ export default function PracticeTestSolutions() {
 
       <div className="space-y-4">
         {groups.map((g, gi) => {
-          const direction = g.groupId ? section.directions?.find((d) => d.groupId === g.groupId) : null
+          const direction = g.groupId ? section.directions.find((d) => d.groupId === g.groupId) : null
           return (
             <div key={gi} className="space-y-3">
               {direction && (
                 <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
                   {direction.title && <p className="text-xs font-bold text-slate-200 mb-1">{direction.title}</p>}
-                  <div className="text-xs text-slate-400 whitespace-pre-wrap [&_table]:whitespace-normal" dangerouslySetInnerHTML={{ __html: sanitizeHtml(insertInstructionLineBreak(direction.content)) }} />
+                  <div className="text-xs text-slate-400 whitespace-pre-wrap [&_table]:whitespace-normal" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatReasoningText(direction.content, { isDirection: true })) }} />
                 </div>
               )}
               {g.questions.map((q) => (

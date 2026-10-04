@@ -9,8 +9,8 @@
 // engine) and pages/PracticeTestSolutions.jsx (review) so both render
 // exactly the same trusted subset.
 export function sanitizeHtml(html) {
-  if (!html) return ''
-  return html
+  if (html == null || html === '') return ''
+  return String(html)
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
     .replace(/ on\w+="[^"]*"/gi, '')

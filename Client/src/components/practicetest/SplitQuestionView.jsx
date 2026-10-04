@@ -100,7 +100,7 @@ export default function SplitQuestionView({
                 onChange={() => onSelectOption(opt.key)}
                 className="mt-1 accent-tapasya-orange"
               />
-              <span className="text-slate-700 font-medium whitespace-pre-wrap" style={{ fontSize: sizes.option }}>{opt.text}</span>
+              <span className="text-slate-800 font-medium whitespace-pre-wrap" style={{ fontSize: sizes.option }}>{opt.text}</span>
             </label>
           )
         })}
@@ -128,7 +128,7 @@ export default function SplitQuestionView({
       >
         {direction.title && <p className="text-sm font-bold text-slate-800 mb-2">{direction.title}</p>}
         <div
-          className="text-slate-600 leading-relaxed whitespace-pre-wrap [&_table]:w-full [&_table]:border-collapse [&_table]:whitespace-normal [&_td]:border [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-slate-200 [&_th]:px-2 [&_th]:py-1"
+          className="text-slate-800 leading-relaxed whitespace-pre-wrap [&_table]:w-full [&_table]:border-collapse [&_table]:whitespace-normal [&_td]:border [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-slate-200 [&_th]:px-2 [&_th]:py-1"
           style={{ fontSize: sizes.direction }}
           dangerouslySetInnerHTML={{ __html: safeDirectionHtml }}
         />

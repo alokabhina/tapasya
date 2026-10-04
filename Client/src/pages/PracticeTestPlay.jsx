@@ -13,6 +13,8 @@ import { useAuth } from '@/hooks/useAuth'
 import useCountdown from '@/hooks/useCountdown'
 import usePracticeTestStore from '@/store/practiceTestStore'
 import { getPracticeAttempt, savePracticeProgress, submitPracticeSection, reportPracticeIssue } from '@/api/practiceAttempts'
+import { getPracticeSubject } from '@/api/practiceSubjects'
+import useAutoStudyTimer from '@/hooks/useAutoStudyTimer'
 
 import TestHeader from '@/components/practicetest/TestHeader'
 import SectionTabs from '@/components/practicetest/SectionTabs'
@@ -45,6 +47,8 @@ export default function PracticeTestPlay() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const store = usePracticeTestStore()
+  // Study timer background me auto-start (screen pe kuch nahi dikhta)
+  const autoTimer = useAutoStudyTimer(attemptId)
 
   const [ready, setReady] = useState(false)
   const [initialSeconds, setInitialSeconds] = useState(null)
@@ -91,6 +95,14 @@ export default function PracticeTestPlay() {
       setInitialSeconds(secondsLeft)
       questionStartRef.current = Date.now()
       setReady(true)
+
+      // Study timer: agar koi timer ON nahi hai to test ke subject ka ON kar do.
+      // Priority: practice subject ka naam -> test title -> section names.
+      // Naam match na ho to bhi koi ek subject pe chalega (hook ke andar fallback).
+      const fallbackNames = [test.title, ...(test.sections || []).map((s) => s.name)]
+      getPracticeSubject(subjectId)
+        .then((subj) => autoTimer.ensureRunning([subj?.name, ...fallbackNames]))
+        .catch(() => autoTimer.ensureRunning(fallbackNames))
     }).catch(() => {
       if (cancelled) return
       // Load fail hua (network issue, invalid attempt, etc.) — Instructions
@@ -102,6 +114,15 @@ export default function PracticeTestPlay() {
     return () => { cancelled = true; store.reset() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptId])
+
+  // Test pause hone pe auto-started study timer bhi pause, resume pe resume
+  // (sirf agar wo isi test ne start kiya ho — user ka apna timer nahi chhedte)
+  useEffect(() => {
+    if (!ready) return
+    if (pauseMode === 'paused') autoTimer.pauseIfOwned()
+    else autoTimer.resumeIfOwned()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pauseMode, ready])
 
   // ── Live "Qn. Time" ticking display (doesn't write to store every tick) ─
   useEffect(() => {
@@ -175,6 +196,7 @@ export default function PracticeTestPlay() {
         sectionIndex: store.currentSectionIndex, timeLeftAtSubmitSec, auto,
       })
       if (isLastSection) {
+        await autoTimer.stopIfOwned() // test khatam — auto-started timer ka session save
         navigate(`/practice-tests/result/${attemptId}`, { replace: true })
         return
       }
@@ -229,8 +251,9 @@ export default function PracticeTestPlay() {
     syncProgress({ full: false })
   }
 
-  function handleExitTest() {
+  async function handleExitTest() {
     if (!window.confirm('Test se bahar jaana hai? Progress save rahega, baad mein resume kar sakte ho.')) return
+    await autoTimer.stopIfOwned()
     navigate(`/practice-tests/${subjectId}`, { replace: true })
   }
 

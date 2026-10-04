@@ -28,6 +28,8 @@ export default function MiniPlayer() {
   const navigate  = useNavigate();
   const location  = useLocation();
   const isTimerPage = location.pathname === '/timer';
+  // Live test screen pe timer pill nahi dikhana — timer background me chalta rehta hai
+  const isLiveTestPage = /^\/practice-tests\/[^/]+\/[^/]+\/attempt\//.test(location.pathname);
 
   // ── "Timer bhi stop karu?" — shown right after closing a video that the
   // 30s "start timer?" nudge was used on, since that's exactly the moment
@@ -209,7 +211,7 @@ export default function MiniPlayer() {
     );
   }
   if (!isRunning && !isPaused) return null;
-  if (isTimerPage) return null;
+  if (isTimerPage || isLiveTestPage) return null;
 
   const floatStyle = pos.x !== null && !pipOpen
     ? { position: 'fixed', left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' }

@@ -23,12 +23,16 @@ router.get('/is-admin', async (req, res) => {
 // per subject for the landing page cards.
 router.get('/', async (req, res) => {
   try {
-    const subjects = await PracticeSubject.find().sort({ order: 1, createdAt: 1 }).lean()
-    const withCounts = await Promise.all(subjects.map(async (s) => ({
-      ...s,
-      testCount: await PracticeTest.countDocuments({ subjectId: s._id, status: 'published' }),
-    })))
-    res.json(withCounts)
+    // N alag countDocuments ki jagah ek hi aggregate (parallel me subjects ke saath)
+    const [subjects, counts] = await Promise.all([
+      PracticeSubject.find().sort({ order: 1, createdAt: 1 }).lean(),
+      PracticeTest.aggregate([
+        { $match: { status: 'published' } },
+        { $group: { _id: '$subjectId', n: { $sum: 1 } } },
+      ]),
+    ])
+    const countBySubject = new Map(counts.map((c) => [String(c._id), c.n]))
+    res.json(subjects.map((s) => ({ ...s, testCount: countBySubject.get(String(s._id)) || 0 })))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

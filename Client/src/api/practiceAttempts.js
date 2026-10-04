@@ -4,13 +4,29 @@ import api from './client'
 // Starts a fresh attempt, or resumes an already-in-progress one for this
 // user+test (server dedupes — see routes/practiceAttempts.js POST /).
 // Returns { attempt, test } — test's questions have no correctKey/explanation.
+//
+// Response (attempt + poora test) yaad rakha jata hai taaki live engine page
+// wahi data seedha use kare — pehle yahan se navigate hone ke baad Play page
+// GET /practice-attempts/:id se poora paper DUBARA download karta tha (sabse
+// bada wait). Sirf ek baar, aur max 2 min tak valid.
+const HANDOFF_TTL_MS = 2 * 60_000
+let handoff = null // { id, at, data }
+
 export async function startPracticeAttempt(testId) {
   const res = await api.post('/practice-attempts', { testId })
+  const id = res.data?.attempt?._id
+  if (id && res.data?.test) handoff = { id: String(id), at: Date.now(), data: res.data }
   return res.data
 }
 
 // Resume payload after a refresh/close mid-test.
 export async function getPracticeAttempt(id) {
+  if (handoff && handoff.id === String(id) && Date.now() - handoff.at < HANDOFF_TTL_MS) {
+    const { data } = handoff
+    handoff = null // one-shot — refresh pe hamesha fresh server copy
+    return data
+  }
+  handoff = null
   const res = await api.get(`/practice-attempts/${id}`)
   return res.data
 }

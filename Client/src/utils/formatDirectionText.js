@@ -39,9 +39,11 @@ export function insertInstructionLineBreak(content) {
 // almost always prints one per line; collapsed into a single paragraph is
 // the "sab saath mein chipka hai" complaint. Keeps the semicolon (matches
 // how these are actually punctuated) and just adds the line break after it.
+// [ \t]+ (not \s+) so it never eats a newline already inserted by an
+// earlier step in the pipeline below.
 export function breakSemicolonList(text) {
   if (!text) return text
-  return text.replace(/;\s+/g, ';\n')
+  return text.replace(/;[ \t]+/g, ';\n')
 }
 
 // "Statement:", "Conclusions:", "Assumptions:", "Courses of Action:",
@@ -68,17 +70,55 @@ export function breakRomanNumeralList(text) {
   return text.replace(ROMAN_ITEM_RE, '\n$1. ')
 }
 
+// Colon-label pass + a single opening-sentence break. Breaks after every
+// ":" (Statement:/Conclusions:/etc. — handled generically here in case
+// breakSectionLabels' fixed label list doesn't cover some variant), and
+// after only the FIRST "." in the text — separating an opening sentence
+// from what follows once, not turning every sentence of a long prose
+// paragraph (Puzzle body text, RC passages) into its own line, which made
+// those look too fragmented. Semicolon/Roman-numeral/section-label
+// breaking above is unaffected — those are genuine list items and still
+// break on every occurrence.
+// Two guards keep this from misfiring:
+// - [ \t]+ instead of \s+ — never re-collapses a newline/blank-line another
+//   step already inserted (e.g. insertInstructionLineBreak's blank line, or
+//   breakSectionLabels'/breakRomanNumeralList's line breaks above).
+// - the ROMAN_ORDER lookbehind on the period rule — without it, "I. R ≤ P"
+//   (already correctly placed on its own line by breakRomanNumeralList)
+//   would get re-split into "I." and "R ≤ P", which is wrong.
+// Decimals (0.25), ratios (3:2), and times (10:30) are naturally safe since
+// there's no space right after the punctuation in those.
+const ROMAN_LOOKBEHIND = `(?<!\\b(?:${ROMAN_ORDER.join('|')}))`
+// Only the FIRST "." in the text gets a break (no 'g' flag — .replace()
+// with a non-global regex stops after one match) — this is meant to
+// separate an opening sentence from what follows it once, not turn every
+// sentence of a long prose paragraph (Puzzle body text, RC passages) into
+// its own line, which made those look too fragmented. Semicolon/Roman-
+// numeral/section-label breaking above is unaffected — those are genuine
+// list items and still break on every occurrence.
+const SENTENCE_END_RE = new RegExp(`${ROMAN_LOOKBEHIND}\\.[ \\t]+(?=[A-Z0-9"'“(])`)
+
+export function breakSentences(text) {
+  if (!text) return text
+  return text
+    .replace(/:[ \t]+/g, ':\n')
+    .replace(SENTENCE_END_RE, '.\n')
+}
+
 // Single entry point used by both SplitQuestionView.jsx (live test) and
 // PracticeTestSolutions.jsx (review) — runs the whole set of reasoning-
-// content line-break fixes in one call. `isDirection: true` additionally
-// runs insertInstructionLineBreak, which only makes sense for a shared
-// direction block (questions don't open with that boilerplate sentence).
+// content line-break fixes in one call, in an order where each step's
+// output is safe for the next (see breakSentences' guards above).
+// `isDirection: true` additionally runs insertInstructionLineBreak, which
+// only makes sense for a shared direction block (questions don't open
+// with that boilerplate sentence).
 export function formatReasoningText(text, { isDirection = false } = {}) {
   if (!text) return text
-  let out = text
+  let out = typeof text === 'string' ? text : String(text)
   if (isDirection) out = insertInstructionLineBreak(out)
   out = breakSectionLabels(out)
   out = breakRomanNumeralList(out)
   out = breakSemicolonList(out)
+  out = breakSentences(out)
   return out
 }

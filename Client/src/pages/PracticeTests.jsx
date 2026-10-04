@@ -11,17 +11,19 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getPracticeSubjects, isPracticeAdmin } from '@/api/practiceSubjects'
+import { getPracticeSubjects, isPracticeAdmin, peekPracticeSubjects, peekPracticeAdmin } from '@/api/practiceSubjects'
 
 export default function PracticeTests() {
   const navigate = useNavigate()
-  const [subjects, setSubjects] = useState(null)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [subjects, setSubjects] = useState(() => peekPracticeSubjects())
+  const [isAdmin, setIsAdmin] = useState(() => peekPracticeAdmin() ?? false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    getPracticeSubjects().then(setSubjects).catch(() => setError('Subjects load nahi ho paye'))
+    getPracticeSubjects().then(setSubjects).catch(() => { if (!peekPracticeSubjects()) setError('Subjects load nahi ho paye') })
     isPracticeAdmin().then(setIsAdmin).catch(() => {})
+    // Agla page (subject ke tests) ka JS chunk pehle se download kar lo
+    import('./PracticeSubjectTests').catch(() => {})
   }, [])
 
   return (

@@ -22,6 +22,9 @@ export default function PracticeTestInstructions() {
   useEffect(() => {
     getPracticeTest(testId).then(setTest).catch(() => setError('Test nahi mila ya abhi published nahi hai'))
     getPracticeAttemptHistory(testId).then(setHistory).catch(() => {})
+    // Live engine ka JS (bhaari hai: poora test UI) user ke instructions padhte
+    // waqt hi download ho jaye, taaki "Start Test" dabate hi khul jaye.
+    import('./PracticeTestPlay').catch(() => {})
   }, [testId])
 
   const inProgress = history.find((a) => a.status === 'in-progress')

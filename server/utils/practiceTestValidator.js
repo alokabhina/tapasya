@@ -30,6 +30,7 @@ export function validatePracticeTestPayload(payload, existingTopics = []) {
 
     if (!section?.name?.trim()) errors.push(`${label}: name required hai`)
     if (!(section?.durationSec > 0)) errors.push(`${label}: durationSec ek positive number hona chahiye`)
+    else if (section.durationSec > 600 * 60) errors.push(`${label}: durationSec 600 minute (36000 sec) se zyada nahi ho sakta`)
     if (!Array.isArray(section?.questions) || section.questions.length === 0) {
       errors.push(`${label}: kam se kam ek question chahiye`)
     }
@@ -105,6 +106,11 @@ export function validatePracticeTestPayload(payload, existingTopics = []) {
     const cutoff = section?.cutoff != null && section?.cutoff !== ''
       ? Number(section.cutoff)
       : Math.round(sectionTotalMarks * 0.75 * 100) / 100
+    if (!Number.isFinite(cutoff) || cutoff < 0) {
+      errors.push(`${label}: cutoff negative ya invalid nahi ho sakta`)
+    } else if (cutoff > sectionTotalMarks + 1e-9) {
+      errors.push(`${label}: cutoff (${cutoff}) section ke total marks (${sectionTotalMarks}) se zyada nahi ho sakta`)
+    }
 
     return {
       name: section?.name?.trim() || `Section ${sIdx + 1}`,

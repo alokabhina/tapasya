@@ -18,7 +18,9 @@ export default function AttemptSwitcher({ testId, currentAttemptId, basePath }) 
 
   useEffect(() => {
     if (!testId) return
-    getPracticeAttemptHistory(testId).then(setHistory).catch(() => {})
+    getPracticeAttemptHistory(testId)
+      .then((data) => setHistory(Array.isArray(data) ? data : null))
+      .catch(() => {})
   }, [testId])
 
   if (!history || history.length < 2) return null
