@@ -21,6 +21,7 @@ import BreakReminderChip from '@/components/home/BreakReminderChip';
 import BreakLogButton from '@/components/home/BreakLogButton';
 import GoalRing from '@/components/home/GoalRing';
 import TodoRing from '@/components/home/TodoRing';
+import TodoTimeLine from '@/components/home/TodoTimeLine';
 import { fetchWordOfDay } from '@/api/Vocab';
 import { useBadges } from '@/hooks/useBadges';
 import { getBadgeProgress, getBadgeById } from '@/utils/badges';
@@ -1029,6 +1030,7 @@ export default function Home() {
                   <p className="text-[11px] text-slate-500 mt-2">
                     Goal: <span className="text-orange-400 font-medium">{formatHours(todayTotal)} / {formatHours(dailyGoalSeconds)}</span>
                   </p>
+                  <TodoTimeLine todos={todayTodos} onClick={() => navigate('/todo')} />
                 </div>
                 <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-3 shrink-0">
                   <BreakReminderChip size={ringSize} />
