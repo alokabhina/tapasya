@@ -3,6 +3,9 @@
 // "pure functions, no DB access" pattern as utils/mockStats.js, so the
 // route stays thin and these stay unit-testable on their own.
 
+import { resolveSubTopic } from './subTopicInference.js'
+
+
 // Section-by-section table: Attempted/Correct/Incorrect/Skipped/Unseen/
 // Accuracy/Score/Time + a grand-total row (plan doc Image 12 reference).
 export function buildSectionalSummary(test, attempt) {
@@ -42,6 +45,16 @@ export function buildSectionalSummary(test, attempt) {
   return { rows, total }
 }
 
+// Analysis bucket for a question. subTopic (e.g. "Percentage", "Approximation",
+// "Surds & Indices" inside a Simplification section) is the real skill label the
+// import prompt asks the AI for — `topic` is often just the section name
+// ("Simplification"), which made every weak/strong row useless. So: subTopic
+// first, then topic / topicRaw as fallback for papers that have no subTopic.
+export function topicKeyOf(q, sectionName = '') {
+  const sub = resolveSubTopic(q, sectionName)
+  return sub || (q.topic && q.topic.trim()) || (q.topicRaw && q.topicRaw.trim()) || 'General'
+}
+
 // Per-topic breakdown, grouped by section — "Know Your Weakness" panel
 // (plan doc Image 13): question chips (correct/wrong/skipped/unseen) +
 // correct/total count, pre-sorted both weak-first and strong-first so the
@@ -56,7 +69,7 @@ export function buildTopicBreakdown(test, attempt) {
 
     for (const q of section.questions) {
       const r = responseMap.get(q.qNo)
-      const topicKey = q.topic || q.topicRaw || 'General'
+      const topicKey = topicKeyOf(q, section.name)
       const isAttempted = !!(r && r.selectedKey != null && (r.status === 'answered' || r.status === 'answered-marked'))
       const isCorrect = isAttempted && r.selectedKey === q.correctKey
       const qStatus = !r || r.status === 'not-visited' ? 'unseen' : !isAttempted ? 'skipped' : isCorrect ? 'correct' : 'wrong'
@@ -108,7 +121,7 @@ export function buildTimeSplit(test, attempt) {
     for (const q of section.questions) {
       const r = responseMap.get(q.qNo)
       const t = r?.timeSpentSec || 0
-      const topicKey = q.topic || q.topicRaw || 'General'
+      const topicKey = topicKeyOf(q, section.name)
       const isAttempted = !!(r && r.selectedKey != null && (r.status === 'answered' || r.status === 'answered-marked'))
       const bucket = isAttempted ? (r.selectedKey === q.correctKey ? 'correctSec' : 'wrongSec') : 'skippedSec'
 
@@ -144,15 +157,15 @@ export function buildStrongWeakZones(test, attempt, weakThreshold = 60) {
       const skippedOrUnseen = t.skipped + t.unseen
       const mostlySkipped = attempted === 0 || skippedOrUnseen > attempted
       const isWeak = mostlySkipped || t.correctPct < weakThreshold
+      const counts = { correct: t.correct, wrong: t.wrong, skipped: t.skipped, unseen: t.unseen, total: t.total, correctPct: t.correctPct }
       if (isWeak) {
         needImprovement.push({
           name: t.name,
           reason: mostlySkipped ? 'skipped' : 'wrong',
-          skipped: skippedOrUnseen,
-          wrong: t.wrong,
+          ...counts,
         })
       } else {
-        strong.push({ name: t.name })
+        strong.push({ name: t.name, ...counts })
       }
     }
     result[sectionName] = { needImprovement, strong }

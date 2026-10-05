@@ -4,6 +4,7 @@
 // stopping at the first one, so the admin sees the full error list in one
 // go on the upload screen — no fix-one-reupload-find-the-next loop.
 import { normalizeAllTopics } from './topicNormalizer.js'
+import { resolveSubTopic } from './subTopicInference.js'
 
 const DIRECTION_TYPES = ['passage', 'puzzle', 'data-table', 'sentence-set', 'instruction']
 const DIFFICULTIES = ['easy', 'medium', 'hard']
@@ -94,7 +95,9 @@ export function validatePracticeTestPayload(payload, existingTopics = []) {
     // Topic normalization sirf tab chalta hai jab yeh section otherwise clean
     // ho — ek error-bhara section pe "similar topic" suggestion dikhana
     // besides-the-point hai.
-    const { questions: normalizedQuestions, suggestions } = normalizeAllTopics(questions, existingTopics)
+    const { questions: normalizedQuestionsRaw, suggestions } = normalizeAllTopics(questions, existingTopics)
+    // subTopic khaali (ya topic jaisa hi) ho to question text se type guess karke store karo
+    const normalizedQuestions = normalizedQuestionsRaw.map((q) => ({ ...q, subTopic: resolveSubTopic(q, section?.name) }))
     suggestions.forEach((s) => allSuggestions.push({ section: section?.name, ...s }))
 
     const marksCorrect = section?.marksCorrect ?? 1

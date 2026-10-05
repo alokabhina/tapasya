@@ -66,6 +66,8 @@ RULES:
      "Approximation", "Percentage-based Simplification", "Algebraic Identities", or similar —
      pick whichever one actually matches what the question is testing, this list is only
      illustrative, use your judgement if a question needs a different label.
+   - subTopic must NEVER be empty and must NEVER just repeat the topic or section name (e.g. not
+     "Simplification" under topic "Simplification") — always name the specific question type.
    - Apply the same specificity everywhere else too, not just Simplification — e.g. for
      "Quadratic Equations" use subTopics like "Comparison of Roots" or "Forming Equations"; for
      "Puzzles" use the puzzle type like "Circular Seating" or "Floor-based Puzzle"; for "Number
