@@ -11,7 +11,7 @@ export default function PauseOverlay({ mode, onConfirmPause, onCancel, onResume 
   if (!mode) return null
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
       {mode === 'confirm' ? (
         <div className="w-full max-w-xs bg-white border border-slate-200 rounded-2xl p-6 text-center shadow-xl animate-fade-in-up">
           <i className="ti ti-player-pause text-3xl text-tapasya-orange mb-2 block" />

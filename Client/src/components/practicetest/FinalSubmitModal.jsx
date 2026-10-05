@@ -21,7 +21,7 @@ function formatTime(totalSec) {
   return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
-export default function FinalSubmitModal({ sectionRows, grandTotal, onConfirm, onCancel, submitting }) {
+export default function FinalSubmitModal({ sectionRows, grandTotal, onConfirm, onCancel, submitting, pendingSections = 0 }) {
   const pills = [
     { label: 'Answered', value: grandTotal.answered, color: 'bg-emerald-50 text-emerald-700' },
     { label: 'Answered & Marked', value: grandTotal.answeredMarked, color: 'bg-purple-50 text-purple-700' },
@@ -32,11 +32,16 @@ export default function FinalSubmitModal({ sectionRows, grandTotal, onConfirm, o
   ]
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="w-full sm:max-w-lg bg-white border border-slate-200 rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-xl animate-fade-in-up max-h-[92vh] flex flex-col">
         <div className="px-5 pt-5 pb-3">
           <h3 className="text-lg font-bold text-slate-800">Final Submit?</h3>
           <p className="text-sm text-slate-500 mt-1">Poora test submit ho jayega — is baad koi bhi section edit nahi ho sakega.</p>
+          {pendingSections > 0 && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+              Abhi {pendingSections} section{pendingSections > 1 ? 's' : ''} baaki {pendingSections > 1 ? 'hain' : 'hai'} — wo bhi unattempted ke roop mein submit ho jayenge.
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-2 px-5 mb-3">

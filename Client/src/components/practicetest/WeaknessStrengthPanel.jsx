@@ -23,12 +23,26 @@ function formatSec(s) {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
-export default function WeaknessStrengthPanel({ topicBreakdown, onJumpToQuestion }) {
-  const sectionNames = Object.keys(topicBreakdown)
+// Same rule as server's buildStrongWeakZones: weak = accuracy on attempted < 60%
+// OR mostly skipped/unseen. Everything else is a strength. (Server list was
+// "all topics, weakest first", so the Weakness tab never looked like a weak list.)
+function isWeakTopic(t) {
+  const attempted = (t.correct || 0) + (t.wrong || 0)
+  const skippedOrUnseen = (t.skipped || 0) + (t.unseen || 0)
+  return attempted === 0 || skippedOrUnseen > attempted || (t.correctPct ?? 0) < 60
+}
+
+export default function WeaknessStrengthPanel({ topicBreakdown = {}, onJumpToQuestion }) {
+  const sectionNames = Object.keys(topicBreakdown || {})
   const [activeSection, setActiveSection] = useState(sectionNames[0])
   const [mode, setMode] = useState('weakness')
 
-  const topics = topicBreakdown[activeSection]?.[mode] || []
+  const section = topicBreakdown?.[activeSection] || topicBreakdown?.[sectionNames[0]] || {}
+  const all = section.weakness || section.strength || []
+  const topics = all
+    .filter((t) => (mode === 'weakness' ? isWeakTopic(t) : !isWeakTopic(t)))
+    .sort((a, b) => (mode === 'weakness' ? a.correctPct - b.correctPct : b.correctPct - a.correctPct))
+  const emptyMsg = mode === 'weakness' ? 'Koi weak topic nahi — shabash! 🎉' : 'Abhi koi strong topic nahi — practice jaari rakho.'
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden">
@@ -64,11 +78,11 @@ export default function WeaknessStrengthPanel({ topicBreakdown, onJumpToQuestion
       )}
 
       <div className="px-4 pb-4 space-y-3">
-        {topics.length === 0 && <p className="text-slate-500 text-xs py-4">Kuch nahi mila is tab mein.</p>}
+        {topics.length === 0 && <p className="text-slate-500 text-xs py-4">{emptyMsg}</p>}
         {topics.map((t) => (
-          <div key={t.name} className="rounded-xl border border-slate-800 px-3 py-2.5">
+          <div key={t.name || 'general'} className="rounded-xl border border-slate-800 px-3 py-2.5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-slate-200">{t.name}</p>
+              <p className="text-sm font-semibold text-slate-200">{t.name || 'General'}</p>
               <p className="text-xs text-slate-400">Correct: {t.correct}/{t.total}</p>
             </div>
             <div className="flex flex-wrap gap-1.5">

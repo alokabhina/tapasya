@@ -56,17 +56,18 @@ export function buildTopicBreakdown(test, attempt) {
 
     for (const q of section.questions) {
       const r = responseMap.get(q.qNo)
+      const topicKey = q.topic || q.topicRaw || 'General'
       const isAttempted = !!(r && r.selectedKey != null && (r.status === 'answered' || r.status === 'answered-marked'))
       const isCorrect = isAttempted && r.selectedKey === q.correctKey
       const qStatus = !r || r.status === 'not-visited' ? 'unseen' : !isAttempted ? 'skipped' : isCorrect ? 'correct' : 'wrong'
 
-      if (!topics[q.topic]) topics[q.topic] = { name: q.topic, correct: 0, wrong: 0, skipped: 0, unseen: 0, total: 0, questions: [] }
-      topics[q.topic].total++
-      if (qStatus === 'correct') topics[q.topic].correct++
-      else if (qStatus === 'wrong') topics[q.topic].wrong++
-      else if (qStatus === 'skipped') topics[q.topic].skipped++
-      else topics[q.topic].unseen++
-      topics[q.topic].questions.push({
+      if (!topics[topicKey]) topics[topicKey] = { name: topicKey, correct: 0, wrong: 0, skipped: 0, unseen: 0, total: 0, questions: [] }
+      topics[topicKey].total++
+      if (qStatus === 'correct') topics[topicKey].correct++
+      else if (qStatus === 'wrong') topics[topicKey].wrong++
+      else if (qStatus === 'skipped') topics[topicKey].skipped++
+      else topics[topicKey].unseen++
+      topics[topicKey].questions.push({
         qNo: q.qNo,
         status: qStatus,
         timeSpentSec: r?.timeSpentSec || 0,
@@ -107,14 +108,15 @@ export function buildTimeSplit(test, attempt) {
     for (const q of section.questions) {
       const r = responseMap.get(q.qNo)
       const t = r?.timeSpentSec || 0
+      const topicKey = q.topic || q.topicRaw || 'General'
       const isAttempted = !!(r && r.selectedKey != null && (r.status === 'answered' || r.status === 'answered-marked'))
       const bucket = isAttempted ? (r.selectedKey === q.correctKey ? 'correctSec' : 'wrongSec') : 'skippedSec'
 
       totals[bucket] += t
       overallTotals[bucket] += t
 
-      if (!topicTotals[q.topic]) topicTotals[q.topic] = { name: q.topic, correctSec: 0, wrongSec: 0, skippedSec: 0 }
-      topicTotals[q.topic][bucket] += t
+      if (!topicTotals[topicKey]) topicTotals[topicKey] = { name: topicKey, correctSec: 0, wrongSec: 0, skippedSec: 0 }
+      topicTotals[topicKey][bucket] += t
     }
 
     sectionWise.push({ sectionName: section.name, ...totals })

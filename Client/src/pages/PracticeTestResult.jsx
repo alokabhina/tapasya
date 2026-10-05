@@ -19,36 +19,23 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { getPracticeResult, getPracticeAnalysis } from '@/api/practiceAttempts'
+import { getPracticeResult } from '@/api/practiceAttempts'
 import AttemptSwitcher from '@/components/practicetest/AttemptSwitcher'
 import ResultCards from '@/components/practicetest/ResultCards'
-import SectionalSummaryTable from '@/components/practicetest/SectionalSummaryTable'
-import WeaknessStrengthPanel from '@/components/practicetest/WeaknessStrengthPanel'
-import TimeSplitTable from '@/components/practicetest/TimeSplitTable'
-import StrongWeakZones from '@/components/practicetest/StrongWeakZones'
-import AttemptCompareTable from '@/components/practicetest/AttemptCompareTable'
 
 export default function PracticeTestResult() {
   const { attemptId } = useParams()
   const navigate = useNavigate()
   const [result, setResult] = useState(null)
-  const [analysis, setAnalysis] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     setResult(null)
-    setAnalysis(null)
     getPracticeResult(attemptId).then(setResult).catch(() => setError('Result load nahi ho paya'))
-    // Best-effort — if analysis fails to load the score card still shows;
-    // we just skip the analysis section below rather than blocking the page.
-    getPracticeAnalysis(attemptId).then(setAnalysis).catch(() => {})
+    import('./PracticeTestAnalysis').catch(() => {}) // Analysis button dabate hi page khule
     // "View Solutions" dabate hi page khule — chunk pehle se ready
     import('./PracticeTestSolutions').catch(() => {})
   }, [attemptId])
-
-  function jumpToQuestion(qNo) {
-    navigate(`/practice-tests/solutions/${attemptId}?qNo=${qNo}`)
-  }
 
   if (error) {
     return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-red-400 text-sm px-4 text-center">{error}</div>
@@ -113,15 +100,12 @@ export default function PracticeTestResult() {
         <i className="ti ti-list-check" /> View Solutions <i className="ti ti-chevron-right" />
       </button>
 
-      {analysis && (
-        <div className="space-y-4 mt-6">
-          <SectionalSummaryTable sectionalSummary={analysis.sectionalSummary} />
-          <WeaknessStrengthPanel topicBreakdown={analysis.topicBreakdown} onJumpToQuestion={jumpToQuestion} />
-          <TimeSplitTable timeSplit={analysis.timeSplit} />
-          <StrongWeakZones strongWeakZones={analysis.strongWeakZones} />
-          <AttemptCompareTable attemptCompare={analysis.attemptCompare} currentAttemptNumber={result.attemptNumber} />
-        </div>
-      )}
+      <button
+        onClick={() => navigate(`/practice-tests/analysis/${attemptId}`)}
+        className="w-full mt-2.5 py-3 rounded-xl border border-tapasya-orange/40 bg-tapasya-orange/10 text-tapasya-orange text-sm font-bold hover:bg-tapasya-orange/20 flex items-center justify-center gap-1.5"
+      >
+        <i className="ti ti-chart-bar" /> View Analysis (Weak Topics, Time Split) <i className="ti ti-chevron-right" />
+      </button>
 
       <div className="rounded-2xl border border-tapasya-orange/25 bg-tapasya-orange/5 px-5 py-4 mt-6 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-start gap-2.5">

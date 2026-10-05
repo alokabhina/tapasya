@@ -6,15 +6,21 @@
 // OnScreenCalculator around usePracticeTestStore (runtime state) +
 // api/practiceAttempts.js (server sync — see plan doc Section 13 for the
 // autosave/resume contract this follows).
+//
+// Perf: the countdown (LiveTimer) and Qn. Time (QuestionTimer) tick inside
+// their own tiny components, so this page + the question body re-render only
+// on real interactions (answer / next / jump) — not every second.
+// Layout: question column (tabs + question + action bar) + palette that is a
+// sidebar on lg+ and a slide-in drawer below that.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import useCountdown from '@/hooks/useCountdown'
 import usePracticeTestStore from '@/store/practiceTestStore'
 import { getPracticeAttempt, savePracticeProgress, submitPracticeSection, reportPracticeIssue } from '@/api/practiceAttempts'
 import { getPracticeSubject } from '@/api/practiceSubjects'
 import useAutoStudyTimer from '@/hooks/useAutoStudyTimer'
+import useMediaQuery from '@/hooks/useMediaQuery'
 
 import TestHeader from '@/components/practicetest/TestHeader'
 import SectionTabs from '@/components/practicetest/SectionTabs'
@@ -51,13 +57,14 @@ export default function PracticeTestPlay() {
   const autoTimer = useAutoStudyTimer(attemptId)
 
   const [ready, setReady] = useState(false)
-  const [initialSeconds, setInitialSeconds] = useState(null)
   const [attemptSnapshot, setAttemptSnapshot] = useState(null) // last full attempt doc from server, for completed-section stats
   const [pauseMode, setPauseMode] = useState(null)             // null | 'confirm' | 'paused'
   const [submitModal, setSubmitModal] = useState(null)         // null | 'section' | 'final'
   const [submitting, setSubmitting] = useState(false)
   const [showCalculator, setShowCalculator] = useState(false)
   const [showReportModal, setShowReportModal] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const isLg = useMediaQuery('(min-width: 1024px)')
   const [fontScale, setFontScale] = useState(() => {
     const saved = Number(localStorage.getItem(FONT_SCALE_KEY))
     return Number.isInteger(saved) && saved >= 0 && saved <= 3 ? saved : 1
@@ -73,8 +80,9 @@ export default function PracticeTestPlay() {
 
   const submittingRef = useRef(false)
   const questionStartRef = useRef(Date.now())
+  const deadlineRef = useRef(Date.now()) // epoch ms when the current section's time runs out
+  const pausedAtRef = useRef(null)
   const syncedTimeRef = useRef({}) // qNo -> seconds already synced to server, reset per section
-  const [, forceTick] = useState(0)
 
   // ── Load / resume ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -92,7 +100,7 @@ export default function PracticeTestPlay() {
       const secondsLeft = startedAt
         ? Math.max(0, section.durationSec - (Date.now() - new Date(startedAt).getTime()) / 1000)
         : section.durationSec
-      setInitialSeconds(secondsLeft)
+      deadlineRef.current = Date.now() + secondsLeft * 1000
       questionStartRef.current = Date.now()
       setReady(true)
 
@@ -123,13 +131,6 @@ export default function PracticeTestPlay() {
     else autoTimer.resumeIfOwned()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pauseMode, ready])
-
-  // ── Live "Qn. Time" ticking display (doesn't write to store every tick) ─
-  useEffect(() => {
-    if (!ready || pauseMode === 'paused') return
-    const id = setInterval(() => forceTick((t) => t + 1), 1000)
-    return () => clearInterval(id)
-  }, [ready, pauseMode])
 
   const commitQuestionTime = useCallback(() => {
     const q = store.currentQuestion()
@@ -184,6 +185,40 @@ export default function PracticeTestPlay() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [ready])
 
+  function secondsLeftNow() {
+    return Math.max(0, Math.round((deadlineRef.current - Date.now()) / 1000))
+  }
+
+  // Top-bar "Submit Test": finish the WHOLE test from any section. Submits the
+  // current section, then every remaining one (untouched sections go in as
+  // unattempted) using the existing per-section endpoint; the last call
+  // finalizes + scores the attempt.
+  async function submitFullTest() {
+    if (submittingRef.current) return
+    submittingRef.current = true
+    setSubmitting(true)
+    commitQuestionTime()
+    await syncProgress({ full: true })
+    try {
+      const sections = store.test.sections
+      const start = store.currentSectionIndex
+      for (let i = start; i < sections.length; i++) {
+        await submitPracticeSection(store.attemptId, {
+          sectionIndex: i,
+          timeLeftAtSubmitSec: i === start ? secondsLeftNow() : sections[i].durationSec,
+          auto: false,
+        })
+      }
+      await autoTimer.stopIfOwned()
+      navigate(`/practice-tests/result/${attemptId}`, { replace: true })
+    } catch (e) {
+      window.alert('Submit fail hua, dobara try karo')
+      submittingRef.current = false
+      setSubmitting(false)
+      setSubmitModal(null)
+    }
+  }
+
   async function submitCurrentSection(auto) {
     if (submittingRef.current) return
     submittingRef.current = true
@@ -191,7 +226,7 @@ export default function PracticeTestPlay() {
     commitQuestionTime()
     await syncProgress({ full: true })
     try {
-      const timeLeftAtSubmitSec = auto ? 0 : Math.max(0, Math.round(secondsLeft))
+      const timeLeftAtSubmitSec = auto ? 0 : secondsLeftNow()
       const { attempt, isLastSection } = await submitPracticeSection(store.attemptId, {
         sectionIndex: store.currentSectionIndex, timeLeftAtSubmitSec, auto,
       })
@@ -202,10 +237,10 @@ export default function PracticeTestPlay() {
       }
       setAttemptSnapshot(attempt)
       const nextIndex = store.currentSectionIndex + 1
+      deadlineRef.current = Date.now() + store.test.sections[nextIndex].durationSec * 1000
       store.advanceToSection(nextIndex)
       syncedTimeRef.current = {}
       questionStartRef.current = Date.now()
-      setInitialSeconds(store.test.sections[nextIndex].durationSec)
     } catch (e) {
       window.alert('Submit fail hua, dobara try karo')
     } finally {
@@ -220,14 +255,7 @@ export default function PracticeTestPlay() {
     submitCurrentSection(true)
   }
 
-  // `enabled: ready` keeps this paused until the attempt has actually
-  // finished loading — otherwise it was starting at 0s during the load
-  // window, expiring instantly, and firing a doomed auto-submit before
-  // store.attemptId even existed (Round-2 Issue A, the "Submit fail hua"
-  // bug).
-  const { secondsLeft } = useCountdown(initialSeconds ?? 0, handleSectionExpire, store.currentSectionIndex, ready)
-
-  if (!ready || initialSeconds == null) {
+  if (!ready) {
     return <div className="min-h-screen flex items-center justify-center bg-white text-slate-400 text-sm">Loading test...</div>
   }
 
@@ -236,12 +264,17 @@ export default function PracticeTestPlay() {
   const direction = store.currentDirection()
   const responses = store.currentResponses()
   const isLastSection = store.currentSectionIndex === store.test.sections.length - 1
-  const qTotalTime = (responses[question.qNo]?.timeSpentSec || 0) + (Date.now() - questionStartRef.current) / 1000
 
   function goNext(markStatus) {
     if (markStatus) store.toggleMarkForReview(question.qNo)
     commitQuestionTime()
     store.goToNextQuestion()
+    syncProgress({ full: false })
+  }
+
+  function goPrev() {
+    commitQuestionTime()
+    store.goToPrevQuestion()
     syncProgress({ full: false })
   }
 
@@ -257,6 +290,7 @@ export default function PracticeTestPlay() {
     navigate(`/practice-tests/${subjectId}`, { replace: true })
   }
 
+  function buildSummary() {
   const sectionRows = store.test.sections.map((s, i) => {
     if (i < store.currentSectionIndex && attemptSnapshot?.sectionState?.[i]) {
       const st = attemptSnapshot.sectionState[i]
@@ -286,12 +320,21 @@ export default function PracticeTestPlay() {
     marked: acc.marked + r.marked,
     answeredMarked: acc.answeredMarked + r.answeredMarked,
   }), { totalQuestions: 0, timeTakenSec: 0, answered: 0, notAnswered: 0, notVisited: 0, marked: 0, answeredMarked: 0 })
+  return { sectionRows, grandTotal }
+  }
+
+  const summary = submitModal ? buildSummary() : null
+  const totalQuestions = store.test.sections.reduce((n, s) => n + s.questions.length, 0)
+  const paused = pauseMode === 'paused'
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-white text-slate-800 z-40">
+    <div className="fixed inset-0 flex flex-col bg-white text-slate-800 z-40 overflow-hidden">
       <TestHeader
         title={store.test.title}
-        secondsLeft={secondsLeft}
+        deadlineRef={deadlineRef}
+        timerPaused={paused}
+        timerResetKey={store.currentSectionIndex}
+        onTimerExpire={handleSectionExpire}
         hasCalculator={!!section.hasCalculator}
         showCalculator={showCalculator}
         onToggleCalculator={() => setShowCalculator((v) => !v)}
@@ -304,36 +347,47 @@ export default function PracticeTestPlay() {
         onReportClick={() => setShowReportModal(true)}
         fontScale={fontScale}
         onFontScaleChange={adjustFontScale}
+        onSubmitTestClick={() => { commitQuestionTime(); setSubmitModal('final') }}
+        onOpenPalette={isLg ? undefined : () => setPaletteOpen(true)}
+        submitting={submitting}
       />
 
-      <SectionTabs
-        sections={store.test.sections}
-        currentSectionIndex={store.currentSectionIndex}
-        qNo={question.qNo}
-        displayPosition={`${question.qNo} / ${store.test.sections.reduce((n, s) => n + s.questions.length, 0)}`}
-        marksCorrect={question.marksCorrectOverride ?? section.marksCorrect}
-        marksWrong={question.marksWrongOverride ?? section.marksWrong}
-        questionTimeSec={qTotalTime}
-      />
+      <div className="flex-1 flex min-h-0">
+        <main className="flex-1 min-w-0 flex flex-col min-h-0">
+          <SectionTabs
+            sections={store.test.sections}
+            currentSectionIndex={store.currentSectionIndex}
+            qNo={question.qNo}
+            displayPosition={`${question.qNo} / ${totalQuestions}`}
+            marksCorrect={question.marksCorrectOverride ?? section.marksCorrect}
+            marksWrong={question.marksWrongOverride ?? section.marksWrong}
+            questionBaseSec={responses[question.qNo]?.timeSpentSec || 0}
+            questionStartRef={questionStartRef}
+            paused={paused}
+          />
 
-      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
-        <div className="flex-1 flex flex-col min-h-0">
           <SplitQuestionView
             question={question}
             direction={direction}
             qNo={question.qNo}
             selectedKey={responses[question.qNo]?.selectedKey ?? null}
-            onSelectOption={(key) => store.selectOption(question.qNo, key)}
+            onSelectOption={store.selectOption}
             fontScale={fontScale}
+            isFirstInGroup={!question.groupId || section.questions.find((q) => q.groupId === question.groupId)?.qNo === question.qNo}
           />
+
           <ActionBar
             onMarkForReview={() => goNext(true)}
             onClearResponse={() => { store.clearResponse(question.qNo); syncProgress({ full: false }) }}
             onSaveAndNext={() => goNext(false)}
+            onPrev={goPrev}
+            canPrev={store.currentQuestionIndex > 0}
           />
-        </div>
+        </main>
 
         <CandidatePalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
           userName={user?.displayName}
           photoURL={user?.photoURL}
           sectionName={section.name}
@@ -361,8 +415,21 @@ export default function PracticeTestPlay() {
       <PauseOverlay
         mode={pauseMode}
         onCancel={() => setPauseMode(null)}
-        onConfirmPause={() => setPauseMode('paused')}
-        onResume={() => { questionStartRef.current = Date.now(); setPauseMode(null) }}
+        onConfirmPause={() => {
+          commitQuestionTime() // bank time spent so far on this question
+          pausedAtRef.current = Date.now()
+          setPauseMode('paused')
+        }}
+        onResume={() => {
+          // push the section deadline forward by the paused duration (before the
+          // timer restarts, so it can never see a stale deadline and auto-submit)
+          if (pausedAtRef.current != null) {
+            deadlineRef.current += Date.now() - pausedAtRef.current
+            pausedAtRef.current = null
+          }
+          questionStartRef.current = Date.now()
+          setPauseMode(null)
+        }}
       />
 
       {submitModal === 'section' && (
@@ -370,7 +437,7 @@ export default function PracticeTestPlay() {
           sectionName={section.name}
           counts={store.statusCounts()}
           totalQuestions={section.questions.length}
-          timeTakenSec={sectionRows[store.currentSectionIndex]?.timeTakenSec || 0}
+          timeTakenSec={summary.sectionRows[store.currentSectionIndex]?.timeTakenSec || 0}
           submitting={submitting}
           onCancel={() => setSubmitModal(null)}
           onConfirm={() => submitCurrentSection(false)}
@@ -379,11 +446,12 @@ export default function PracticeTestPlay() {
 
       {submitModal === 'final' && (
         <FinalSubmitModal
-          sectionRows={sectionRows}
-          grandTotal={grandTotal}
+          sectionRows={summary.sectionRows}
+          grandTotal={summary.grandTotal}
+          pendingSections={store.test.sections.length - 1 - store.currentSectionIndex}
           submitting={submitting}
           onCancel={() => setSubmitModal(null)}
-          onConfirm={() => submitCurrentSection(false)}
+          onConfirm={submitFullTest}
         />
       )}
     </div>

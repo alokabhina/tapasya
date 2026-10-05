@@ -24,7 +24,7 @@ export default function SectionSubmitModal({ sectionName, counts, totalQuestions
   ]
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="w-full sm:max-w-sm bg-white border border-slate-200 rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-xl animate-fade-in-up max-h-[90vh] flex flex-col">
         <div className="px-5 pt-5 pb-3">
           <h3 className="text-base font-bold text-slate-800">Submit "{sectionName}"?</h3>

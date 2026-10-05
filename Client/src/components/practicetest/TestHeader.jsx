@@ -1,32 +1,26 @@
 // src/components/practicetest/TestHeader.jsx
-// Top bar of the live engine — mirrors the reference UI header (plan doc
-// Section 7.1): title, ticking "Time Left" box (section-wise, resets fresh
-// on every section switch), Pause, fullscreen toggle, and an on-screen
-// calculator icon that only appears when the *current* section has
-// hasCalculator: true.
+// Top bar of the live engine. Compact single row on phones:
+//   [title ......] [timer] [pause] [SUBMIT TEST] [palette] [⋯ menu]
+// Less-used tools (A-/A+, calculator, report, fullscreen, exit) fold into the
+// ⋯ menu below md and show inline from md up (tablets / desktop).
 //
-// Light/white theme — matches the reference (Guidely) screenshot 1:1,
-// unlike the rest of the (dark) app shell. The live engine is a dedicated
-// full-screen route with no sidebar, so it's free to run its own theme.
+// "Submit Test" lives here on purpose — finish the WHOLE test straight from
+// the top bar, from any section, without hunting for the palette.
 //
-// Pure/presentational — PracticeTestPlay.jsx owns the actual countdown
-// (via the existing hooks/useCountdown.js) and just hands secondsLeft down.
-//
-// Round-2 Issue B: Exit moved here as a small icon (next to Pause /
-// Fullscreen) — its old spot in the section-tabs row now holds the
-// Submit button instead.
+// Pure/presentational. The countdown itself is <LiveTimer/> (self-ticking).
 
-function formatTime(totalSeconds) {
-  const s = Math.max(0, Math.ceil(totalSeconds || 0))
-  const m = Math.floor(s / 60)
-  const sec = s % 60
-  return `${String(m).padStart(2, '0')} : ${String(sec).padStart(2, '0')}`
-}
+import { useState } from 'react'
+import LiveTimer from './LiveTimer'
+
+const iconBtn =
+  'w-8 h-8 shrink-0 rounded-lg border border-slate-300 text-slate-500 flex items-center justify-center active:bg-slate-100 hover:bg-slate-50'
 
 export default function TestHeader({
   title,
-  secondsLeft,
-  lowTimeThresholdSec = 120,
+  deadlineRef,
+  timerPaused,
+  timerResetKey,
+  onTimerExpire,
   hasCalculator,
   showCalculator,
   onToggleCalculator,
@@ -36,103 +30,104 @@ export default function TestHeader({
   onReportClick,
   fontScale,
   onFontScaleChange,
+  onSubmitTestClick,
+  onOpenPalette, // only passed when the palette is a drawer (< lg)
+  submitting,
 }) {
-  const isLow = secondsLeft <= lowTimeThresholdSec
+  const [menuOpen, setMenuOpen] = useState(false)
+  const closeThen = (fn) => () => { setMenuOpen(false); fn?.() }
+
+  const fontButtons = onFontScaleChange && (
+    <div className="flex items-center rounded-lg border border-slate-300 overflow-hidden shrink-0">
+      <button type="button" onClick={() => onFontScaleChange(-1)} disabled={fontScale <= 0} title="Decrease text size"
+        className="w-8 h-8 flex items-center justify-center text-slate-600 text-xs font-bold active:bg-slate-100 disabled:opacity-30 border-r border-slate-300">A-</button>
+      <button type="button" onClick={() => onFontScaleChange(1)} disabled={fontScale >= 3} title="Increase text size"
+        className="w-8 h-8 flex items-center justify-center text-slate-600 text-sm font-bold active:bg-slate-100 disabled:opacity-30">A+</button>
+    </div>
+  )
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 sm:px-5 py-3 bg-white border-b border-slate-200 shadow-sm">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <div className="w-8 h-8 rounded-full bg-tapasya-orange text-white font-black text-xs flex items-center justify-center shrink-0">TP</div>
-        <h1 className="text-sm sm:text-base font-bold text-slate-800 truncate">{title}</h1>
+    <header className="relative shrink-0 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 bg-white border-b border-slate-200 shadow-sm pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="hidden sm:flex w-8 h-8 rounded-full bg-tapasya-orange text-white font-black text-xs items-center justify-center shrink-0">TP</div>
+        <h1 className="text-[13px] sm:text-base font-bold text-slate-800 truncate">{title}</h1>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-2.5">
-        {onFontScaleChange && (
-          <div className="flex items-center rounded-lg border border-slate-300 overflow-hidden mr-1">
-            <button
-              type="button"
-              onClick={() => onFontScaleChange(-1)}
-              title="Decrease question text size"
-              disabled={fontScale <= 0}
-              className="w-8 h-9 flex items-center justify-center text-slate-600 text-xs font-bold hover:bg-slate-50 disabled:opacity-30 border-r border-slate-300"
-            >
-              A-
-            </button>
-            <button
-              type="button"
-              onClick={() => onFontScaleChange(1)}
-              title="Increase question text size"
-              disabled={fontScale >= 3}
-              className="w-8 h-9 flex items-center justify-center text-slate-600 text-sm font-bold hover:bg-slate-50 disabled:opacity-30"
-            >
-              A+
-            </button>
-          </div>
-        )}
-
+      {/* tablet / desktop: tools inline */}
+      <div className="hidden md:flex items-center gap-2">
+        {fontButtons}
         {onReportClick && (
-          <button
-            type="button"
-            onClick={onReportClick}
-            title="Report an issue with this question/test"
-            className="w-9 h-9 rounded-lg flex items-center justify-center border border-slate-300 text-slate-500 hover:text-red-500 hover:border-red-300 hover:bg-red-50"
-          >
-            <i className="ti ti-flag-3 text-lg" />
+          <button type="button" onClick={onReportClick} title="Report an issue" className={`${iconBtn} hover:text-red-500 hover:border-red-300`}>
+            <i className="ti ti-flag-3 text-base" />
           </button>
         )}
-
         {hasCalculator && (
-          <button
-            type="button"
-            onClick={onToggleCalculator}
-            title="Calculator"
-            aria-pressed={showCalculator}
-            className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-colors ${
-              showCalculator
-                ? 'bg-tapasya-orange/10 border-tapasya-orange text-tapasya-orange'
-                : 'border-slate-300 text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <i className="ti ti-calculator text-lg" />
+          <button type="button" onClick={onToggleCalculator} title="Calculator" aria-pressed={showCalculator}
+            className={`${iconBtn} ${showCalculator ? '!bg-tapasya-orange/10 !border-tapasya-orange text-tapasya-orange' : ''}`}>
+            <i className="ti ti-calculator text-base" />
           </button>
         )}
-
-        <div
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-mono text-sm font-bold tabular-nums ${
-            isLow ? 'border-red-400 text-red-600 bg-red-50' : 'border-slate-300 text-slate-700 bg-slate-50'
-          }`}
-        >
-          <i className="ti ti-clock text-base" />
-          <span className="hidden xs:inline">Time Left:</span>
-          {formatTime(secondsLeft)}
-        </div>
-
-        <button
-          type="button"
-          onClick={onPauseClick}
-          className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50"
-        >
-          Pause
-        </button>
-
-        <button
-          type="button"
-          onClick={onToggleFullscreen}
-          title="Fullscreen"
-          className="w-9 h-9 rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-50 flex items-center justify-center"
-        >
-          <i className="ti ti-arrows-maximize text-lg" />
-        </button>
-
-        <button
-          type="button"
-          onClick={onExitClick}
-          title="Exit Test"
-          className="w-9 h-9 rounded-lg border border-slate-300 text-slate-500 hover:text-red-500 hover:border-red-300 hover:bg-red-50 flex items-center justify-center"
-        >
-          <i className="ti ti-door-exit text-lg" />
-        </button>
       </div>
-    </div>
+
+      <LiveTimer deadlineRef={deadlineRef} paused={timerPaused} resetKey={timerResetKey} onExpire={onTimerExpire} />
+
+      <button type="button" onClick={onPauseClick} title="Pause"
+        className="h-8 px-2.5 sm:px-3 shrink-0 rounded-lg border border-slate-300 text-slate-700 text-[13px] font-semibold active:bg-slate-100 hover:bg-slate-50 flex items-center gap-1">
+        <i className="ti ti-player-pause text-base" />
+        <span className="hidden sm:inline">Pause</span>
+      </button>
+
+      <button type="button" onClick={onSubmitTestClick} disabled={submitting} title="Submit the whole test"
+        className="h-8 px-3 sm:px-3.5 shrink-0 rounded-lg bg-blue-600 text-white text-xs sm:text-[13px] font-bold active:bg-blue-800 hover:bg-blue-700 disabled:opacity-60 flex items-center gap-1.5">
+        <i className="ti ti-circle-check text-base sm:hidden" />
+        <span className="sm:hidden">Submit</span>
+        <span className="hidden sm:inline">Submit Test</span>
+      </button>
+
+      <div className="hidden md:flex items-center gap-2">
+        <button type="button" onClick={onToggleFullscreen} title="Fullscreen" className={iconBtn}><i className="ti ti-arrows-maximize text-base" /></button>
+        <button type="button" onClick={onExitClick} title="Exit Test" className={`${iconBtn} hover:text-red-500 hover:border-red-300`}><i className="ti ti-door-exit text-base" /></button>
+      </div>
+
+      {onOpenPalette && (
+        <button type="button" onClick={onOpenPalette} title="Question palette" className={iconBtn}>
+          <i className="ti ti-layout-grid text-base" />
+        </button>
+      )}
+
+      {/* phone: overflow menu */}
+      <button type="button" onClick={() => setMenuOpen((v) => !v)} title="More" aria-expanded={menuOpen} className={`${iconBtn} md:hidden`}>
+        <i className="ti ti-dots-vertical text-base" />
+      </button>
+
+      {menuOpen && (
+        <>
+          <button type="button" aria-label="Close menu" className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuOpen(false)} />
+          <div className="absolute right-2 top-full mt-1 z-50 w-60 rounded-2xl border border-slate-200 bg-white shadow-xl p-2 md:hidden">
+            {onFontScaleChange && (
+              <div className="flex items-center justify-between px-3 py-2">
+                <span className="text-sm text-slate-600 font-medium">Text size</span>
+                {fontButtons}
+              </div>
+            )}
+            {hasCalculator && (
+              <MenuRow icon="ti-calculator" label="Calculator" onClick={closeThen(onToggleCalculator)} />
+            )}
+            <MenuRow icon="ti-flag-3" label="Report an issue" onClick={closeThen(onReportClick)} />
+            <MenuRow icon="ti-arrows-maximize" label="Fullscreen" onClick={closeThen(onToggleFullscreen)} />
+            <MenuRow icon="ti-door-exit" label="Exit test" danger onClick={closeThen(onExitClick)} />
+          </div>
+        </>
+      )}
+    </header>
+  )
+}
+
+function MenuRow({ icon, label, onClick, danger }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium active:bg-slate-100 ${danger ? 'text-red-600' : 'text-slate-700'}`}>
+      <i className={`ti ${icon} text-lg`} /> {label}
+    </button>
   )
 }

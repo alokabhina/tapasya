@@ -1,66 +1,47 @@
 // src/components/practicetest/SplitQuestionView.jsx
-// The core question renderer — one component handles all 3 layout modes
-// from the reference UI (plan doc Section 7.3), driven entirely by whether
-// `direction` is present:
-//   1. direction == null  -> full-width single question (standalone)
-//   2. direction present  -> left panel (shared passage/puzzle/table/
-//                            instruction) + right panel (this question's
-//                            stem + options)
-// The same `direction` object/reference is reused unchanged across every
-// question in its group, so pass the same reference in from the parent —
-// that's what keeps the left panel from remounting/flickering while
-// navigating within a group.
+// Question renderer. Layout adapts to screen:
+//   • no direction          -> single scrolling column (max-w-3xl, centered)
+//   • direction + width>=640 -> side-by-side (passage | question), each with its own scroll
+//   • direction + phone     -> stacked: collapsible passage on top (max 40% height,
+//                              own scroll) + question below (own scroll)
+// Question text is ALWAYS visible — it never gets squeezed out by other panels.
 //
-// Left panel deliberately blocks wheel/trackpad scrolling (onWheelCapture
-// below) and only scrolls via dragging the visible scrollbar thumb — this
-// mirrors real bank-exam software on purpose now (Alok's explicit call;
-// the reference UI's "bug" the old comment here used to avoid is the
-// wanted behaviour). Touch-drag on mobile/tablet is left untouched since
-// that's the only scroll gesture touch devices have. See .exam-scrollbar
-// in styles/globals.css for the thicker, grabbable scrollbar this needs.
+// Wrapped in React.memo and fed stable props so selecting an option or a
+// timer tick elsewhere doesn't re-render / re-sanitize everything (low-RAM friendly).
 //
-// fontScale (0-3, see FONT_LEVELS) drives question/option/direction text
-// size — TestHeader's A-/A+ buttons control it, state lives in
-// PracticeTestPlay.jsx (persisted to localStorage).
+// Left panel still blocks mouse-wheel scrolling on desktop (intentional, exam-style —
+// drag the thick scrollbar). Touch scrolling is untouched.
 //
-// whitespace-pre-wrap on every text container below (question, options,
-// direction) — content comes from AI-imported paper text and often relies
-// on literal spacing/line breaks that matter: coding-decoding rows aligned
-// with runs of spaces, or a blank line separating a puzzle's "Directions"
-// paragraph from the question. Default HTML whitespace handling collapses
-// all of that into one line/one space, which is exactly the "space missing"
-// / "sab chipka hua" bug — pre-wrap preserves it while still wrapping long
-// lines normally. Real <table> markup inside direction.content is reset
-// back to whitespace-normal (see [&_table]:whitespace-normal below) since
-// that's genuinely structured HTML, not manually-spaced plain text.
-//
-// Light theme — matches the reference screenshot exactly. The "Qn. Time"
-// stopwatch (with its eye-icon toggle) and the Q-no/Marks line used to
-// live here but moved up into SectionTabs.jsx's combined top bar
-// (Round-2 Issue B) — this component only renders the question + options
-// now.
+// whitespace-pre-wrap is deliberate: AI-imported paper text relies on literal
+// spacing/line breaks (coding-decoding rows, puzzle paragraphs).
 
-import { useMemo } from 'react'
+import { memo, useMemo, useState, useEffect } from 'react'
 import { sanitizeHtml } from '@/utils/sanitizeHtml'
 import { formatReasoningText } from '@/utils/formatDirectionText'
+import useMediaQuery from '@/hooks/useMediaQuery'
 
 const FONT_LEVELS = [
-  { question: 16, option: 14, direction: 13 },
-  { question: 17, option: 15, direction: 14 }, // default — a step up from the old fixed sizes
-  { question: 19, option: 16, direction: 15 },
-  { question: 21, option: 17, direction: 16 },
+  { question: 16, option: 15, direction: 14 },
+  { question: 17, option: 16, direction: 15 }, // default
+  { question: 19, option: 17, direction: 16 },
+  { question: 21, option: 18, direction: 17 },
 ]
 
 function blockWheel(e) { e.preventDefault() }
 
-export default function SplitQuestionView({
-  question,
-  direction,
-  qNo,
-  selectedKey,
-  onSelectOption,
-  fontScale = 1,
-}) {
+const tableCls =
+  '[&_table]:w-full [&_table]:border-collapse [&_table]:whitespace-normal [&_td]:border [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-slate-200 [&_th]:px-2 [&_th]:py-1 [&_img]:max-w-full [&_img]:h-auto'
+
+function SplitQuestionView({ question, direction, qNo, selectedKey, onSelectOption, fontScale = 1, isFirstInGroup = true }) {
+  const wide = useMediaQuery('(min-width: 640px)')
+  const isLg = useMediaQuery('(min-width: 1024px)')
+  // Phone + tablet (< lg): the shared direction opens by itself only on the FIRST
+  // question of its group. On the later questions it stays folded behind a one-tap
+  // "Directions" bar, so the question gets the whole screen. Desktop (lg+) always
+  // shows it side by side, as before.
+  const [passageOpen, setPassageOpen] = useState(isLg || isFirstInGroup)
+  useEffect(() => { setPassageOpen(isLg || isFirstInGroup) }, [qNo, isLg, isFirstInGroup])
+
   const safeDirectionHtml = useMemo(
     () => sanitizeHtml(formatReasoningText(direction?.content, { isDirection: true })),
     [direction?.content],
@@ -74,33 +55,30 @@ export default function SplitQuestionView({
   if (!question) return null
 
   const questionBlock = (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 pb-4">
       <div
-        className="text-slate-800 font-bold leading-relaxed whitespace-pre-wrap"
+        className={`text-slate-800 font-bold leading-relaxed whitespace-pre-wrap break-words ${tableCls}`}
         style={{ fontSize: sizes.question }}
         dangerouslySetInnerHTML={{ __html: safeQuestionHtml }}
       />
-
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-2" role="radiogroup">
         {question.options.map((opt) => {
           const isSelected = selectedKey === opt.key
           return (
             <label
               key={opt.key}
-              className={`flex items-start gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
-                isSelected
-                  ? 'border-tapasya-orange bg-tapasya-orange/5'
-                  : 'border-slate-200 hover:border-slate-300 bg-white'
+              className={`flex items-start gap-3 px-3 py-2.5 min-h-[42px] rounded-lg border cursor-pointer select-none active:scale-[0.99] ${
+                isSelected ? 'border-tapasya-orange bg-tapasya-orange/5' : 'border-slate-200 bg-white'
               }`}
             >
               <input
                 type="radio"
                 name={`q-${qNo}`}
                 checked={isSelected}
-                onChange={() => onSelectOption(opt.key)}
-                className="mt-1 accent-tapasya-orange"
+                onChange={() => onSelectOption(qNo, opt.key)}
+                className="mt-1 w-4 h-4 shrink-0 accent-tapasya-orange"
               />
-              <span className="text-slate-800 font-medium whitespace-pre-wrap" style={{ fontSize: sizes.option }}>{opt.text}</span>
+              <span className="text-slate-800 font-medium whitespace-pre-wrap break-words min-w-0" style={{ fontSize: sizes.option }}>{opt.text}</span>
             </label>
           )
         })}
@@ -108,34 +86,79 @@ export default function SplitQuestionView({
     </div>
   )
 
-  // Mode 1: standalone, no shared context — full width
+  const scrollCls = 'overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]'
+
+  // Mode 1: standalone question
   if (!direction) {
     return (
-      <div className="flex-1 overflow-y-auto bg-white px-4 sm:px-6 py-5">
-        <div className="max-w-2xl mx-auto">
-          {questionBlock}
+      <div className={`flex-1 min-h-0 bg-white px-3.5 sm:px-6 py-4 ${scrollCls}`}>
+        <div className="max-w-3xl mx-auto">{questionBlock}</div>
+      </div>
+    )
+  }
+
+  const passage = (
+    <>
+      {direction.title && <p className="text-sm font-bold text-slate-800 mb-2">{direction.title}</p>}
+      <div
+        className={`text-slate-800 leading-relaxed whitespace-pre-wrap break-words ${tableCls}`}
+        style={{ fontSize: sizes.direction }}
+        dangerouslySetInnerHTML={{ __html: safeDirectionHtml }}
+      />
+    </>
+  )
+
+  // Folded state (phone + tablet, later questions of a group): slim bar + full-width question
+  if (!isLg && !passageOpen) {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 bg-white">
+        <button type="button" onClick={() => setPassageOpen(true)}
+          className="shrink-0 flex items-center justify-between px-3.5 sm:px-6 py-2 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wide active:bg-slate-100">
+          <span className="flex items-center gap-1.5"><i className="ti ti-file-text text-sm" /> Directions dekhein</span>
+          <i className="ti ti-chevron-down text-base" />
+        </button>
+        <div className={`flex-1 min-h-0 px-3.5 sm:px-6 py-3.5 ${scrollCls}`}>
+          <div className="max-w-3xl mx-auto">{questionBlock}</div>
         </div>
       </div>
     )
   }
 
-  // Mode 2: split — left shared context, right this question
+  // Mode 2a: tablet / landscape / desktop — side by side
+  if (wide) {
+    return (
+      <div className="flex-1 flex min-h-0 bg-white">
+        <div className="w-1/2 flex flex-col min-h-0 border-r border-slate-200">
+          {!isLg && (
+            <button type="button" onClick={() => setPassageOpen(false)}
+              className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-2 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wide active:bg-slate-100">
+              <span className="flex items-center gap-1.5"><i className="ti ti-file-text text-sm" /> Directions</span>
+              <span className="flex items-center gap-1 normal-case font-semibold text-slate-400">Hide <i className="ti ti-x text-sm" /></span>
+            </button>
+          )}
+          <div className={`flex-1 min-h-0 exam-scrollbar px-4 sm:px-6 py-4 ${scrollCls}`} onWheelCapture={blockWheel}>
+            {passage}
+          </div>
+        </div>
+        <div className={`w-1/2 min-w-0 px-4 sm:px-6 py-4 ${scrollCls}`}>{questionBlock}</div>
+      </div>
+    )
+  }
+
+  // Mode 2b: phone portrait — passage panel on top (first question), question below
   return (
-    <div className="flex-1 flex flex-col md:flex-row min-h-0 bg-white">
-      <div
-        className="md:w-1/2 border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto exam-scrollbar px-4 sm:px-6 py-5"
-        onWheelCapture={blockWheel}
-      >
-        {direction.title && <p className="text-sm font-bold text-slate-800 mb-2">{direction.title}</p>}
-        <div
-          className="text-slate-800 leading-relaxed whitespace-pre-wrap [&_table]:w-full [&_table]:border-collapse [&_table]:whitespace-normal [&_td]:border [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-slate-200 [&_th]:px-2 [&_th]:py-1"
-          style={{ fontSize: sizes.direction }}
-          dangerouslySetInnerHTML={{ __html: safeDirectionHtml }}
-        />
+    <div className="flex-1 flex flex-col min-h-0 bg-white">
+      <div className="shrink-0 border-b border-slate-200 bg-slate-50 flex flex-col" style={{ maxHeight: '40%' }}>
+        <button type="button" onClick={() => setPassageOpen(false)}
+          className="shrink-0 flex items-center justify-between px-3.5 py-2 text-xs font-bold text-slate-600 uppercase tracking-wide active:bg-slate-100">
+          <span className="flex items-center gap-1.5"><i className="ti ti-file-text text-sm" /> Directions / Passage</span>
+          <i className="ti ti-chevron-up text-base" />
+        </button>
+        <div className={`min-h-0 px-3.5 pb-3 ${scrollCls}`}>{passage}</div>
       </div>
-      <div className="md:w-1/2 overflow-y-auto px-4 sm:px-6 py-5">
-        {questionBlock}
-      </div>
+      <div className={`flex-1 min-h-0 px-3.5 py-3.5 ${scrollCls}`}>{questionBlock}</div>
     </div>
   )
 }
+
+export default memo(SplitQuestionView)
