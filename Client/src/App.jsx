@@ -6,6 +6,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { useUserStore } from './store/userStore';
 import { useBootstrap } from './hooks/useBootstrap';
+import useTodoTimeReminders from './hooks/useTodoTimeReminders';
 
 // Layout
 import PageLoader from './components/layout/PageLoader';
@@ -139,6 +140,7 @@ export default function App() {
   const theme = useUserStore((s) => s.theme);
   const location = useLocation(); // used to auto-reset the error boundary on navigation
   useBootstrap(); // FIX: login ke baad subjects fetch + todaySeconds calculate
+  useTodoTimeReminders(); // todo ka start time aate hi "Ye todo karna hai" notification (app khula ho to)
 
   // Warm the offline cache for pages that matter offline (PDF Library
   // especially) WITHOUT requiring the user to manually open them online

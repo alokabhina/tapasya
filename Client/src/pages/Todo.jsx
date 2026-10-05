@@ -12,6 +12,9 @@ import { useSubjectStore } from "../store/subjectStore";
 import { getDateString, getStudyDayString } from "../utils/time";
 import PhotoJournal from "../components/todo/PhotoJournal";
 import VideoPlayerModal from "../components/watch/VideoPlayerModal";
+import { requestPermission } from "../utils/notifications";
+import { subscribeToPush } from "../utils/push";
+import { formatTimeWindow, getTimeWindowState, getTodoStartMs, minutesBetween } from "../utils/todoTime";
 
 function addDays(dateStr, n) {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -83,6 +86,9 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
   const [subjectId, setSubjectId] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [estMins, setEstMins] = useState("");
+  const [startTime, setStartTime] = useState(""); // optional time limit, "HH:mm"
+  const [endTime, setEndTime] = useState("");
+  const [notifBlocked, setNotifBlocked] = useState(false);
   const [taskDate, setTaskDate] = useState(defaultDate || getStudyDayString());
   const [adding, setAdding] = useState(false);
   const [videoPickerOpen, setVideoPickerOpen] = useState(false);
@@ -111,9 +117,22 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
     setVideoPickerOpen(false);
   }
 
+  // Time limit validation — end ke liye start zaroori, aur end start ke baad
+  let timeError = "";
+  if (endTime && !startTime) timeError = "Pehle start time set karo";
+  else if (startTime && endTime && endTime <= startTime) timeError = "End time start ke baad ka hona chahiye";
+  const timeMins = startTime && endTime && !timeError ? minutesBetween(startTime, endTime) : null;
+
   async function handleAdd() {
-    if (!text.trim() || adding) return;
+    if (!text.trim() || adding || timeError) return;
     setAdding(true);
+    // Time limit wale todo ka start time aate hi notification chahiye —
+    // permission yahin (user ke tap pe) maangte hain aur push subscribe karte hain.
+    if (startTime) {
+      const granted = await requestPermission();
+      setNotifBlocked(!granted);
+      if (granted) subscribeToPush().catch(() => {});
+    }
     const sub = subjects.find((s) => (s.id || s._id) === subjectId);
     await onAdd({
       text: text.trim(),
@@ -121,13 +140,15 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
       subjectName: sub?.name || null,
       subjectColor: sub?.color || null,
       priority,
-      estMins: parseInt(estMins) || null,
+      estMins: parseInt(estMins) || timeMins || null,
+      startTime: startTime || null,
+      endTime: startTime && endTime ? endTime : null,
       done: false,
       date: taskDate,
       linkedWatchItem: linkedVideo || null,
     });
     setAdding(false);
-    setText(""); setEstMins(""); setLinkedVideo(null);
+    setText(""); setEstMins(""); setStartTime(""); setEndTime(""); setLinkedVideo(null);
     inputRef.current?.focus();
   }
 
@@ -175,6 +196,41 @@ function AddTaskModal({ subjects, onClose, onAdd, defaultDate }) {
               <input type="date" value={taskDate} onChange={(e) => setTaskDate(e.target.value)}
                 className="w-full bg-[#0f172a] border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-orange-500" />
             </div>
+          </div>
+
+          {/* Optional time limit — start time aate hi phone pe "Ye todo karna hai" notification aayegi */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-slate-500 flex items-center gap-1">
+                <i className="ti ti-alarm text-[11px]" /> Time limit (optional) · start time pe notification aayegi
+              </label>
+              {(startTime || endTime) && (
+                <button type="button" onClick={() => { setStartTime(""); setEndTime(""); }}
+                  className="text-[10px] text-slate-500 hover:text-red-400 transition-colors">Clear</button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2 bg-[#0f172a] border border-slate-700 rounded-lg px-2 py-1.5 focus-within:border-orange-500 transition-colors">
+                <span className="text-[10px] text-slate-500 w-8 flex-shrink-0">Start</span>
+                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
+                  className="flex-1 min-w-0 bg-transparent text-xs text-white focus:outline-none [color-scheme:dark]" />
+              </div>
+              <div className="flex items-center gap-2 bg-[#0f172a] border border-slate-700 rounded-lg px-2 py-1.5 focus-within:border-orange-500 transition-colors">
+                <span className="text-[10px] text-slate-500 w-8 flex-shrink-0">End</span>
+                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
+                  className="flex-1 min-w-0 bg-transparent text-xs text-white focus:outline-none [color-scheme:dark]" />
+              </div>
+            </div>
+            {timeError && <p className="text-[11px] text-red-400 mt-1">{timeError}</p>}
+            {!timeError && startTime && (
+              <p className="text-[11px] text-orange-400/90 mt-1 flex items-center gap-1">
+                <i className="ti ti-bell-ringing text-[11px]" />
+                {formatTimeWindow({ startTime, endTime })}{timeMins ? ` · ${formatEstTime(timeMins)}` : ""}
+              </p>
+            )}
+            {notifBlocked && (
+              <p className="text-[11px] text-amber-400 mt-1">Notification permission band hai — browser/app settings mein allow karo, tabhi reminder aayega.</p>
+            )}
           </div>
 
           {subjects.length > 0 && (
@@ -382,6 +438,19 @@ function GoalCard({ goal, subjects, onEdit, onDelete, onUpdateChapters }) {
 // ── Task Row ───────────────────────────────────────────────────────────────────
 function TaskRow({ task, onToggle, onDelete, onPlayVideo }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Time-limit chip live rakhne ke liye — sirf pending + timed task pe ticker chalta hai
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const hasWindow = !!task.startTime && !task.done;
+  useEffect(() => {
+    if (!hasWindow) return undefined;
+    const id = setInterval(() => setNowMs(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, [hasWindow]);
+  const windowState = hasWindow ? getTimeWindowState(task, nowMs) : null;
+  const windowChipClass = task.done ? "bg-slate-800/60 text-slate-500"
+    : windowState === "live" ? "bg-orange-500/15 text-orange-400 border border-orange-500/30"
+    : windowState === "overdue" ? "bg-red-500/10 text-red-400"
+    : "bg-slate-800 text-slate-400";
   const p = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG["Medium"];
   const video = task.linkedWatchItem;
 
@@ -405,11 +474,23 @@ function TaskRow({ task, onToggle, onDelete, onPlayVideo }) {
       )}
       <div className="flex-1 min-w-0">
         <p className={`text-sm transition-all ${task.done ? "line-through text-slate-500" : "text-slate-200"}`}>{task.text}</p>
-        {task.subjectName && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-md mt-0.5 inline-block"
-            style={{ backgroundColor: (task.subjectColor || "#f97316") + "22", color: task.subjectColor || "#fb923c" }}>
-            {task.subjectName}
-          </span>
+        {(task.subjectName || task.startTime) && (
+          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+            {task.subjectName && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-md inline-block"
+                style={{ backgroundColor: (task.subjectColor || "#f97316") + "22", color: task.subjectColor || "#fb923c" }}>
+                {task.subjectName}
+              </span>
+            )}
+            {task.startTime && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 ${windowChipClass}`}>
+                <i className="ti ti-clock text-[10px]" />
+                {formatTimeWindow(task)}
+                {windowState === "live" && <span className="font-semibold">· Abhi</span>}
+                {windowState === "overdue" && <span className="font-semibold">· Time nikal gaya</span>}
+              </span>
+            )}
+          </div>
         )}
       </div>
       {task.priority && (
@@ -943,7 +1024,15 @@ export default function Todo() {
     setGoals(updated); saveGoals(updated);
   }
 
-  const todayTasks = tasks.filter((t) => t.date === todayStr);
+  // Time-limit wale tasks upar, start time ke order mein; baaki jaise the waise
+  const todayTasks = tasks.filter((t) => t.date === todayStr).sort((a, b) => {
+    const aStart = a.startTime ? getTodoStartMs(a) : null;
+    const bStart = b.startTime ? getTodoStartMs(b) : null;
+    if (aStart != null && bStart != null) return aStart - bStart;
+    if (aStart != null) return -1;
+    if (bStart != null) return 1;
+    return 0;
+  });
   const upcomingTasks = tasks.filter((t) => t.date > todayStr);
   const upcomingGroups = groupByDate(upcomingTasks);
   const activeGoals = goals.filter((g) => (g.doneChapters || 0) < (g.totalChapters || 1) || !g.totalChapters);

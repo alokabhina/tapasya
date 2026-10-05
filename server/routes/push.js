@@ -10,6 +10,7 @@ import PushSubscription from '../models/PushSubscription.js'
 import User from '../models/User.js'
 import Session from '../models/Session.js'
 import { ensureConfigured, getPublicKey, sendPush } from '../utils/webpush.js'
+import { runTodoReminders } from '../utils/todoReminders.js'
 
 const router = express.Router()
 
@@ -164,5 +165,29 @@ cronRouter.all('/check', async (req, res) => {
     }
 
     res.json({ ok: true, slot, checked: subs.length, sent: sentCount })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── TODO TIME-LIMIT REMINDERS ───────────────────────────────────────────────
+// Jis todo ka startTime aa gaya, uska "Ye todo karna hai" push yahan se jaata hai.
+// Exact time ke liye ye endpoint har 1 minute hit hona chahiye — Vercel Hobby ke
+// built-in crons (din mein ek baar) kaafi nahi hain, isliye cron-job.org jaisa
+// external pinger lagao:
+//   URL:     https://<server-domain>/api/cron/push/todos
+//   Header:  x-cron-secret: <CRON_SECRET env var ki value>
+//   Every:   1 minute
+// Idempotent hai (Todo.remindedAt), to extra/overlapping pings se duplicate nahi aate.
+cronRouter.all('/todos', async (req, res) => {
+  const authHeader = req.headers['authorization']
+  const bearerSecret = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+  const secret = bearerSecret || req.headers['x-cron-secret']
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET)
+    return res.status(401).json({ error: 'Unauthorized' })
+
+  if (!ensureConfigured()) return res.status(503).json({ error: 'Push not configured' })
+
+  try {
+    const result = await runTodoReminders()
+    res.json({ ok: true, ...result })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

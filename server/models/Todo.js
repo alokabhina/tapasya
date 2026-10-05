@@ -11,6 +11,16 @@ const todoSchema = new mongoose.Schema({
   date:            String,
   priority:        { type: String, enum: ['High', 'Medium', 'Low'], default: 'Medium' },
   estMins:         Number,
+  // Optional time limit for this task — "HH:mm" (24h, IST wall-clock), e.g.
+  // startTime "12:00", endTime "13:00" = "12 baje se 1 baje tak". When
+  // startTime arrives, the server cron (routes/push.js -> /api/cron/push/todos
+  // -> utils/todoReminders.js) sends a Web Push so the phone shows
+  // "Ye todo karna hai" even with the app closed. Times before 03:00 belong to
+  // the NEXT calendar day of the study day in `date` (3am study-day rule).
+  startTime:       { type: String, match: /^([01]\d|2[0-3]):[0-5]\d$/ },
+  endTime:         { type: String, match: /^([01]\d|2[0-3]):[0-5]\d$/ },
+  // Set once the start-time push has gone out, so it never fires twice.
+  remindedAt:      Date,
   completedAt:     String,
   // Optional link to a YT Study Pathsala watchlist video. When set, marking
   // this todo done/undone also flips the linked WatchItem's `completed`
@@ -31,4 +41,6 @@ const todoSchema = new mongoose.Schema({
   },
 }, { timestamps: true })
 todoSchema.index({ userId: 1, date: 1 })
+// Reminder cron scans by date + done across all users
+todoSchema.index({ date: 1, done: 1 })
 export default mongoose.model('Todo', todoSchema)
