@@ -8,17 +8,16 @@ import MobileDrawer from './MobileDrawer';
 import ReportIssueModal from './ReportIssueModal';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
-// "Math" (Speed Math) used to sit in the 5th slot here — moved out to
-// declutter mobile (still reachable from the sidebar / Other Tools on
-// desktop, or via /speedmath directly) and replaced with a quick "Report"
-// action so an issue can be flagged from anywhere in the app, not just
-// mid-test (see components/practicetest/ReportQuestionModal.jsx for the
-// in-test version).
+// 5th slot is Practice Tests. "Report an issue" no longer has its own slot —
+// it lives in the More drawer (MobileDrawer's onReport) so it can still be
+// flagged from anywhere in the app, not just mid-test (see
+// components/practicetest/ReportQuestionModal.jsx for the in-test version).
 const MAIN_NAV = [
-  { to: '/',      icon: 'ti-home',      label: 'Home'  },
-  { to: '/vocab', icon: 'ti-language',  label: 'Vocab' },
-  { to: '/todo',  icon: 'ti-checkbox',  label: 'Todo'  },
-  { to: '/group', icon: 'ti-users',     label: 'Group' },
+  { to: '/',               icon: 'ti-home',           label: 'Home'     },
+  { to: '/vocab',          icon: 'ti-language',       label: 'Vocab'    },
+  { to: '/todo',           icon: 'ti-checkbox',       label: 'Todo'     },
+  { to: '/group',          icon: 'ti-users',          label: 'Group'    },
+  { to: '/practice-tests', icon: 'ti-clipboard-text', label: 'Practice' },
 ];
 
 export default function BottomNav() {
@@ -88,17 +87,6 @@ export default function BottomNav() {
             </NavLink>
           ))}
 
-          {/* Report button — opens ReportIssueModal, doesn't navigate */}
-          <button
-            onClick={() => setReportOpen(true)}
-            className="flex flex-col items-center justify-center flex-1 h-[56px] rounded-xl transition-all duration-200 text-slate-400 active:scale-95 active:text-slate-200"
-          >
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center">
-              <i className="ti ti-flag-3 text-[19px]" />
-            </div>
-            <span className="text-[10px] mt-0.5 font-medium">Report</span>
-          </button>
-
           {/* Hamburger button */}
           <button
             onClick={() => setDrawerOpen(true)}
@@ -115,7 +103,11 @@ export default function BottomNav() {
         </div>
       </nav>
 
-      <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <MobileDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onReport={() => { setDrawerOpen(false); setReportOpen(true); }}
+      />
       {reportOpen && <ReportIssueModal onClose={() => setReportOpen(false)} />}
     </>
   );

@@ -23,7 +23,7 @@ const SECONDARY_NAV = [
   { to: '/settings',     icon: 'ti-settings',  label: 'Settings',         desc: 'App preferences & account'  },
 ];
 
-export default function MobileDrawer({ open, onClose }) {
+export default function MobileDrawer({ open, onClose, onReport }) {
   const { user } = useAuth();
   const displayName = useUserStore((s) => s.displayName);
   const photoURL    = useUserStore((s) => s.photoURL);
@@ -120,6 +120,24 @@ export default function MobileDrawer({ open, onClose }) {
               )}
             </NavLink>
           ))}
+
+          {/* Report an issue — opens ReportIssueModal (owned by BottomNav), doesn't navigate */}
+          {onReport && (
+            <button
+              type="button"
+              onClick={onReport}
+              className="flex items-center gap-3 px-3 py-3 rounded-xl text-left text-slate-300 active:bg-slate-800/60 transition-all duration-150"
+            >
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-slate-800/70">
+                <i className="ti ti-flag-3 text-[20px]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium leading-tight">Report an issue</p>
+                <p className="text-xs text-slate-500 truncate">Bug ya galat question flag karo</p>
+              </div>
+              <i className="ti ti-chevron-right text-[14px] text-slate-600 ml-auto shrink-0" />
+            </button>
+          )}
         </div>
       </div>
     </>
