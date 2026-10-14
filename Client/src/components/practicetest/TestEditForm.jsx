@@ -22,6 +22,7 @@
 
 import { useState } from 'react'
 import { extractJson } from '@/constants/practiceTestImportPrompt'
+import GroupImagesEditor from './GroupImagesEditor'
 
 // Controlled number input jo kabhi galat value state me nahi jaane deta:
 //  - min/max: arrows aur typing dono me clamp (minus time/cutoff ab possible nahi)
@@ -105,6 +106,14 @@ export default function TestEditForm({ payload, onChange }) {
   function patchSection(index, fields) {
     const sections = payload.sections.map((s, i) => (i === index ? { ...s, ...fields } : s))
     onChange({ ...payload, sections })
+  }
+
+  // One image per direction group: applies to every question of that group.
+  function setGroupImage(sectionIndex, groupId, field, url) {
+    const section = payload.sections[sectionIndex]
+    patchSection(sectionIndex, {
+      directions: (section.directions || []).map((d) => (d.groupId === groupId ? { ...d, [field]: url } : d)),
+    })
   }
 
   function removeSection(index) {
@@ -257,6 +266,18 @@ export default function TestEditForm({ payload, onChange }) {
                 </button>
               </label>
             </div>
+
+            {section.questions?.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-700">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-2">
+                  <i className="ti ti-photo" /> Group Images
+                </p>
+                <GroupImagesEditor
+                  section={section}
+                  onSet={(groupId, field, url) => setGroupImage(i, groupId, field, url)}
+                />
+              </div>
+            )}
 
             {(!section.questions || section.questions.length === 0) && (
               <div className="mt-2 pt-2 border-t border-slate-700">

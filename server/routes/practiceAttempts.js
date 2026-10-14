@@ -17,9 +17,19 @@ router.use(authMiddleware)
 
 // Answer-stripping for the mid-test payload — kept local to this route
 // since it owns "what can the client see while an attempt is in-progress".
-function sanitizeQuestion({ correctKey, explanation, topic, topicRaw, ...q }) { return q }
+// solutionImageUrl (direction + question level) is answer material too — see
+// sanitizeForAttempt() in routes/practiceTests.js. Only /solutions reveals it.
+function sanitizeQuestion({ correctKey, explanation, topic, topicRaw, solutionImageUrl, ...q }) { return q }
+function sanitizeDirection({ solutionImageUrl, ...d }) { return d }
 function sanitizeTest(test) {
-  return { ...test, sections: test.sections.map((s) => ({ ...s, questions: s.questions.map(sanitizeQuestion) })) }
+  return {
+    ...test,
+    sections: test.sections.map((s) => ({
+      ...s,
+      directions: (s.directions || []).map(sanitizeDirection),
+      questions: s.questions.map(sanitizeQuestion),
+    })),
+  }
 }
 
 // POST /api/practice-attempts — start (or resume) an attempt. Body: { testId }

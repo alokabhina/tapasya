@@ -15,16 +15,23 @@ router.use(authMiddleware)
 // correctKey client-side. Same rule enforced again in practiceAttempts.js
 // for the resume payload, since that route owns a second copy of "what can
 // the client see mid-test".
+//
+// solutionImageUrl (direction-level AND question-level) is answer material —
+// e.g. a Direction Sense route diagram — so it is stripped here too and only
+// ever reaches the client through the post-submit /solutions endpoint.
 function sanitizeForAttempt(test) {
   const obj = test.toObject ? test.toObject() : test
   return {
     ...obj,
     sections: obj.sections.map((s) => ({
       ...s,
-      questions: s.questions.map(({ correctKey, explanation, topic, topicRaw, ...q }) => q),
+      directions: (s.directions || []).map(({ solutionImageUrl, ...d }) => d),
+      questions: s.questions.map(({ correctKey, explanation, topic, topicRaw, solutionImageUrl, ...q }) => q),
     })),
   }
 }
+
+const IMAGE_URL_RE = /^https:\/\/[^\s"'<>]+$/
 
 // ── Student-facing ───────────────────────────────────────────────────────
 
@@ -212,6 +219,57 @@ router.patch('/:id', practiceAdminMiddleware, async (req, res) => {
 
     await test.save()
     res.json(test)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// PATCH /api/practice-tests/:id/group-images — set/replace/clear the OPTIONAL
+// images of one direction group (or one standalone question), even after the
+// test already has attempts. Image URLs are presentation only — they never
+// touch questions/answers/scoring, so unlike a structural edit this is safe on
+// a live paper (no Clone needed just to add a forgotten diagram).
+// Body: { sectionIndex, groupId | qNo, imageUrl?, solutionImageUrl? }   ('' clears)
+router.patch('/:id/group-images', practiceAdminMiddleware, async (req, res) => {
+  try {
+    const { sectionIndex, groupId, qNo } = req.body
+    const test = await PracticeTest.findById(req.params.id)
+    if (!test) return res.status(404).json({ error: 'Not found' })
+    const section = test.sections[sectionIndex]
+    if (!section) return res.status(400).json({ error: 'sectionIndex galat hai' })
+
+    const target = groupId
+      ? section.directions.find((d) => d.groupId === groupId)
+      : section.questions.find((q) => q.qNo === qNo)
+    if (!target) return res.status(404).json({ error: groupId ? 'Direction group nahi mila' : 'Question nahi mila' })
+
+    for (const field of ['imageUrl', 'solutionImageUrl']) {
+      if (req.body[field] === undefined) continue
+      const u = typeof req.body[field] === 'string' ? req.body[field].trim() : ''
+      if (u && !IMAGE_URL_RE.test(u)) return res.status(400).json({ error: `${field} valid https:// link nahi hai` })
+      target[field] = u
+    }
+    test.markModified('sections')
+    await test.save()
+    res.json({ ok: true, imageUrl: target.imageUrl || '', solutionImageUrl: target.solutionImageUrl || '' })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// POST /api/practice-tests/bulk-delete — delete many tests in one request.
+// Same cascade as the single DELETE: attempts of any test that has them are
+// removed too (Mock Tracker rows stay, they're historical). Body: { ids: [...] }
+router.post('/bulk-delete', practiceAdminMiddleware, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? [...new Set(req.body.ids.filter(Boolean))] : []
+    if (ids.length === 0) return res.status(400).json({ error: 'Koi test select nahi hai' })
+    if (ids.length > 200) return res.status(400).json({ error: 'Ek baar me max 200 tests delete ho sakte hai' })
+    const tests = await PracticeTest.find({ _id: { $in: ids } }).select('_id hasAttempts').lean()
+    const withAttempts = tests.filter((t) => t.hasAttempts).map((t) => t._id)
+    if (withAttempts.length) await PracticeAttempt.deleteMany({ testId: { $in: withAttempts } })
+    const result = await PracticeTest.deleteMany({ _id: { $in: tests.map((t) => t._id) } })
+    res.json({ deleted: result.deletedCount ?? tests.length })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

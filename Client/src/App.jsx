@@ -69,6 +69,7 @@ const MockExamDashboard = lazy(() => import('./pages/MockExamDashboard'));
 // ── Practice Tests (live test-taking engine — separate from Mock Tracker's
 // self-report flow, see practice-test-feature-plan.md Section 0) ──────────
 const PracticeTests = lazy(() => import('./pages/PracticeTests'));
+const PracticeExamSubjects = lazy(() => import('./pages/PracticeExamSubjects'));
 const PracticeSubjectTests = lazy(() => import('./pages/PracticeSubjectTests'));
 const PracticeTestInstructions = lazy(() => import('./pages/PracticeTestInstructions'));
 const PracticeTestPlay = lazy(() => import('./pages/PracticeTestPlay'));
@@ -231,6 +232,7 @@ export default function App() {
             ['/practice-tests/result/:attemptId',           <PracticeTestResult />],
             ['/practice-tests/analysis/:attemptId',         <PracticeTestAnalysis />],
             ['/practice-tests/solutions/:attemptId',        <PracticeTestSolutions />],
+            ['/practice-tests/exam/:examId',                <PracticeExamSubjects />],
             ['/practice-tests/:subjectId',                  <PracticeSubjectTests />],
             ['/practice-tests/:subjectId/:testId',          <PracticeTestInstructions />],
             // ── Practice Arena routes ─────────────────────────────────────

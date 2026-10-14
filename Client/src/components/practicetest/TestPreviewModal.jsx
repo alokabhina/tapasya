@@ -22,8 +22,10 @@
 import { useState } from 'react'
 import SplitQuestionView from './SplitQuestionView'
 import { isAnswerUnverified } from '@/constants/practiceTestImportPrompt'
+import ImageSlot from './ImageSlot'
+import ZoomImage from './ZoomImage'
 
-function EditQuestionForm({ question, onPatch }) {
+function EditQuestionForm({ question, direction, groupQNos, onPatch, onPatchDirection }) {
   function patchOption(key, text) {
     onPatch({ options: question.options.map((o) => (o.key === key ? { ...o, text } : o)) })
   }
@@ -75,6 +77,50 @@ function EditQuestionForm({ question, onPatch }) {
           rows={3}
           placeholder="Solving steps / reasoning..."
           className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-slate-800 text-xs focus:outline-none focus:border-tapasya-orange/50"
+        />
+      </div>
+
+      {/* Shared (group) images — ek upload, group ke saare questions ke liye */}
+      {direction && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-3">
+          <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wide mb-0.5">
+            Group images — {groupQNos}
+          </p>
+          <p className="text-[10px] text-slate-400 mb-2">Ek image upload karo, group ke saare questions ke saath lag jayegi.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <ImageSlot
+              variant="light"
+              label="Question image"
+              hint="Puzzle / DI figure — test me directions ke saath"
+              value={direction.imageUrl || ''}
+              onChange={(url) => onPatchDirection({ imageUrl: url })}
+            />
+            <ImageSlot
+              variant="light"
+              label="Solution image"
+              hint="Answer diagram — sirf Solutions me, har question ke saath"
+              value={direction.solutionImageUrl || ''}
+              onChange={(url) => onPatchDirection({ solutionImageUrl: url })}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Is question ki apni image (standalone question ya question-specific figure) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <ImageSlot
+          variant="light"
+          label="This question's image"
+          hint={direction ? 'Sirf is ek question ke liye (group image upar hai)' : 'Question ke saath dikhegi'}
+          value={question.imageUrl || ''}
+          onChange={(url) => onPatch({ imageUrl: url })}
+        />
+        <ImageSlot
+          variant="light"
+          label="This question's solution image"
+          hint="Sirf Solutions me, is question ke explanation ke saath"
+          value={question.solutionImageUrl || ''}
+          onChange={(url) => onPatch({ solutionImageUrl: url })}
         />
       </div>
 
@@ -155,6 +201,22 @@ export default function TestPreviewModal({ sections, onClose, onChange }) {
     onChange(updatedSections)
   }
 
+  // Group-level image edit (direction object) — patches the matching direction in this section.
+  function patchDirection(fields) {
+    if (!onChange || !question.groupId) return
+    onChange(sections.map((s, si) => (si !== sectionIndex ? s : {
+      ...s,
+      directions: (s.directions || []).map((d) => (d.groupId === question.groupId ? { ...d, ...fields } : d)),
+    })))
+  }
+
+  const groupQNos = (() => {
+    if (!question.groupId) return ''
+    const nums = section.questions.filter((q) => q.groupId === question.groupId).map((q) => q.qNo).sort((a, b) => a - b)
+    return nums.length > 1 ? `Q${nums[0]}–Q${nums[nums.length - 1]} (${nums.length} Qs)` : `Q${nums[0]}`
+  })()
+  const solutionImages = [direction?.solutionImageUrl, question.solutionImageUrl].filter(Boolean)
+
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-white text-slate-800">
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 gap-2">
@@ -196,7 +258,13 @@ export default function TestPreviewModal({ sections, onClose, onChange }) {
       <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
           {isEditing ? (
-            <EditQuestionForm question={question} onPatch={patchQuestion} />
+            <EditQuestionForm
+              question={question}
+              direction={direction}
+              groupQNos={groupQNos}
+              onPatch={patchQuestion}
+              onPatchDirection={patchDirection}
+            />
           ) : (
             <SplitQuestionView
               question={question}
@@ -237,6 +305,9 @@ export default function TestPreviewModal({ sections, onClose, onChange }) {
                   Correct: {question.correctKey}
                 </span>
                 {question.explanation && <p className="mt-1 opacity-80 whitespace-pre-wrap">{question.explanation}</p>}
+                {solutionImages.map((url) => (
+                  <div key={url} className="mt-2"><ZoomImage src={url} alt="Solution figure" /></div>
+                ))}
                 <p className="mt-1 opacity-60">{question.topic}{question.subTopic ? ` · ${question.subTopic}` : ''} · {question.difficulty}</p>
               </div>
             </div>

@@ -3,6 +3,10 @@
 // Test 1", "Speed Math Test 2" under the "Quant" subject. Published tests
 // only; draft tests are admin-panel-only (PracticeAdminSubjects.jsx).
 //
+// Folders: agar is subject ke andar folders bane hai (admin ne banaye) to wo
+// tests ke upar folder cards me dikhte hai; folder kholne par uske apne tests.
+// Folder page par back button parent subject par le jata hai.
+//
 // Round-3: rebuilt to match the reference design — badge pills instead of
 // plain icon+text, and for an attempted test a "Last Attempt <date>" row +
 // Score/Percentage + progress bar plus Solution/Analysis/Reattempt buttons
@@ -12,7 +16,7 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getPracticeSubject } from '@/api/practiceSubjects'
+import { getPracticeSubject, getPracticeFolders } from '@/api/practiceSubjects'
 import { getPracticeTests } from '@/api/practiceTests'
 
 function formatDuration(totalSec) {
@@ -33,11 +37,15 @@ export default function PracticeSubjectTests() {
   const navigate = useNavigate()
   const [subject, setSubject] = useState(null)
   const [tests, setTests] = useState(null)
+  const [folders, setFolders] = useState([])
   const [error, setError] = useState('')
 
   useEffect(() => {
+    // subject <-> folder navigate karne par same component reuse hota hai — purana data hata do
+    setSubject(null); setTests(null); setFolders([]); setError('')
     getPracticeSubject(subjectId).then(setSubject).catch(() => setError('Subject nahi mila'))
     getPracticeTests(subjectId).then(setTests).catch(() => setError('Tests load nahi ho paye'))
+    getPracticeFolders(subjectId).then(setFolders).catch(() => setFolders([]))
     import('./PracticeTestInstructions').catch(() => {})
     import('./PracticeTestResult').catch(() => {})
   }, [subjectId])
@@ -45,10 +53,14 @@ export default function PracticeSubjectTests() {
   return (
     <div className="min-h-screen px-4 py-6 md:px-8 bg-[#0f172a]">
       <button
-        onClick={() => navigate('/practice-tests')}
+        onClick={() => navigate(
+          subject?.parentId ? `/practice-tests/${subject.parentId}`
+            : subject?.examId ? `/practice-tests/exam/${subject.examId}`
+            : '/practice-tests'
+        )}
         className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200 mb-3"
       >
-        <i className="ti ti-arrow-left" /> Practice Tests
+        <i className="ti ti-arrow-left" /> {subject?.parentId ? (subject.parentName || 'Back') : 'Subjects'}
       </button>
 
       <div className="flex items-center gap-3 mb-5">
@@ -59,8 +71,16 @@ export default function PracticeSubjectTests() {
           {subject?.name?.[0]?.toUpperCase() || '·'}
         </div>
         <div>
-          <h1 className="text-xl font-black text-white">{subject?.name || 'Loading...'}</h1>
-          <p className="text-slate-500 text-xs">{tests?.length ?? 0} test{tests?.length === 1 ? '' : 's'} available</p>
+          <h1 className="text-xl font-black text-white flex items-center gap-2">
+            {subject?.name || 'Loading...'}
+            {subject?.isOptional && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-tapasya-orange/15 text-tapasya-orange">Optional</span>
+            )}
+          </h1>
+          <p className="text-slate-500 text-xs">
+            {tests?.length ?? 0} test{tests?.length === 1 ? '' : 's'} available
+            {folders.length > 0 ? ` · ${folders.length} folder${folders.length === 1 ? '' : 's'}` : ''}
+          </p>
         </div>
       </div>
 
@@ -74,7 +94,35 @@ export default function PracticeSubjectTests() {
         </div>
       )}
 
-      {tests?.length === 0 && (
+      {folders.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+          {folders.map((f) => (
+            <button
+              key={f._id}
+              onClick={() => navigate(`/practice-tests/${f._id}`)}
+              className="text-left rounded-2xl px-4 py-4 flex items-center gap-3 active:scale-[0.98] transition-transform"
+              style={{ background: 'linear-gradient(135deg, #101a30 0%, #0d1728 100%)', border: `1px solid ${f.color}30` }}
+            >
+              <div
+                className="w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0"
+                style={{ background: `${f.color}20`, color: f.color }}
+              >
+                <i className="ti ti-folder" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-white font-bold text-sm truncate flex items-center gap-1.5">
+                  {f.name}
+                  {f.isOptional && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-tapasya-orange/15 text-tapasya-orange">Optional</span>}
+                </p>
+                <p className="text-slate-500 text-xs mt-0.5">{f.testCount} test{f.testCount === 1 ? '' : 's'}</p>
+              </div>
+              <i className="ti ti-chevron-right text-slate-500" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tests?.length === 0 && folders.length === 0 && (
         <div className="text-center py-16 text-slate-500">
           <i className="ti ti-file-off text-4xl mb-2 block" />
           <p className="text-sm">Is subject mein abhi koi test published nahi hai.</p>

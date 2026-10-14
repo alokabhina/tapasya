@@ -19,6 +19,7 @@ import { memo, useMemo, useState, useEffect } from 'react'
 import { sanitizeHtml } from '@/utils/sanitizeHtml'
 import { formatReasoningText } from '@/utils/formatDirectionText'
 import useMediaQuery from '@/hooks/useMediaQuery'
+import ZoomImage from './ZoomImage'
 
 const FONT_LEVELS = [
   { question: 16, option: 15, direction: 14 },
@@ -61,6 +62,8 @@ function SplitQuestionView({ question, direction, qNo, selectedKey, onSelectOpti
         style={{ fontSize: sizes.question }}
         dangerouslySetInnerHTML={{ __html: safeQuestionHtml }}
       />
+      {/* optional per-question figure (standalone questions / question-specific diagram) */}
+      {question.imageUrl && <ZoomImage src={question.imageUrl} alt={`Question ${qNo} figure`} />}
       <div className="flex flex-col gap-2" role="radiogroup">
         {question.options.map((opt) => {
           const isSelected = selectedKey === opt.key
@@ -105,6 +108,12 @@ function SplitQuestionView({ question, direction, qNo, selectedKey, onSelectOpti
         style={{ fontSize: sizes.direction }}
         dangerouslySetInnerHTML={{ __html: safeDirectionHtml }}
       />
+      {/* optional shared figure — ONE image serves every question of this group (puzzle / DI) */}
+      {direction.imageUrl && (
+        <div className="mt-3">
+          <ZoomImage src={direction.imageUrl} alt={direction.title || 'Directions figure'} />
+        </div>
+      )}
     </>
   )
 
@@ -148,7 +157,7 @@ function SplitQuestionView({ question, direction, qNo, selectedKey, onSelectOpti
   // Mode 2b: phone portrait — passage panel on top (first question), question below
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white">
-      <div className="shrink-0 border-b border-slate-200 bg-slate-50 flex flex-col" style={{ maxHeight: '40%' }}>
+      <div className="shrink-0 border-b border-slate-200 bg-slate-50 flex flex-col" style={{ maxHeight: direction.imageUrl ? '60%' : '40%' }}>
         <button type="button" onClick={() => setPassageOpen(false)}
           className="shrink-0 flex items-center justify-between px-3.5 py-2 text-xs font-bold text-slate-600 uppercase tracking-wide active:bg-slate-100">
           <span className="flex items-center gap-1.5"><i className="ti ti-file-text text-sm" /> Directions / Passage</span>

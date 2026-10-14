@@ -137,6 +137,16 @@ RULES:
       imperfect output here isn't catastrophic) — but get it right in the JSON directly where you
       can, since that's more reliable than any regex-based cleanup.
 
+12. FIGURES / DIAGRAMS — an image cannot go inside JSON. When a question group depends on a
+    diagram (Direction Sense route, seating-arrangement figure, DI chart, figure series...):
+    - Describe the figure in words inside the direction "content" (or questionText) as faithfully
+      as you can — every label, number and distance you can actually read. Never skip it silently.
+    - Keep all questions that share that figure under ONE groupId (one direction object). The admin
+      attaches a single image to that group in the app and it applies to every question of the group.
+    - Do NOT write image URLs, markdown images (![](...)) or placeholders like [IMG] anywhere.
+    - For such questions prefer the paper's official answer key. If you could not read the figure
+      reliably, follow rule 3d (start the explanation with "ANSWER NOT VERIFIED: ").
+
 SCHEMA:
 {
   "title": string,

@@ -25,6 +25,8 @@ import pdfRoutes      from './routes/pdfs.js'
 import mockExamsRoutes from './routes/mockExams.js'
 import practiceSubjectsRoutes from './routes/practiceSubjects.js'
 import practiceTestsRoutes from './routes/practiceTests.js'
+import practiceExamsRoutes from './routes/practiceExams.js'
+import practiceUploadRoutes from './routes/practiceUpload.js'
 import practiceAttemptsRoutes from './routes/practiceAttempts.js'
 import practiceLeaderboardRoutes from './routes/practiceLeaderboard.js'
 import currentAffairsRoutes from './routes/currentAffairs.js'
@@ -83,7 +85,9 @@ app.use('/api/channels',  channelRoutes)
 app.use('/api/folders',   folderRoutes)
 app.use('/api/pdfs',      pdfRoutes)
 app.use('/api/mock-exams', mockExamsRoutes)
+app.use('/api/practice-exams',      practiceExamsRoutes)
 app.use('/api/practice-subjects',   practiceSubjectsRoutes)
+app.use('/api/practice-upload',     practiceUploadRoutes)
 app.use('/api/practice-tests',      practiceTestsRoutes)
 app.use('/api/practice-attempts',   practiceAttemptsRoutes)
 app.use('/api/practice-leaderboard', practiceLeaderboardRoutes)

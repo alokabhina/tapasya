@@ -25,6 +25,23 @@ export async function getPracticeTestAttemptPayload(id) {
 
 // ── Admin ─────────────────────────────────────────────────────────────────
 
+// Uploads one (already-compressed) image for a direction group / question.
+// Returns the hosted URL. Admin-only on the server.
+export async function uploadPracticeImage(file) {
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await api.post('/practice-upload/image', fd)
+  return res.data.url
+}
+
+// Sets/replaces/clears the optional image(s) of one direction group (groupId)
+// or one standalone question (qNo) — allowed even after the test has attempts.
+// body: { sectionIndex, groupId | qNo, imageUrl?, solutionImageUrl? }
+export async function setPracticeGroupImage(id, body) {
+  const res = await api.patch(`/practice-tests/${id}/group-images`, body)
+  return res.data
+}
+
 export async function getAdminPracticeTests(subjectId) {
   const res = await api.get('/practice-tests/admin/all', { params: subjectId ? { subjectId } : {} })
   return res.data
@@ -55,6 +72,12 @@ export async function updatePracticeTest(id, updates) {
 // Escape hatch once a test already has attempts — see plan doc Section 8.3.
 export async function clonePracticeTest(id) {
   const res = await api.post(`/practice-tests/${id}/clone`)
+  return res.data
+}
+
+// Many tests in one request. Returns { deleted: n }.
+export async function bulkDeletePracticeTests(ids) {
+  const res = await api.post('/practice-tests/bulk-delete', { ids })
   return res.data
 }
 

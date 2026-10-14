@@ -26,6 +26,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { getPracticeSolutions } from '@/api/practiceAttempts'
 import { sanitizeHtml } from '@/utils/sanitizeHtml'
+import ZoomImage from '@/components/practicetest/ZoomImage'
 import { formatReasoningText } from '@/utils/formatDirectionText'
 import AttemptSwitcher from '@/components/practicetest/AttemptSwitcher'
 
@@ -97,7 +98,10 @@ function StatChip({ status, value }) {
   )
 }
 
-function QuestionCard({ q, highlighted, scrollMarginTop }) {
+// solutionImage = the group's shared solution diagram (direction.solutionImageUrl) —
+// one upload shows up under EVERY question of that group's explanation.
+function QuestionCard({ q, highlighted, scrollMarginTop, solutionImage }) {
+  const solutionImages = [solutionImage, q.solutionImageUrl].filter(Boolean)
   const status = statusOf(q)
   const meta = STATUS_META[status]
   const hasCommunityTime = q.avgTimeSec != null && q.avgTimeSampleSize >= 3
@@ -126,6 +130,7 @@ function QuestionCard({ q, highlighted, scrollMarginTop }) {
         className="text-[15px] leading-relaxed text-slate-100 mb-3.5 whitespace-pre-wrap"
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatReasoningText(q.questionText)) }}
       />
+      {q.imageUrl && <div className="mb-3.5"><ZoomImage src={q.imageUrl} alt={`Question ${q.qNo} figure`} /></div>}
 
       <div className="space-y-1.5 mb-3.5">
         {options.map((opt, oi) => {
@@ -163,12 +168,17 @@ function QuestionCard({ q, highlighted, scrollMarginTop }) {
         })}
       </div>
 
-      {q.explanation && (
+      {(q.explanation || solutionImages.length > 0) && (
         <div className="rounded-xl bg-slate-800/50 border border-slate-800 px-3.5 py-3 text-[13px] leading-relaxed text-slate-300 mb-3">
           <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-tapasya-orange mb-1">
             <i className="ti ti-bulb" /> Explanation
           </p>
-          <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatReasoningText(q.explanation)) }} />
+          {q.explanation && (
+            <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatReasoningText(q.explanation)) }} />
+          )}
+          {solutionImages.map((url) => (
+            <div key={url} className="mt-2.5"><ZoomImage src={url} alt="Solution figure" /></div>
+          ))}
         </div>
       )}
 
@@ -416,10 +426,19 @@ export default function PracticeTestSolutions() {
                         className="text-[13px] leading-relaxed text-slate-400 whitespace-pre-wrap [&_table]:whitespace-normal"
                         dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatReasoningText(direction.content, { isDirection: true })) }}
                       />
+                      {direction.imageUrl && (
+                        <div className="mt-2.5"><ZoomImage src={direction.imageUrl} alt={direction.title || 'Directions figure'} /></div>
+                      )}
                     </div>
                   )}
                   {g.questions.map((q) => (
-                    <QuestionCard key={q.qNo} q={q} highlighted={q.qNo === jumpQNo} scrollMarginTop={headerH + 12} />
+                    <QuestionCard
+                      key={q.qNo}
+                      q={q}
+                      highlighted={q.qNo === jumpQNo}
+                      scrollMarginTop={headerH + 12}
+                      solutionImage={direction?.solutionImageUrl}
+                    />
                   ))}
                 </div>
               )

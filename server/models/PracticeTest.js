@@ -14,7 +14,19 @@ const directionSchema = new mongoose.Schema({
   groupId: { type: String, required: true },
   type:    { type: String, enum: ['passage', 'puzzle', 'data-table', 'sentence-set', 'instruction'], required: true },
   title:   { type: String, default: '' },
-  content: { type: String, required: true }, // HTML allowed (paragraphs/tables) — sanitized on render, not on save
+  // HTML allowed (paragraphs/tables) — sanitized on render, not on save.
+  // Not `required` any more: a direction can be image-only (validator makes
+  // sure at least one of content / imageUrl is present).
+  content: { type: String, default: '' },
+
+  // OPTIONAL shared images — ONE upload serves every question in this group.
+  //   imageUrl         -> shown in the directions panel during the test AND in
+  //                       Solutions (Puzzle diagram / DI chart / table-as-image)
+  //   solutionImageUrl -> shown ONLY in Solutions, under every question of the
+  //                       group (Direction Sense route diagram from the answer
+  //                       key). Stripped from every live-attempt payload.
+  imageUrl:         { type: String, default: '' },
+  solutionImageUrl: { type: String, default: '' },
 }, { _id: false })
 
 const optionSchema = new mongoose.Schema({
@@ -29,6 +41,12 @@ const questionSchema = new mongoose.Schema({
   options:      { type: [optionSchema], required: true },
   correctKey:   { type: String, required: true },
   explanation:  { type: String, default: '' },
+
+  // OPTIONAL per-question images, for standalone questions (no groupId) or a
+  // question-specific figure. Same split as the direction fields: imageUrl is
+  // visible during the test, solutionImageUrl only in Solutions.
+  imageUrl:         { type: String, default: '' },
+  solutionImageUrl: { type: String, default: '' },
 
   // Topic normalization — utils/topicNormalizer.js resolves whatever the AI
   // gave into `topic` before save; `topicRaw` keeps the original for audit.

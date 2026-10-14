@@ -8,12 +8,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { getPracticeSubjects, isPracticeAdmin } from '@/api/practiceSubjects'
+import { getPracticeExams } from '@/api/practiceExams'
 import {
   getPracticeTestFull, validatePracticeTestPayload, createPracticeTest, updatePracticeTest,
+  setPracticeGroupImage,
 } from '@/api/practiceTests'
 import { PRACTICE_TEST_IMPORT_PROMPT, extractJson } from '@/constants/practiceTestImportPrompt'
 import TestPreviewModal from '@/components/practicetest/TestPreviewModal'
 import TestEditForm from '@/components/practicetest/TestEditForm'
+import GroupImagesEditor from '@/components/practicetest/GroupImagesEditor'
 
 // Converts a full test doc (from getPracticeTestFull) into the same
 // payload shape the AI-JSON import uses, so TestEditForm can edit an
@@ -40,6 +43,8 @@ function testDocToPayload(t) {
         options: q.options,
         correctKey: q.correctKey,
         explanation: q.explanation || '',
+        imageUrl: q.imageUrl || '',
+        solutionImageUrl: q.solutionImageUrl || '',
         topic: q.topic,
         subTopic: q.subTopic || '',
         difficulty: q.difficulty || 'medium',
@@ -58,8 +63,11 @@ export default function PracticeAdminUpload() {
   const fileInputRef = useRef(null)
 
   const [checking, setChecking] = useState(true)
+  const [exams, setExams] = useState([])
+  const [examId, setExamId] = useState('')
   const [subjects, setSubjects] = useState([])
   const [subjectId, setSubjectId] = useState('')
+  const [metaSections, setMetaSections] = useState(null) // attempted test: sections for the images-only editor
   const [rawJson, setRawJson] = useState('')
   const [parsed, setParsed] = useState(null)
   const [parseError, setParseError] = useState('')
@@ -75,12 +83,14 @@ export default function PracticeAdminUpload() {
     isPracticeAdmin().then((ok) => {
       if (!ok) { navigate('/practice-tests', { replace: true }); return }
       setChecking(false)
+      getPracticeExams().then(setExams).catch(() => {})
       getPracticeSubjects().then(setSubjects).catch(() => {})
       if (editingTestId) {
         getPracticeTestFull(editingTestId).then((t) => {
           setExistingTest(t)
           setSubjectId(t.subjectId)
           setMetaOnly(!!t.hasAttempts)
+          if (t.hasAttempts) setMetaSections(t.sections || [])
           if (t.sourceJson) setRawJson(JSON.stringify(t.sourceJson, null, 2))
           // Seed the structured edit form straight from the saved test —
           // admin can tweak section details without re-pasting JSON.
@@ -90,6 +100,48 @@ export default function PracticeAdminUpload() {
     }).catch(() => navigate('/practice-tests', { replace: true }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Exam -> Subject cascade: subject list is filtered by the chosen exam.
+  // Top-level subject ke turant baad uske folders ("Quant › Optional Papers") —
+  // test folder me bhi upload ho sakta hai, same subjectId flow se.
+  const examSubjects = (() => {
+    const inExam = subjects.filter((s) => s.examId === examId)
+    const out = []
+    for (const s of inExam.filter((x) => !x.parentId)) {
+      out.push(s)
+      out.push(...inExam.filter((f) => f.parentId === s._id))
+    }
+    return out
+  })()
+  const subjectOptionLabel = (s) => {
+    if (!s.parentId) return s.name + (s.isOptional ? ' (Optional)' : '')
+    const parent = subjects.find((x) => x._id === s.parentId)
+    return `${parent?.name || ''} › ${s.name}` + (s.isOptional ? ' (Optional)' : '')
+  }
+  const examName = exams.find((x) => x._id === examId)?.name || ''
+  // examTag khaali ho to exam ka naam lagao — Mock Tracker grouping ke liye consistent rahe
+  const withExamTag = (p) => (p && !String(p.examTag || '').trim() && examName ? { ...p, examTag: examName } : p)
+
+  function handleExamChange(id) {
+    setExamId(id)
+    setSubjectId('')
+    setParsed(null)
+    setValidation(null)
+  }
+
+  // Attempted test: images are presentation-only, so they save straight to the server
+  // (no structural edit, no re-validate) and the local copy is updated on success.
+  async function handleMetaSetImage(sectionIndex, groupId, field, url) {
+    try {
+      await setPracticeGroupImage(editingTestId, { sectionIndex, groupId, [field]: url })
+      setMetaSections((secs) => secs.map((s, si) => (si !== sectionIndex ? s : {
+        ...s,
+        directions: (s.directions || []).map((d) => (d.groupId === groupId ? { ...d, [field]: url } : d)),
+      })))
+    } catch (e) {
+      alert(e?.response?.data?.error || 'Image save nahi ho payi')
+    }
+  }
 
   function handleCopyPrompt() {
     navigator.clipboard.writeText(PRACTICE_TEST_IMPORT_PROMPT)
@@ -105,24 +157,34 @@ export default function PracticeAdminUpload() {
     reader.readAsText(file)
   }
 
-  function handleParse() {
+  // Parses the pasted JSON and RETURNS it (or null on error). Returning the value is
+  // the point: setParsed() is async, so Validate/Publish used to need a 2nd click —
+  // the 1st click only parsed, and `parsed` was still null when the same handler
+  // continued. Callers now use the returned value directly, in the same click.
+  function parseNow() {
     setParseError('')
     setValidation(null)
     try {
       const json = extractJson(rawJson)
       setParsed(json)
+      return json
     } catch (e) {
       setParsed(null)
       setParseError(e.message || 'JSON parse nahi ho paya')
+      return null
     }
   }
 
+  function handleParse() { parseNow() }
+
   async function handleValidate() {
-    if (!parsed) { handleParse(); return }
-    if (!subjectId) { alert('Pehle subject select karo'); return }
+    if (validating) return
+    const payload = parsed || parseNow()
+    if (!payload) return
+    if (!subjectId) { alert('Pehle exam aur subject select karo'); return }
     setValidating(true)
     try {
-      const result = await validatePracticeTestPayload(parsed, subjectId)
+      const result = await validatePracticeTestPayload(withExamTag(payload), subjectId)
       setValidation(result)
       // Seed the structured edit form with the normalized result (proper
       // defaults filled in — marksWrong/cutoff/etc.) so it opens editable
@@ -135,20 +197,22 @@ export default function PracticeAdminUpload() {
 
   async function handleSave(publish) {
     if (saving) return
+    let payload = parsed
     if (!metaOnly) {
-      if (!parsed) { handleParse(); return }
-      if (!subjectId) { alert('Subject select karo'); return }
+      payload = parsed || parseNow()
+      if (!payload) return
+      if (!editingTestId && !subjectId) { alert('Exam aur subject select karo'); return }
     }
     setSaving(true)
     try {
       if (editingTestId) {
         const body = { status: publish ? 'published' : 'draft' }
-        if (parsed && !metaOnly) body.payload = parsed
+        if (payload && !metaOnly) body.payload = payload
         const updated = await updatePracticeTest(editingTestId, body)
         alert('Test update ho gaya')
         navigate('/practice-tests/admin')
       } else {
-        const created = await createPracticeTest({ subjectId, payload: parsed, publish })
+        const created = await createPracticeTest({ subjectId, payload: withExamTag(payload), publish })
         alert(publish ? 'Test published ho gaya' : 'Draft save ho gaya')
         navigate('/practice-tests/admin')
       }
@@ -171,23 +235,55 @@ export default function PracticeAdminUpload() {
       </h1>
       <p className="text-slate-500 text-xs mb-5">
         {metaOnly
-          ? 'Is test pe attempts ho chuke hai — sirf status change ho sakta hai. Questions edit karne ke liye "Clone as new test" use karo.'
+          ? 'Is test pe attempts ho chuke hai — questions/answers edit nahi ho sakte (Clone as new test use karo), lekin neeche se diagram images add/change kar sakte ho aur status badal sakte ho.'
           : editingTestId
           ? 'Neeche section details edit kar sakte ho, ya naya AI-JSON paste karke poora test revalidate/replace kar sakte ho.'
           : 'Ek AI-generated JSON paste ya upload karo, validate karo, phir publish.'}
       </p>
 
       {!editingTestId && (
-        <div className="mb-4">
-          <label className="text-xs text-slate-400 mb-1 block">Subject</label>
-          <select
-            value={subjectId}
-            onChange={(e) => setSubjectId(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 text-sm"
-          >
-            <option value="">Select subject...</option>
-            {subjects.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
-          </select>
+        <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Exam</label>
+            <select
+              value={examId}
+              onChange={(e) => handleExamChange(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 text-sm"
+            >
+              <option value="">Select exam...</option>
+              {exams.map((x) => <option key={x._id} value={x._id}>{x.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Subject</label>
+            <select
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+              disabled={!examId}
+              className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 text-sm disabled:opacity-50"
+            >
+              <option value="">{examId ? 'Select subject...' : 'Pehle exam chuno'}</option>
+              {examSubjects.map((s) => <option key={s._id} value={s._id}>{subjectOptionLabel(s)}</option>)}
+            </select>
+            {examId && examSubjects.length === 0 && (
+              <p className="text-[11px] text-amber-400 mt-1">Is exam me abhi koi subject nahi — Admin page se banao.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {metaOnly && metaSections && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-4 mb-4 space-y-4">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wide"><i className="ti ti-photo" /> Group Images</p>
+          {metaSections.map((section, si) => (
+            <div key={si}>
+              <p className="text-xs font-semibold text-slate-300 mb-1.5">{section.name}</p>
+              <GroupImagesEditor
+                section={section}
+                onSet={(groupId, field, url) => handleMetaSetImage(si, groupId, field, url)}
+              />
+            </div>
+          ))}
         </div>
       )}
 
@@ -274,7 +370,13 @@ export default function PracticeAdminUpload() {
       )}
 
       {!metaOnly && parsed && (editingTestId || validation?.valid) && (
-        <TestEditForm payload={parsed} onChange={setParsed} />
+        <>
+          <TestEditForm payload={parsed} onChange={setParsed} />
+          <p className="text-[11px] text-slate-500 -mt-2 mb-4">
+            Tip: puzzle / DI / direction-sense jaise groups ki image upar har section ke <b>Group Images</b> me ek baar upload karo (optional) —
+            wo group ke saare questions ke saath lag jayegi. Standalone question ki image Preview &amp; Verify → Edit me milegi.
+          </p>
+        </>
       )}
 
       <div className="flex gap-2">

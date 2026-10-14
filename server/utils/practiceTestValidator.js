@@ -9,6 +9,16 @@ import { resolveSubTopic } from './subTopicInference.js'
 const DIRECTION_TYPES = ['passage', 'puzzle', 'data-table', 'sentence-set', 'instruction']
 const DIFFICULTIES = ['easy', 'medium', 'hard']
 
+// Optional image fields (direction.imageUrl / solutionImageUrl and the same two
+// on a question). Empty is fine; anything else must be a plain https URL —
+// no spaces / quotes / angle brackets, since the URL ends up inside an <img src>.
+const IMAGE_URL_RE = /^https:\/\/[^\s"'<>]+$/
+function imageUrlOf(v) { return typeof v === 'string' ? v.trim() : '' }
+function checkImageUrl(v, label, errors) {
+  const u = imageUrlOf(v)
+  if (u && !IMAGE_URL_RE.test(u)) errors.push(`${label}: image URL valid https:// link hona chahiye`)
+}
+
 // existingTopics: every distinct topic already used under the target
 // subject — passed in by the route so fuzzy-matching (topicNormalizer.js)
 // has something real to compare against.
@@ -55,8 +65,19 @@ export function validatePracticeTestPayload(payload, existingTopics = []) {
       if (directionIds.has(d.groupId)) errors.push(`${label}: duplicate direction groupId "${d.groupId}"`)
       directionIds.add(d.groupId)
       if (!DIRECTION_TYPES.includes(d.type)) errors.push(`${label}, direction "${d.groupId}": type in mein se ek hona chahiye — ${DIRECTION_TYPES.join(', ')}`)
-      if (!d.content?.trim()) errors.push(`${label}, direction "${d.groupId}": content required hai`)
+      // content ya image — dono me se ek zaroor (image-only puzzle/DI allowed)
+      if (!d.content?.trim() && !imageUrlOf(d.imageUrl)) errors.push(`${label}, direction "${d.groupId}": content ya imageUrl me se ek required hai`)
+      checkImageUrl(d.imageUrl, `${label}, direction "${d.groupId}" imageUrl`, errors)
+      checkImageUrl(d.solutionImageUrl, `${label}, direction "${d.groupId}" solutionImageUrl`, errors)
     })
+    const cleanDirections = directions.map((d) => ({
+      groupId: d?.groupId,
+      type: d?.type,
+      title: d?.title || '',
+      content: d?.content || '',
+      imageUrl: imageUrlOf(d?.imageUrl),
+      solutionImageUrl: imageUrlOf(d?.solutionImageUrl),
+    }))
 
     const seenQNos = new Set()
     const questions = Array.isArray(section?.questions) ? section.questions : []
@@ -81,6 +102,8 @@ export function validatePracticeTestPayload(payload, existingTopics = []) {
         errors.push(`${qLabel}: difficulty in mein se ek honi chahiye — ${DIFFICULTIES.join(', ')}`)
       }
       if (!q.topic?.trim()) errors.push(`${qLabel}: topic required hai`)
+      checkImageUrl(q.imageUrl, `${qLabel} imageUrl`, errors)
+      checkImageUrl(q.solutionImageUrl, `${qLabel} solutionImageUrl`, errors)
 
       // Same magnitude-not-sign rule as the section-level marks, applied to
       // the rare per-question override fields.
@@ -97,7 +120,12 @@ export function validatePracticeTestPayload(payload, existingTopics = []) {
     // besides-the-point hai.
     const { questions: normalizedQuestionsRaw, suggestions } = normalizeAllTopics(questions, existingTopics)
     // subTopic khaali (ya topic jaisa hi) ho to question text se type guess karke store karo
-    const normalizedQuestions = normalizedQuestionsRaw.map((q) => ({ ...q, subTopic: resolveSubTopic(q, section?.name) }))
+    const normalizedQuestions = normalizedQuestionsRaw.map((q) => ({
+      ...q,
+      subTopic: resolveSubTopic(q, section?.name),
+      imageUrl: imageUrlOf(q.imageUrl),
+      solutionImageUrl: imageUrlOf(q.solutionImageUrl),
+    }))
     suggestions.forEach((s) => allSuggestions.push({ section: section?.name, ...s }))
 
     const marksCorrect = section?.marksCorrect ?? 1
@@ -123,7 +151,7 @@ export function validatePracticeTestPayload(payload, existingTopics = []) {
       marksWrong: section?.marksWrong ?? 0.25,
       cutoff,
       hasCalculator: !!section?.hasCalculator,
-      directions,
+      directions: cleanDirections,
       questions: normalizedQuestions,
     }
   })
