@@ -155,7 +155,7 @@ function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, hand
                 <i className="ti ti-folder-symlink text-xs" />
               </button>
             )}
-            {(doc.isMine !== false || doc.annotatedUrl) && (
+            {(canEdit || doc.annotatedUrl) && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleDelete(doc) }}
                 className="w-8 h-8 sm:w-7 sm:h-7 rounded-md bg-black/60 hover:bg-red-600/80 flex items-center justify-center text-white"
@@ -504,7 +504,7 @@ export default function PdfLibrary() {
 
   // --- Delete ---------------------------------------------------------------
   async function handleDelete(doc) {
-    const isOwnUpload = doc.isMine !== false
+    const isOwnUpload = doc.canEdit ?? doc.isMine !== false // uploader, or an admin on a global item → deletes the real thing for everyone
     const msg = isOwnUpload
       ? `"${doc.title}" delete karna hai?${doc.isGlobal ? ' (Ye global hai — sabke liye hat jayega)' : ''}`
       : `"${doc.title}" global PDF hai — sirf tumhara khud ka markup hatega, sabke liye file rahegi. Theek hai?`

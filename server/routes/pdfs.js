@@ -421,15 +421,17 @@ router.post('/:id/annotated', handleSingle, async (req, res) => {
   }
 })
 
-// DELETE /api/pdfs/:id   — only the uploader (so only the uploading admin can
-// remove a global item; a regular user deleting one just removes their own
-// personal annotation, not the shared file).
+// DELETE /api/pdfs/:id   — the uploader, or either admin for a global item
+// (so both admins can clean up each other's uploads). A regular user deleting
+// a global item just removes their own personal annotation, not the shared file.
 router.delete('/:id', async (req, res) => {
   try {
     const doc = await PdfDoc.findOne({ _id: req.params.id })
     if (!doc) return res.status(404).json({ error: 'Not found' })
 
-    if (String(doc.userId) !== req.user.id) {
+    const adminOnGlobal = doc.isGlobal && String(doc.userId) !== req.user.id && await isPdfAdmin(req.user.id)
+
+    if (String(doc.userId) !== req.user.id && !adminOnGlobal) {
       // Not the owner — for a global doc, just clear MY personal markup.
       if (!doc.isGlobal) return res.status(404).json({ error: 'Not found' })
       const ann = await PdfAnnotation.findOneAndDelete({ userId: req.user.id, pdfDocId: doc._id })
@@ -450,7 +452,12 @@ router.delete('/:id', async (req, res) => {
     for (const im of doc.images || []) {
       await cloud.uploader.destroy(im.publicId, { resource_type: 'image' }).catch(() => {})
     }
-    // Clean up everyone else's personal annotations on this now-deleted doc too.
+    // Clean up everyone else's personal annotations on this now-deleted doc too
+    // (their Cloudinary copies as well, so nothing is left orphaned).
+    const personal = await PdfAnnotation.find({ pdfDocId: doc._id }).catch(() => [])
+    for (const a of personal) {
+      if (a.annotatedPublicId) await cloud.uploader.destroy(a.annotatedPublicId, { resource_type: 'raw' }).catch(() => {})
+    }
     await PdfAnnotation.deleteMany({ pdfDocId: doc._id }).catch(() => {})
 
     res.json({ deleted: true })
