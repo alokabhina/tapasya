@@ -8,8 +8,15 @@ import mongoose from 'mongoose'
 const pdfDocSchema = new mongoose.Schema({
   userId:             { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   title:              { type: String, required: true },
-  originalUrl:         { type: String, required: true },
-  originalPublicId:    { type: String, required: true },
+  // Optional now: an item can be "pics only" (revision images with no PDF).
+  // At least one of (originalUrl, images) must exist — enforced by the routes.
+  originalUrl:         { type: String, default: null },
+  originalPublicId:    { type: String, default: null },
+  // 4-5 line "what's inside / what got covered" blurb shown right on the card.
+  summary:             { type: String, default: '', trim: true, maxlength: 500 },
+  // Revision pictures attached to this item (e.g. the CA PDF + 2 pics of the
+  // same day). Opened from the same card via a PDF / Pics chooser.
+  images:              { type: [{ url: String, publicId: String }], default: [] },
   annotatedUrl:        { type: String, default: null },
   annotatedPublicId:   { type: String, default: null },
   annotatedAt:         { type: Date, default: null },

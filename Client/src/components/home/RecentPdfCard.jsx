@@ -61,7 +61,9 @@ export default function RecentPdfCard({ refreshKey }) {
       className="w-full flex items-center gap-3 bg-[#141d2e] rounded-2xl border border-slate-800 hover:border-orange-500/40 transition-colors p-2.5 mb-5 text-left group"
     >
       <div className="relative w-16 sm:w-20 aspect-[3/4] rounded-xl overflow-hidden bg-slate-900 shrink-0 flex items-center justify-center">
-        <i className="ti ti-file-type-pdf text-3xl text-red-400/70" />
+        {(doc.hasPdf ?? !!doc.originalUrl)
+          ? <i className="ti ti-file-type-pdf text-3xl text-red-400/70" />
+          : <i className="ti ti-photo text-3xl text-sky-400/70" />}
       </div>
 
       <div className="min-w-0 flex-1">
@@ -70,8 +72,9 @@ export default function RecentPdfCard({ refreshKey }) {
           <span className="text-[10px] uppercase tracking-wide text-orange-400 font-medium">Recent PDF</span>
         </div>
         <p className="text-sm text-slate-200 line-clamp-2 leading-snug">{doc.title}</p>
+        {doc.summary && <p className="text-[11px] text-slate-400 line-clamp-2 leading-snug mt-0.5">{doc.summary}</p>}
         <p className="text-xs text-slate-500 truncate mt-0.5">
-          {formatSize(doc.fileSizeBytes)}
+          {(doc.hasPdf ?? !!doc.originalUrl) ? formatSize(doc.fileSizeBytes) : `${doc.imageCount ?? doc.images?.length ?? 0} pics`}
           {doc.folder ? ` · ${doc.folder}` : ''}
         </p>
       </div>

@@ -1,32 +1,44 @@
 // server/routes/pdfs.js
-// PDF Library: upload a PDF, list/fetch it for reading, and save an
-// annotated copy after marking it up client-side. The annotated copy is
-// ALWAYS a new Cloudinary resource — the original's public_id is never
-// re-uploaded to or deleted, so it can never be corrupted by an annotation
-// save, even if that save fails halfway.
+// PDF Library: upload a PDF (and/or revision pictures), list/fetch it for
+// reading, and save an annotated copy after marking it up client-side. The
+// annotated copy is ALWAYS a new Cloudinary resource — the original's
+// public_id is never re-uploaded to or deleted, so it can never be corrupted
+// by an annotation save, even if that save fails halfway.
 //
-// Global uploads: the PDF-library admin (see PDF_ADMIN_EMAIL) can mark an
-// upload as "global" — every user then sees it in their library. A regular
-// user's markup on a global PDF is stored in a separate PdfAnnotation row
-// keyed to (their userId, that doc) — never on the shared PdfDoc itself, so
-// one person's highlighting can never show up for anyone else.
+// Items: one library item = optional PDF + 0..MAX_IMAGES revision pics.
+// (PDF only → opens in the reader; pics only → opens in the image viewer;
+// both → the user picks from a chooser on the client.)
+//
+// Global uploads: the two admins (see middleware/caAdmin.js — main admin +
+// alokabhinandan123@gmail.com) can mark an upload as "global" — every user
+// then sees it in their library, and either admin can edit it (title,
+// summary, pics, unlock time). A regular user's markup on a global PDF is
+// stored in a separate PdfAnnotation row keyed to (their userId, that doc) —
+// never on the shared PdfDoc itself, so one person's highlighting can never
+// show up for anyone else.
 import express from 'express'
 import multer from 'multer'
 import cloudinary from 'cloudinary'
 import { Readable } from 'stream'
 import authMiddleware from '../middleware/auth.js'
+import { isCaAdmin } from '../middleware/caAdmin.js'
 import PdfDoc, { PdfAnnotation } from '../models/PdfDoc.js'
-import User from '../models/User.js'
 
-// Separate from the main app's ADMIN_EMAIL (middleware/admin.js) — this is
-// specifically who can publish PDFs visible to everyone, per explicit request.
-const PDF_ADMIN_EMAIL = 'alokabhinandan123@gmail.com'
+const MAX_IMAGES = 10
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024
+const MAX_SUMMARY = 500
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB — study PDFs/books can be sizeable
+  limits: { fileSize: 25 * 1024 * 1024, files: MAX_IMAGES + 1 }, // 25MB — study PDFs/books can be sizeable
   fileFilter: (req, file, cb) => {
-    if (file.mimetype !== 'application/pdf') return cb(new Error('Only PDF files are allowed'))
+    if (file.fieldname === 'file') {
+      if (file.mimetype !== 'application/pdf') return cb(new Error('Only PDF files are allowed'))
+    } else if (file.fieldname === 'images') {
+      if (!file.mimetype.startsWith('image/')) return cb(new Error('Only image files are allowed'))
+    } else {
+      return cb(new Error('Unexpected file field'))
+    }
     cb(null, true)
   },
 })
@@ -34,12 +46,17 @@ const upload = multer({
 // multer's own errors (wrong file type, too large) otherwise fall through
 // to Express's default HTML error page — this wraps them into clean JSON
 // the frontend can actually show the user.
-function handleUpload(req, res, next) {
-  upload.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'Upload failed' })
-    next()
-  })
+function wrapMulter(handler) {
+  return (req, res, next) => {
+    handler(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message || 'Upload failed' })
+      next()
+    })
+  }
 }
+const handleSingle = wrapMulter(upload.single('file'))                       // annotated export
+const handleBundle = wrapMulter(upload.fields([{ name: 'file', maxCount: 1 }, { name: 'images', maxCount: MAX_IMAGES }]))
+const handleImages = wrapMulter(upload.array('images', MAX_IMAGES))          // add pics later
 
 function getCloudinary() {
   const cloud = cloudinary.v2
@@ -62,9 +79,43 @@ function uploadPdfToCloudinary(buffer, publicId, { overwrite = false } = {}) {
   })
 }
 
-async function isPdfAdmin(userId) {
-  const user = await User.findById(userId).select('email')
-  return user?.email?.toLowerCase() === PDF_ADMIN_EMAIL.toLowerCase()
+function uploadImageToCloudinary(buffer, publicId) {
+  return new Promise((resolve, reject) => {
+    const cloud = getCloudinary()
+    const stream = cloud.uploader.upload_stream(
+      { folder: 'tapasya/pdf-pics', resource_type: 'image', public_id: publicId },
+      (error, result) => { if (error) return reject(error); resolve(result) }
+    )
+    Readable.from(buffer).pipe(stream)
+  })
+}
+
+async function uploadImages(files, userId) {
+  const stamp = Date.now()
+  return Promise.all(files.map(async (f, i) => {
+    const r = await uploadImageToCloudinary(f.buffer, `${userId}-${stamp}-pic${i}`)
+    return { url: r.secure_url, publicId: r.public_id }
+  }))
+}
+
+function imagesTooBig(files) {
+  return files.some((f) => f.size > MAX_IMAGE_BYTES)
+}
+
+// "Admin" = the two people allowed to publish/edit global items.
+const isPdfAdmin = isCaAdmin
+
+// Adds the flags the frontend relies on. Computed BEFORE any lock-stripping
+// so a locked card still knows it holds a PDF / how many pics it has.
+function shape(docObj, { userId, admin }) {
+  const isMine = String(docObj.userId) === String(userId)
+  return {
+    ...docObj,
+    isMine,
+    canEdit: isMine || (!!docObj.isGlobal && admin),
+    hasPdf: !!docObj.originalUrl,
+    imageCount: (docObj.images || []).length,
+  }
 }
 
 // Merges a user's personal annotation (for a global doc they don't own)
@@ -81,11 +132,27 @@ function withMyAnnotation(doc, annotation) {
   }
 }
 
+// Strips file URLs from a doc that's scheduled to unlock later — the card
+// (title/summary/size/folder/unlockAt) still shows so the countdown renders,
+// but there's nothing to actually open yet.
+function withLockApplied(docObj) {
+  if (!docObj.unlockAt || new Date(docObj.unlockAt).getTime() <= Date.now()) {
+    return { ...docObj, locked: false }
+  }
+  // eslint-disable-next-line no-unused-vars
+  const { originalUrl, originalPublicId, annotatedUrl, annotatedPublicId, annotationsData, images, ...safe } = docObj
+  return { ...safe, locked: true }
+}
+
+function cleanSummary(v) {
+  return String(v ?? '').trim().slice(0, MAX_SUMMARY)
+}
+
 const router = express.Router()
 router.use(authMiddleware)
 
 // GET /api/pdfs/is-admin   → { isAdmin } — frontend uses this to show the
-// "global upload" option only to the right person.
+// "global upload" option only to the right people.
 router.get('/is-admin', async (req, res) => {
   try {
     res.json({ isAdmin: await isPdfAdmin(req.user.id) })
@@ -94,65 +161,65 @@ router.get('/is-admin', async (req, res) => {
   }
 })
 
-// POST /api/pdfs/upload   multipart: file, title, global ('true'/'false'), folder, unlockAt (optional ISO string)
-router.post('/upload', handleUpload, async (req, res) => {
+// POST /api/pdfs/upload
+// multipart: file (pdf, optional), images (0..10, optional) — at least one of
+// the two — plus title, summary, global ('true'/'false'), folder, unlockAt.
+router.post('/upload', handleBundle, async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
-    const title = (req.body.title || req.file.originalname || 'Untitled').replace(/\.pdf$/i, '')
+    const pdfFile = req.files?.file?.[0] || null
+    const imgFiles = req.files?.images || []
+    if (!pdfFile && !imgFiles.length) return res.status(400).json({ error: 'No file uploaded' })
+    if (imagesTooBig(imgFiles)) return res.status(400).json({ error: 'Har pic 8MB se chhoti honi chahiye' })
+
+    const stripExt = (n) => String(n || '').replace(/\.(pdf|jpe?g|png|webp|gif|heic|heif)$/i, '')
+    const title = stripExt(req.body.title) || stripExt(pdfFile?.originalname) || stripExt(imgFiles[0]?.originalname) || 'Untitled'
     const folder = (req.body.folder || '').trim() || null
 
-    // "global" is only ever honoured for the actual admin — anyone else
+    // "global" is only ever honoured for the admins — anyone else
     // sending the flag just gets a normal private upload, silently.
-    const wantsGlobal = req.body.global === 'true'
-    const isGlobal = wantsGlobal && await isPdfAdmin(req.user.id)
+    const admin = await isPdfAdmin(req.user.id)
+    const isGlobal = req.body.global === 'true' && admin
 
-    // unlockAt is a datetime-local string like "2026-09-05T09:00" from the
-    // browser — only kept if it's actually still in the future.
+    // unlockAt is an ISO string — only kept if it's actually still in the future.
     let unlockAt = null
     if (req.body.unlockAt) {
       const d = new Date(req.body.unlockAt)
       if (!isNaN(d) && d.getTime() > Date.now()) unlockAt = d
     }
 
-    const publicId = `${req.user.id}-${Date.now()}-original`
-    const result = await uploadPdfToCloudinary(req.file.buffer, publicId)
+    let pdfResult = null
+    if (pdfFile) pdfResult = await uploadPdfToCloudinary(pdfFile.buffer, `${req.user.id}-${Date.now()}-original`)
+    const images = imgFiles.length ? await uploadImages(imgFiles, req.user.id) : []
 
     const doc = await PdfDoc.create({
       userId: req.user.id,
       title,
+      summary: cleanSummary(req.body.summary),
       folder,
-      originalUrl: result.secure_url,
-      originalPublicId: result.public_id,
-      fileSizeBytes: req.file.size,
+      originalUrl: pdfResult?.secure_url ?? null,
+      originalPublicId: pdfResult?.public_id ?? null,
+      fileSizeBytes: pdfFile?.size ?? 0,
+      images,
       isGlobal,
       unlockAt,
     })
-    res.json(doc)
+    res.json({ ...shape(doc.toObject(), { userId: req.user.id, admin }), locked: false })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
 })
 
-// Strips file URLs from a doc that's scheduled to unlock later, for anyone
-// other than its owner — the card (title/size/folder/unlockAt) still shows
-// so the countdown renders, but there's nothing to actually open yet.
-function withLockApplied(docObj) {
-  if (!docObj.unlockAt || new Date(docObj.unlockAt).getTime() <= Date.now()) {
-    return { ...docObj, locked: false }
-  }
-  const { originalUrl, originalPublicId, annotatedUrl, annotatedPublicId, annotationsData, ...safe } = docObj
-  return { ...safe, locked: true }
-}
-
-// GET /api/pdfs   → my own PDFs + every global PDF (with MY annotation, if any)
+// GET /api/pdfs   → my own items + every global item (with MY annotation, if any)
 router.get('/', async (req, res) => {
   try {
+    const admin = await isPdfAdmin(req.user.id)
+    const ctx = { userId: req.user.id, admin }
     const [own, global] = await Promise.all([
       PdfDoc.find({ userId: req.user.id }),
       PdfDoc.find({ isGlobal: true, userId: { $ne: req.user.id } }),
     ])
 
-    let globalWithMine = global
+    let globalWithMine = global.map((d) => d.toObject())
     if (global.length) {
       const myAnnotations = await PdfAnnotation.find({
         userId: req.user.id,
@@ -163,8 +230,12 @@ router.get('/', async (req, res) => {
     }
 
     const all = [
-      ...own.map((d) => ({ ...d.toObject(), isMine: true, locked: false })), // owner always has full access
-      ...globalWithMine.map((d) => ({ ...withLockApplied(d), isMine: false })),
+      ...own.map((d) => ({ ...shape(d.toObject(), ctx), locked: false })), // owner always has full access
+      // Admins bypass the unlock timer too, so either of them can preview/edit before release.
+      ...globalWithMine.map((d) => {
+        const s = shape(d, ctx)
+        return admin ? { ...s, locked: false } : withLockApplied(s)
+      }),
     ]
     all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     res.json(all)
@@ -173,17 +244,27 @@ router.get('/', async (req, res) => {
   }
 })
 
-// PATCH /api/pdfs/:id   body: { title?, folder?, unlockAt? } — owner only.
-// Used to rename a PDF, move it into a different folder (or out to
-// "Ungrouped" by sending folder: '' / null), or set/change/clear its
-// scheduled-unlock time (send unlockAt: '' or null to unlock immediately).
+// Owner of the item, or an admin for a global item.
+async function loadEditable(req) {
+  const doc = await PdfDoc.findOne({ _id: req.params.id })
+  if (!doc) return { error: 'Not found' }
+  const admin = await isPdfAdmin(req.user.id)
+  const mine = String(doc.userId) === req.user.id
+  if (!mine && !(doc.isGlobal && admin)) return { error: 'Not found' }
+  return { doc, admin, mine }
+}
+
+// PATCH /api/pdfs/:id   body: { title?, summary?, folder?, unlockAt? }
+// Owner, or either admin for a global item. Used to rename, set the card
+// summary, move into a different folder (folder: '' → "Ungrouped"), or
+// set/change/clear the scheduled-unlock time (unlockAt: '' → unlock now).
 router.patch('/:id', async (req, res) => {
   try {
-    const doc = await PdfDoc.findOne({ _id: req.params.id })
-    if (!doc) return res.status(404).json({ error: 'Not found' })
-    if (String(doc.userId) !== req.user.id) return res.status(404).json({ error: 'Not found' })
+    const { doc, admin, error } = await loadEditable(req)
+    if (error) return res.status(404).json({ error })
 
     if (req.body.title != null) doc.title = String(req.body.title).trim() || doc.title
+    if (req.body.summary !== undefined) doc.summary = cleanSummary(req.body.summary)
     if (req.body.folder !== undefined) doc.folder = (req.body.folder || '').trim() || null
     if (req.body.unlockAt !== undefined) {
       if (!req.body.unlockAt) {
@@ -194,17 +275,16 @@ router.patch('/:id', async (req, res) => {
       }
     }
     await doc.save()
-    res.json(doc)
+    res.json({ ...shape(doc.toObject(), { userId: req.user.id, admin }), locked: false })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
 })
 
 // PATCH /api/pdfs/folder/rename   body: { oldName, newName } — owner only.
-// Folders aren't a separate collection (see PdfDoc.folder comment above), so
-// "renaming a folder" means bulk-updating every PDF of this user's that's
-// currently in oldName to point at newName instead. Global PDFs uploaded by
-// someone else are left untouched even if they happen to share the name.
+// Folders aren't a separate collection (see PdfDoc.folder comment), so
+// "renaming a folder" means bulk-updating every item of this user's that's
+// currently in oldName to point at newName instead.
 router.patch('/folder/rename', async (req, res) => {
   try {
     const oldName = String(req.body.oldName || '').trim()
@@ -222,6 +302,46 @@ router.patch('/folder/rename', async (req, res) => {
   }
 })
 
+// POST /api/pdfs/:id/images   multipart: images (1..10) — add pics to an existing item.
+router.post('/:id/images', handleImages, async (req, res) => {
+  try {
+    const { doc, admin, error } = await loadEditable(req)
+    if (error) return res.status(404).json({ error })
+    const files = req.files || []
+    if (!files.length) return res.status(400).json({ error: 'No images uploaded' })
+    if (imagesTooBig(files)) return res.status(400).json({ error: 'Har pic 8MB se chhoti honi chahiye' })
+    if ((doc.images?.length || 0) + files.length > MAX_IMAGES) {
+      return res.status(400).json({ error: `Ek item mein max ${MAX_IMAGES} pics ho sakti hain` })
+    }
+    const added = await uploadImages(files, req.user.id)
+    doc.images.push(...added)
+    await doc.save()
+    res.json({ ...shape(doc.toObject(), { userId: req.user.id, admin }), locked: false })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// DELETE /api/pdfs/:id/images?pid=<publicId>   — remove one pic from an item.
+router.delete('/:id/images', async (req, res) => {
+  try {
+    const { doc, admin, error } = await loadEditable(req)
+    if (error) return res.status(404).json({ error })
+    const pid = String(req.query.pid || '')
+    const idx = (doc.images || []).findIndex((im) => im.publicId === pid)
+    if (idx === -1) return res.status(404).json({ error: 'Pic nahi mili' })
+    if (!doc.originalUrl && doc.images.length <= 1) {
+      return res.status(400).json({ error: 'Kam se kam ek PDF ya pic rehni chahiye — poora item delete kar do' })
+    }
+    const [removed] = doc.images.splice(idx, 1)
+    await doc.save()
+    await getCloudinary().uploader.destroy(removed.publicId, { resource_type: 'image' }).catch(() => {})
+    res.json({ ...shape(doc.toObject(), { userId: req.user.id, admin }), locked: false })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // GET /api/pdfs/:id
 router.get('/:id', async (req, res) => {
   try {
@@ -230,10 +350,13 @@ router.get('/:id', async (req, res) => {
     if (String(doc.userId) !== req.user.id && !doc.isGlobal) {
       return res.status(404).json({ error: 'Not found' })
     }
-    if (String(doc.userId) === req.user.id) return res.json({ ...doc.toObject(), locked: false })
+    const admin = await isPdfAdmin(req.user.id)
+    const ctx = { userId: req.user.id, admin }
+    if (String(doc.userId) === req.user.id) return res.json({ ...shape(doc.toObject(), ctx), locked: false })
 
     const mine = await PdfAnnotation.findOne({ userId: req.user.id, pdfDocId: doc._id })
-    res.json(withLockApplied(withMyAnnotation(doc, mine)))
+    const s = shape(withMyAnnotation(doc, mine), ctx)
+    res.json(admin ? { ...s, locked: false } : withLockApplied(s))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -248,13 +371,14 @@ router.get('/:id', async (req, res) => {
 // } as JSON — saved alongside the flattened PDF so the reader can reload
 // the actual editable/erasable strokes next time instead of the flattened
 // pixels (see PdfDoc.annotationsData comment).
-router.post('/:id/annotated', handleUpload, async (req, res) => {
+router.post('/:id/annotated', handleSingle, async (req, res) => {
   try {
     const doc = await PdfDoc.findOne({ _id: req.params.id })
     if (!doc) return res.status(404).json({ error: 'Not found' })
     if (String(doc.userId) !== req.user.id && !doc.isGlobal) {
       return res.status(404).json({ error: 'Not found' })
     }
+    if (!doc.originalUrl) return res.status(400).json({ error: 'Is item mein PDF nahi hai' })
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
     let annotationsData
@@ -271,13 +395,16 @@ router.post('/:id/annotated', handleUpload, async (req, res) => {
       : `${doc._id}-annotated-${req.user.id}` // personal layer for a global doc
     const result = await uploadPdfToCloudinary(req.file.buffer, publicId, { overwrite: true })
 
+    const admin = await isPdfAdmin(req.user.id)
+    const ctx = { userId: req.user.id, admin }
+
     if (String(doc.userId) === req.user.id) {
       doc.annotatedUrl = result.secure_url
       doc.annotatedPublicId = result.public_id
       doc.annotatedAt = new Date()
       if (annotationsData !== undefined) doc.annotationsData = annotationsData
       await doc.save()
-      return res.json(doc)
+      return res.json({ ...shape(doc.toObject(), ctx), locked: false })
     }
 
     // Global doc, not mine — personal annotation layer only.
@@ -288,14 +415,14 @@ router.post('/:id/annotated', handleUpload, async (req, res) => {
       update,
       { upsert: true, new: true }
     )
-    res.json(withMyAnnotation(doc, annotation))
+    res.json({ ...shape(withMyAnnotation(doc, annotation), ctx), locked: false })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
 })
 
-// DELETE /api/pdfs/:id   — only the uploader (so only the admin can remove
-// a global PDF; a regular user deleting one just removes their own copy's
+// DELETE /api/pdfs/:id   — only the uploader (so only the uploading admin can
+// remove a global item; a regular user deleting one just removes their own
 // personal annotation, not the shared file).
 router.delete('/:id', async (req, res) => {
   try {
@@ -314,9 +441,14 @@ router.delete('/:id', async (req, res) => {
 
     await PdfDoc.deleteOne({ _id: doc._id })
     const cloud = getCloudinary()
-    await cloud.uploader.destroy(doc.originalPublicId, { resource_type: 'raw' }).catch(() => {})
+    if (doc.originalPublicId) {
+      await cloud.uploader.destroy(doc.originalPublicId, { resource_type: 'raw' }).catch(() => {})
+    }
     if (doc.annotatedPublicId) {
       await cloud.uploader.destroy(doc.annotatedPublicId, { resource_type: 'raw' }).catch(() => {})
+    }
+    for (const im of doc.images || []) {
+      await cloud.uploader.destroy(im.publicId, { resource_type: 'image' }).catch(() => {})
     }
     // Clean up everyone else's personal annotations on this now-deleted doc too.
     await PdfAnnotation.deleteMany({ pdfDocId: doc._id }).catch(() => {})

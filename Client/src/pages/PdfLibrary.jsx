@@ -4,11 +4,34 @@
 // (see PdfReader.jsx) without ever touching the original file.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { getPdfs, uploadPdfsBulk, updatePdf, deletePdf, checkPdfAdmin, renamePdfFolder } from '@/api/pdfs'
+import { getPdfs, uploadBundle, updatePdf, deletePdf, checkPdfAdmin, renamePdfFolder, addPdfImages, removePdfImage, isoToLocalInput } from '@/api/pdfs'
 import PdfReader from '@/components/pdf/PdfReader'
+import ImageViewer from '@/components/pdf/ImageViewer'
 import { getPdfsOffline, savePdfsOffline, getPdfFileOffline, savePdfFileOffline, deletePdfFileOffline, deletePdfOffline } from '@/utils/offlineDB'
 
 const UNGROUPED = '__ungrouped__' // sentinel for docs with no folder
+
+const MAX_PICS = 10
+
+// Cloudinary delivery transforms: tiny crisp thumbs for the edit modal, and
+// auto-format/quality (WebP/AVIF, smaller bytes) for the full-screen viewer.
+function thumbUrl(url = '') {
+  return url.includes('/upload/') ? url.replace('/upload/', '/upload/c_fill,w_160,h_160,q_auto,f_auto/') : url
+}
+function viewUrl(url = '') {
+  return url.includes('/upload/') ? url.replace('/upload/', '/upload/q_auto,f_auto/') : url
+}
+
+// Only these fields may be merged from a PATCH/pics response into the list —
+// never annotatedUrl etc., because for a global doc the response could carry
+// the OWNER's annotation, not the viewer's own.
+function pickMeta(u = {}) {
+  const out = {}
+  for (const k of ['title', 'summary', 'folder', 'unlockAt', 'images', 'imageCount', 'hasPdf', 'canEdit']) {
+    if (u[k] !== undefined) out[k] = u[k]
+  }
+  return out
+}
 
 function formatSize(bytes = 0) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
@@ -55,8 +78,12 @@ function useCountdown(targetIso, onUnlock) {
 
 // ── PDF grid card — handles its own scheduled-unlock countdown (needs its
 // own hook instance, hence a separate component rather than inline JSX) ────
-function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, handleMoveTo, handleDelete, setOpenDoc, startEditUnlock, onUnlocked }) {
+function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, handleMoveTo, handleDelete, openItem, startEdit, onUnlocked }) {
   const isLocked = doc.locked === true
+  const hasPdf = doc.hasPdf ?? !!doc.originalUrl
+  const picCount = doc.imageCount ?? doc.images?.length ?? 0
+  const canEdit = doc.canEdit ?? doc.isMine !== false // older cached docs don't have canEdit yet
+  const summary = (doc.summary || '').trim()
   const countdown = useCountdown(doc.unlockAt, () => { if (isLocked) onUnlocked?.() })
   // Owner still sees their own scheduled-but-not-yet-live doc marked, just
   // never blocked from opening it.
@@ -65,10 +92,17 @@ function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, hand
   return (
     <div
       className={`group relative rounded-2xl overflow-hidden bg-slate-800/60 border border-slate-700/60 transition-colors ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer hover:border-orange-500/50'}`}
-      onClick={() => !isLocked && setOpenDoc(doc)}
+      onClick={() => !isLocked && openItem(doc)}
     >
       <div className="aspect-[3/4] bg-slate-900 flex items-center justify-center relative">
-        <i className={`ti ti-file-type-pdf text-5xl ${isLocked ? 'text-red-400/20' : 'text-red-400/70'}`} />
+        <i className={`ti ${hasPdf ? 'ti-file-type-pdf' : 'ti-photo'} text-5xl ${hasPdf ? (isLocked ? 'text-red-400/20' : summary ? 'text-red-400/25' : 'text-red-400/70') : (isLocked ? 'text-sky-400/20' : summary ? 'text-sky-400/25' : 'text-sky-400/70')}`} />
+
+        {/* What's inside / what got covered — straight on the card, no need to open it */}
+        {summary && !isLocked && (
+          <div className="absolute inset-x-0 bottom-0 p-2.5 pt-8 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent">
+            <p className="text-[11px] leading-[1.45] text-slate-200 line-clamp-6 whitespace-pre-line break-words">{summary}</p>
+          </div>
+        )}
 
         {isLocked && (
           <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2 px-3 text-center">
@@ -84,6 +118,11 @@ function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, hand
               <i className="ti ti-world text-[10px]" /> Global
             </span>
           )}
+          {picCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded bg-sky-500/90 text-[10px] text-white font-semibold flex items-center gap-1">
+              <i className="ti ti-photo text-[10px]" /> {hasPdf ? `+${picCount} pic${picCount !== 1 ? 's' : ''}` : `${picCount} pic${picCount !== 1 ? 's' : ''}`}
+            </span>
+          )}
           {doc.annotatedUrl && !isLocked && (
             <span className="px-1.5 py-0.5 rounded bg-orange-500/90 text-[10px] text-white font-semibold flex items-center gap-1">
               <i className="ti ti-pencil text-[10px]" /> Marked
@@ -97,20 +136,20 @@ function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, hand
         </div>
 
         {!isLocked && (
-          <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {doc.isMine !== false && (
+          <div className={`absolute top-2 right-2 flex items-center gap-1 transition-opacity [@media(hover:none)]:opacity-100 ${moveMenuDoc?._id === doc._id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+            {canEdit && (
               <button
-                onClick={(e) => { e.stopPropagation(); startEditUnlock(doc) }}
-                className="w-7 h-7 rounded-md bg-black/60 hover:bg-slate-700 flex items-center justify-center text-white"
-                title="Unlock time set/badlo"
+                onClick={(e) => { e.stopPropagation(); startEdit(doc) }}
+                className="w-8 h-8 sm:w-7 sm:h-7 rounded-md bg-black/60 hover:bg-slate-700 flex items-center justify-center text-white"
+                title="Naam, summary, pics, unlock time badlo"
               >
-                <i className="ti ti-clock text-xs" />
+                <i className="ti ti-pencil text-xs" />
               </button>
             )}
-            {doc.isMine !== false && (
+            {canEdit && (
               <button
                 onClick={(e) => { e.stopPropagation(); setMoveMenuDoc(moveMenuDoc?._id === doc._id ? null : doc) }}
-                className="w-7 h-7 rounded-md bg-black/60 hover:bg-slate-700 flex items-center justify-center text-white"
+                className="w-8 h-8 sm:w-7 sm:h-7 rounded-md bg-black/60 hover:bg-slate-700 flex items-center justify-center text-white"
                 title="Doosre folder mein le jao"
               >
                 <i className="ti ti-folder-symlink text-xs" />
@@ -119,7 +158,7 @@ function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, hand
             {(doc.isMine !== false || doc.annotatedUrl) && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleDelete(doc) }}
-                className="w-7 h-7 rounded-md bg-black/60 hover:bg-red-600/80 flex items-center justify-center text-white"
+                className="w-8 h-8 sm:w-7 sm:h-7 rounded-md bg-black/60 hover:bg-red-600/80 flex items-center justify-center text-white"
               >
                 <i className="ti ti-trash text-xs" />
               </button>
@@ -146,7 +185,10 @@ function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, hand
       </div>
       <div className="p-2.5">
         <p className="text-xs text-slate-200 line-clamp-2 leading-snug">{doc.title}</p>
-        <p className="text-[10px] text-slate-500 mt-1">{isLocked ? 'Locked' : formatSize(doc.fileSizeBytes)}</p>
+        <p className="text-[10px] text-slate-500 mt-1">
+          {isLocked ? 'Locked' : [hasPdf && formatSize(doc.fileSizeBytes), picCount > 0 && `${picCount} pic${picCount !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
+        </p>
+        {isLocked && summary && <p className="text-[10px] text-slate-400 mt-1 line-clamp-3 leading-snug whitespace-pre-line">{summary}</p>}
       </div>
     </div>
   )
@@ -163,8 +205,15 @@ export default function PdfLibrary() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [uploadAsGlobal, setUploadAsGlobal] = useState(false)
   const [uploadUnlockAt, setUploadUnlockAt] = useState('') // datetime-local string — optional schedule applied to the whole upcoming batch
-  const [unlockEditDoc, setUnlockEditDoc] = useState(null) // doc currently showing its "set unlock time" inline editor
-  const [unlockEditValue, setUnlockEditValue] = useState('')
+  const [editDocId, setEditDocId] = useState(null) // item whose edit modal (title / summary / pics / unlock) is open
+  const [editTitle, setEditTitle] = useState('')
+  const [editSummary, setEditSummary] = useState('')
+  const [editUnlock, setEditUnlock] = useState('')
+  const [editBusy, setEditBusy] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [chooserDoc, setChooserDoc] = useState(null) // item that has BOTH a PDF and pics → ask which to open
+  const [viewer, setViewer] = useState(null) // { doc, index } → full-screen pics viewer
+  const editPicsInputRef = useRef(null)
   const [activeFolder, setActiveFolder] = useState(null) // null = folder grid view
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
@@ -203,7 +252,7 @@ export default function PdfLibrary() {
     const targetId = location.state?.openDocId
     if (!targetId || !docs.length) return
     const match = docs.find((d) => d._id === targetId)
-    if (match) setOpenDoc(match)
+    if (match) openItem(match)
     navigate(location.pathname, { replace: true, state: {} })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docs, location.state])
@@ -285,21 +334,57 @@ export default function PdfLibrary() {
     e.target.value = '' // allow re-selecting the same file(s) later
     if (!files.length) return
 
-    const nonPdf = files.filter((f) => f.type !== 'application/pdf')
-    const pdfFiles = files.filter((f) => f.type === 'application/pdf')
-    if (nonPdf.length) alert(`${nonPdf.length} file(s) skip ki gayi — sirf PDF allowed hai`)
-    if (!pdfFiles.length) return
+    const isPdf = (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
+    const isImg = (f) => f.type.startsWith('image/')
+    const pdfFiles = files.filter(isPdf)
+    const imgFiles = files.filter((f) => !isPdf(f) && isImg(f))
+    const skipped = files.length - pdfFiles.length - imgFiles.length
+    if (skipped) alert(`${skipped} file(s) skip ki gayi — sirf PDF ya photo allowed hai`)
+    if (!pdfFiles.length && !imgFiles.length) return
+    if (imgFiles.length > MAX_PICS) { alert(`Ek item mein max ${MAX_PICS} pics ho sakti hain — ${imgFiles.length} chuni hain`); return }
+
+    // One library item = optional PDF + its revision pics:
+    //  • 1 PDF + pics  → ONE item (PDF and pics together; chooser on tap)
+    //  • only PDFs     → one item per PDF, exactly like before
+    //  • only pics     → one pics-only item
+    //  • many PDFs + pics → PDFs stay separate, pics become their own item
+    //    (attach them to a specific PDF afterwards with ✏️ → "Pics add karo")
+    const picsTitle = `Revision Pics — ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
+    const jobs = []
+    if (pdfFiles.length === 1 && imgFiles.length) jobs.push({ pdf: pdfFiles[0], images: imgFiles })
+    else {
+      pdfFiles.forEach((f) => jobs.push({ pdf: f, images: [] }))
+      if (imgFiles.length) jobs.push({ pdf: null, images: imgFiles })
+    }
 
     setUploading(true)
-    setUploadProgress({ done: 0, total: pdfFiles.length })
-    const results = await uploadPdfsBulk(pdfFiles, uploadAsGlobal, pendingUploadFolder.current, (done, total) => setUploadProgress({ done, total }), uploadUnlockAt)
+    setUploadProgress({ done: 0, total: jobs.length })
+    const succeeded = []
+    const failed = []
+    // Sequential on purpose — big batches shouldn't all hit Cloudinary at once,
+    // and one failure shouldn't take the rest down.
+    for (let i = 0; i < jobs.length; i++) {
+      const job = jobs[i]
+      try {
+        const doc = await uploadBundle({
+          pdf: job.pdf,
+          images: job.images,
+          title: job.pdf ? job.pdf.name.replace(/\.pdf$/i, '') : picsTitle,
+          isGlobal: uploadAsGlobal,
+          folder: pendingUploadFolder.current,
+          unlockAt: uploadUnlockAt,
+        })
+        succeeded.push(doc)
+      } catch (err) {
+        failed.push(`${job.pdf ? job.pdf.name : `${job.images.length} pic(s)`} — ${err?.response?.data?.error || 'upload fail'}`)
+      }
+      setUploadProgress({ done: i + 1, total: jobs.length })
+    }
     setUploading(false)
     setUploadProgress(null)
 
-    const succeeded = results.filter((r) => r.doc)
-    const failed = results.filter((r) => r.error)
-    if (succeeded.length) setDocs((prev) => [...succeeded.map((r) => r.doc), ...prev])
-    if (failed.length) alert(`${failed.length} file(s) upload nahi ho payi:\n${failed.map((f) => `• ${f.file.name}`).join('\n')}`)
+    if (succeeded.length) setDocs((prev) => [...succeeded, ...prev])
+    if (failed.length) alert(`${failed.length} upload nahi ho paye:\n${failed.map((f) => `• ${f}`).join('\n')}`)
   }
 
   // --- Folders --------------------------------------------------------------
@@ -320,26 +405,74 @@ export default function PdfLibrary() {
     setDocs((prev) => prev.map((d) => (d._id === doc._id ? { ...d, folder: updated.folder } : d)))
   }
 
-  // --- Scheduled unlock time (per PDF, owner only) --------------------------
-  function startEditUnlock(doc) {
-    setMoveMenuDoc(null)
-    // datetime-local wants "YYYY-MM-DDTHH:mm" in LOCAL time, not UTC ISO.
-    if (doc.unlockAt) {
-      const d = new Date(doc.unlockAt)
-      const pad = (n) => String(n).padStart(2, '0')
-      setUnlockEditValue(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`)
-    } else {
-      setUnlockEditValue('')
-    }
-    setUnlockEditDoc(doc)
+  // --- Open an item: PDF → reader, pics → viewer, both → chooser ---------------
+  function openItem(doc) {
+    if (doc.locked) return
+    const hasPdf = doc.hasPdf ?? !!doc.originalUrl
+    const picCount = doc.images?.length ?? 0
+    if (hasPdf && picCount) setChooserDoc(doc)
+    else if (hasPdf) setOpenDoc(doc)
+    else if (picCount) setViewer({ doc, index: 0 })
   }
 
-  async function saveUnlockTime() {
-    const doc = unlockEditDoc
-    setUnlockEditDoc(null)
-    if (!doc) return
-    const updated = await updatePdf(doc._id, { unlockAt: unlockEditValue || '' })
-    setDocs((prev) => prev.map((d) => (d._id === doc._id ? { ...d, unlockAt: updated.unlockAt, locked: false } : d)))
+  // --- Edit an item (owner, or either admin for a global item) ----------------
+  const editDoc = editDocId ? docs.find((d) => d._id === editDocId) : null
+
+  function patchDoc(id, updated) {
+    setDocs((prev) => prev.map((d) => (d._id === id ? { ...d, ...pickMeta(updated), locked: false } : d)))
+  }
+
+  function startEdit(doc) {
+    setMoveMenuDoc(null)
+    setEditTitle(doc.title || '')
+    setEditSummary(doc.summary || '')
+    setEditUnlock(isoToLocalInput(doc.unlockAt)) // datetime-local wants LOCAL "YYYY-MM-DDTHH:mm"
+    setEditError('')
+    setEditDocId(doc._id)
+  }
+
+  async function saveEdit() {
+    if (!editDoc) return
+    setEditBusy(true)
+    setEditError('')
+    try {
+      const updated = await updatePdf(editDoc._id, { title: editTitle.trim() || editDoc.title, summary: editSummary.trim(), unlockAt: editUnlock || '' })
+      patchDoc(editDoc._id, updated)
+      setEditDocId(null)
+    } catch (e) {
+      setEditError(e?.response?.data?.error || 'Save nahi ho paya, dobara try karo')
+    } finally {
+      setEditBusy(false)
+    }
+  }
+
+  async function handleAddPics(e) {
+    const files = Array.from(e.target.files || []).filter((f) => f.type.startsWith('image/'))
+    e.target.value = ''
+    if (!editDoc || !files.length) return
+    if ((editDoc.images?.length || 0) + files.length > MAX_PICS) { setEditError(`Ek item mein max ${MAX_PICS} pics ho sakti hain`); return }
+    setEditBusy(true)
+    setEditError('')
+    try {
+      patchDoc(editDoc._id, await addPdfImages(editDoc._id, files))
+    } catch (err) {
+      setEditError(err?.response?.data?.error || 'Pics upload nahi ho payi')
+    } finally {
+      setEditBusy(false)
+    }
+  }
+
+  async function handleRemovePic(img) {
+    if (!editDoc || !confirm('Ye pic hata dein?')) return
+    setEditBusy(true)
+    setEditError('')
+    try {
+      patchDoc(editDoc._id, await removePdfImage(editDoc._id, img.publicId))
+    } catch (err) {
+      setEditError(err?.response?.data?.error || 'Pic hat nahi payi')
+    } finally {
+      setEditBusy(false)
+    }
   }
 
   // --- Rename folder (bulk-moves every PDF currently in it to the new name) --
@@ -440,7 +573,7 @@ export default function PdfLibrary() {
                   )}
                 </div>
               )}
-              <p className="text-xs text-slate-500">{activeFolder != null ? `${docsInActiveFolder.length} PDF` : 'Apne PDFs padho, organize karo, mark-up karo'}</p>
+              <p className="text-xs text-slate-500">{activeFolder != null ? `${docsInActiveFolder.length} item${docsInActiveFolder.length !== 1 ? 's' : ''}` : 'Apne PDFs padho, organize karo, mark-up karo'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -491,7 +624,7 @@ export default function PdfLibrary() {
               )}
             </button>
           </div>
-          <input ref={fileInputRef} type="file" accept="application/pdf" multiple onChange={handleFileChange} className="hidden" />
+          <input ref={fileInputRef} type="file" accept="application/pdf,image/*" multiple onChange={handleFileChange} className="hidden" />
         </div>
       </div>
 
@@ -544,7 +677,7 @@ export default function PdfLibrary() {
                 </div>
                 <div className="min-w-0 w-full">
                   <p className="text-sm text-slate-200 truncate font-medium">{f.name}</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">{f.count} PDF{f.count !== 1 ? 's' : ''}</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{f.count} item{f.count !== 1 ? 's' : ''}</p>
                 </div>
               </button>
             ))}
@@ -558,7 +691,7 @@ export default function PdfLibrary() {
                 </div>
                 <div className="min-w-0 w-full">
                   <p className="text-sm text-slate-300 truncate font-medium">Ungrouped</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">{folders.ungroupedCount} PDF{folders.ungroupedCount !== 1 ? 's' : ''}</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{folders.ungroupedCount} item{folders.ungroupedCount !== 1 ? 's' : ''}</p>
                 </div>
               </button>
             )}
@@ -586,8 +719,8 @@ export default function PdfLibrary() {
                 setMoveMenuDoc={setMoveMenuDoc}
                 handleMoveTo={handleMoveTo}
                 handleDelete={handleDelete}
-                setOpenDoc={setOpenDoc}
-                startEditUnlock={startEditUnlock}
+                openItem={openItem}
+                startEdit={startEdit}
                 onUnlocked={load}
               />
             ))}
@@ -595,27 +728,118 @@ export default function PdfLibrary() {
         )
       )}
 
-      {/* Set / change scheduled unlock time — mini modal */}
-      {unlockEditDoc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setUnlockEditDoc(null)}>
-          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-semibold text-slate-200 mb-1 flex items-center gap-1.5"><i className="ti ti-clock text-orange-400" /> Unlock Time</p>
-            <p className="text-xs text-slate-500 mb-3 truncate">"{unlockEditDoc.title}" is time tak lock rahega, uske baad khud unlock ho jayega. Khaali chhodo agar abhi hi unlock rakhna hai.</p>
+      {/* Edit item — title, summary shown on the card, pics, unlock time */}
+      {editDoc && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={() => !editBusy && setEditDocId(null)}>
+          <div className="w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-1.5"><i className="ti ti-pencil text-orange-400" /> Item edit karo</p>
+
+            <label className="block text-[11px] text-slate-500 mb-1">Naam</label>
             <input
-              type="datetime-local"
-              value={unlockEditValue}
-              onChange={(e) => setUnlockEditValue(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 focus:outline-none focus:border-orange-500/60 mb-4"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 focus:outline-none focus:border-orange-500/60 mb-3"
             />
-            <div className="flex items-center gap-2 justify-end">
-              {unlockEditValue && (
-                <button onClick={() => setUnlockEditValue('')} className="px-3.5 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 mr-auto">Abhi unlock karo</button>
+
+            <label className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+              <span>Summary — card pe direct dikhegi (4-5 line)</span>
+              <span className="tabular-nums">{editSummary.length}/500</span>
+            </label>
+            <textarea
+              value={editSummary}
+              onChange={(e) => setEditSummary(e.target.value.slice(0, 500))}
+              rows={5}
+              placeholder={'Jaise: Aaj ke CA mein kya cover hua —\n• RBI repo rate\n• G20 summit\n• Sports awards'}
+              className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-orange-500/60 mb-3 resize-none"
+            />
+
+            <label className="block text-[11px] text-slate-500 mb-1">Revision pics ({editDoc.images?.length || 0}/{MAX_PICS})</label>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {(editDoc.images || []).map((img) => (
+                <div key={img.publicId} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-700 bg-slate-800">
+                  <img src={thumbUrl(img.url)} alt="" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => handleRemovePic(img)}
+                    disabled={editBusy}
+                    className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/70 hover:bg-red-600 text-white flex items-center justify-center disabled:opacity-50"
+                    title="Pic hatao"
+                  >
+                    <i className="ti ti-x text-[10px]" />
+                  </button>
+                </div>
+              ))}
+              {(editDoc.images?.length || 0) < MAX_PICS && (
+                <button
+                  onClick={() => editPicsInputRef.current?.click()}
+                  disabled={editBusy}
+                  className="w-16 h-16 rounded-lg border border-dashed border-slate-600 hover:border-orange-500/60 text-slate-400 hover:text-orange-400 flex flex-col items-center justify-center gap-0.5 disabled:opacity-50"
+                >
+                  <i className="ti ti-photo-plus text-lg" />
+                  <span className="text-[9px]">Pics add</span>
+                </button>
               )}
-              <button onClick={() => setUnlockEditDoc(null)} className="px-3.5 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200">Cancel</button>
-              <button onClick={saveUnlockTime} className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold">Save</button>
+              <input ref={editPicsInputRef} type="file" accept="image/*" multiple onChange={handleAddPics} className="hidden" />
+            </div>
+
+            <label className="text-[11px] text-slate-500 mb-1 flex items-center gap-1"><i className="ti ti-clock text-orange-400" /> Unlock time (optional)</label>
+            <div className="flex items-center gap-2 mb-1">
+              <input
+                type="datetime-local"
+                value={editUnlock}
+                onChange={(e) => setEditUnlock(e.target.value)}
+                className="flex-1 min-w-0 px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 focus:outline-none focus:border-orange-500/60"
+              />
+              {editUnlock && (
+                <button onClick={() => setEditUnlock('')} className="px-2.5 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 shrink-0">Abhi unlock</button>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-600 mb-4">Is time tak sabke liye lock rahega (global item ho to), phir khud unlock ho jayega.</p>
+
+            {editError && <p className="text-xs text-red-400 mb-3">{editError}</p>}
+
+            <div className="flex items-center gap-2 justify-end">
+              <button onClick={() => setEditDocId(null)} disabled={editBusy} className="px-3.5 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 disabled:opacity-50">Cancel</button>
+              <button onClick={saveEdit} disabled={editBusy || !editTitle.trim()} className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5">
+                {editBusy && <div className="w-3 h-3 rounded-full border-2 border-white/50 border-t-white animate-spin" />} Save
+              </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* PDF + pics item → pick what to open */}
+      {chooserDoc && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={() => setChooserDoc(null)}>
+          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-slate-200 line-clamp-2 mb-1">{chooserDoc.title}</p>
+            <p className="text-xs text-slate-500 mb-4">Kya kholna hai?</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => { const d = chooserDoc; setChooserDoc(null); setOpenDoc(d) }}
+                className="rounded-xl border border-slate-700 hover:border-orange-500/60 bg-slate-800/60 p-4 flex flex-col items-center gap-2"
+              >
+                <i className="ti ti-file-type-pdf text-3xl text-red-400" />
+                <span className="text-xs text-slate-200 font-medium">PDF</span>
+              </button>
+              <button
+                onClick={() => { const d = chooserDoc; setChooserDoc(null); setViewer({ doc: d, index: 0 }) }}
+                className="rounded-xl border border-slate-700 hover:border-sky-500/60 bg-slate-800/60 p-4 flex flex-col items-center gap-2"
+              >
+                <i className="ti ti-photo text-3xl text-sky-400" />
+                <span className="text-xs text-slate-200 font-medium">Revision Pics ({chooserDoc.images?.length || 0})</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewer && (
+        <ImageViewer
+          images={(viewer.doc.images || []).map((im) => ({ ...im, url: viewUrl(im.url) }))}
+          startIndex={viewer.index}
+          title={viewer.doc.title}
+          onClose={() => setViewer(null)}
+        />
       )}
 
       {openDoc && (

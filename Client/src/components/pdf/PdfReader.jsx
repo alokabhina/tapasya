@@ -25,6 +25,7 @@
 //   annotator shown in the reference screenshot.
 import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react'
 import { saveAnnotatedPdf } from '@/api/pdfs'
+import usePinchZoom from '@/hooks/usePinchZoom'
 import { getPdfFileOffline, savePdfFileOffline } from '@/utils/offlineDB'
 import * as pdfjsLib from 'pdfjs-dist'
 // Vite: `?url` gives us a hashed, served URL for the worker file instead of
@@ -139,7 +140,7 @@ function drawStroke(ctx, stroke, w, h) {
 // ── One page: lazily rendered when it scrolls near the viewport ────────────
 function PageBlock({
   pageNum, pdfDoc, zoom, containerWidth, tool, color, penWidth, penOpacity, markerWidth, markerOpacity, eraserSize,
-  strokes, onStroke, onErase, registerRenderObserver, registerViewObserver,
+  strokes, onStroke, onErase, registerRenderObserver, registerViewObserver, pinchingRef,
 }) {
   const wrapRef = useRef(null)
   const baseCanvasRef = useRef(null)
@@ -147,6 +148,7 @@ function PageBlock({
   const renderTaskRef = useRef(null)
   const drawingRef = useRef(false)
   const currentStrokeRef = useRef(null)
+  const baseSizeRef = useRef(null) // unscaled page size — lets us resize the canvas instantly on zoom, before the crisp re-render lands
   const cssSizeRef = useRef({ w: 0, h: 0 }) // canvas CSS (logical) size — backing-store pixels are this × devicePixelRatio
   const [rendered, setRendered] = useState(false)
   const [shouldRender, setShouldRender] = useState(false)
@@ -171,6 +173,7 @@ function PageBlock({
     if (!pdfDoc || !baseCanvasRef.current || !overlayCanvasRef.current || !containerWidth) return
     const page = await pdfDoc.getPage(pageNum)
     const unscaledViewport = page.getViewport({ scale: 1 })
+    baseSizeRef.current = { w: unscaledViewport.width, h: unscaledViewport.height }
     const fitScale = Math.min(containerWidth, 1100) / unscaledViewport.width
     const viewport = page.getViewport({ scale: fitScale * zoom })
     // Mobile screens have a devicePixelRatio > 1 (often 2–3x). If we only
@@ -186,29 +189,42 @@ function PageBlock({
     // page in a real browser tab even though the CSS size matches exactly. Rendering
     // ~1.5x oversized and letting the browser's own downscale do the anti-aliasing
     // closes most of that gap. Cap at 4x so we don't blow up canvas memory on 3x+ panels.
-    const dpr = Math.min((window.devicePixelRatio || 1) * 1.5, 4)
+    let dpr = Math.min((window.devicePixelRatio || 1) * 1.5, 4)
+    // At high zoom (pinch up to 400%) the backing store can exceed what browsers allow
+    // (~16k px per side / ~16M px area on mobile) and the canvas silently goes blank.
+    dpr = Math.max(1, Math.min(dpr, 8192 / Math.max(viewport.width, viewport.height), Math.sqrt(16000000 / (viewport.width * viewport.height))))
     const base = baseCanvasRef.current
     const overlay = overlayCanvasRef.current
-    for (const canvas of [base, overlay]) {
-      canvas.width = Math.round(viewport.width * dpr)
-      canvas.height = Math.round(viewport.height * dpr)
-      canvas.style.width = `${viewport.width}px`
-      canvas.style.height = `${viewport.height}px`
-    }
     if (renderTaskRef.current) {
       try { renderTaskRef.current.cancel() } catch { /* previous task already done */ }
     }
-    const baseCtx = base.getContext('2d')
-    baseCtx.imageSmoothingEnabled = true
-    baseCtx.imageSmoothingQuality = 'high'
-    baseCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    const task = page.render({ canvasContext: baseCtx, viewport })
+    // Draw the new, sharper bitmap on an OFFSCREEN canvas first, and only swap it in
+    // once it's finished. Resizing the visible canvas up-front would blank it (a white
+    // flash after every zoom); this way the old, stretched bitmap stays on screen until
+    // the crisp one is ready, then the swap happens in a single frame.
+    const tmp = document.createElement('canvas')
+    tmp.width = Math.round(viewport.width * dpr)
+    tmp.height = Math.round(viewport.height * dpr)
+    const tmpCtx = tmp.getContext('2d')
+    tmpCtx.imageSmoothingEnabled = true
+    tmpCtx.imageSmoothingQuality = 'high'
+    tmpCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    const task = page.render({ canvasContext: tmpCtx, viewport })
     renderTaskRef.current = task
     try {
       await task.promise
     } catch {
+      tmp.width = 0
       return // cancelled by a newer render (e.g. rapid zoom change)
     }
+    for (const canvas of [base, overlay]) {
+      canvas.width = tmp.width
+      canvas.height = tmp.height
+      canvas.style.width = `${viewport.width}px`
+      canvas.style.height = `${viewport.height}px`
+    }
+    base.getContext('2d').drawImage(tmp, 0, 0)
+    tmp.width = 0 // free the offscreen bitmap right away
     setRendered(true)
     cssSizeRef.current = { w: viewport.width, h: viewport.height }
     const ctx = overlay.getContext('2d')
@@ -219,6 +235,20 @@ function PageBlock({
     for (const s of strokes) drawStroke(ctx, s, viewport.width, viewport.height)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfDoc, pageNum, zoom, containerWidth])
+
+  // On zoom change, resize the canvases to the new size IMMEDIATELY (the old bitmap
+  // just stretches) so layout/scroll are right the instant a pinch is released; the
+  // sharp re-render then replaces the bitmap a moment later.
+  useLayoutEffect(() => {
+    const b = baseSizeRef.current
+    if (!b || !rendered || !containerWidth) return
+    const fit = Math.min(containerWidth, 1100) / b.w
+    const w = b.w * fit * zoom
+    const h = b.h * fit * zoom
+    for (const c of [baseCanvasRef.current, overlayCanvasRef.current]) {
+      if (c) { c.style.width = `${w}px`; c.style.height = `${h}px` }
+    }
+  }, [zoom, containerWidth, rendered])
 
   useEffect(() => { if (shouldRender) render() }, [shouldRender, render])
 
@@ -239,8 +269,21 @@ function PageBlock({
     return { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height }
   }
 
+  // A second finger landed → it's a pinch, not a pen stroke. Drop the half-drawn stroke.
+  function cancelStroke() {
+    drawingRef.current = false
+    currentStrokeRef.current = null
+    const overlay = overlayCanvasRef.current
+    if (!overlay) return
+    const { w, h } = cssSizeRef.current
+    const ctx = overlay.getContext('2d')
+    ctx.clearRect(0, 0, w, h)
+    for (const s of strokes) drawStroke(ctx, s, w, h)
+  }
+
   function handlePointerDown(e) {
     if (tool === 'none') return // read/scroll mode — overlay has pointer-events:none anyway
+    if (e.isPrimary === false || pinchingRef?.current) return // extra finger = pinch, not drawing
     e.preventDefault()
     const pt = getNormalizedPoint(e)
     if (tool === 'eraser') {
@@ -257,6 +300,7 @@ function PageBlock({
   }
 
   function handlePointerMove(e) {
+    if (pinchingRef?.current) { if (drawingRef.current) cancelStroke(); return }
     if (!drawingRef.current) return
     const pt = getNormalizedPoint(e)
     if (tool === 'eraser') { onErase(pageNum, pt); return }
@@ -276,19 +320,20 @@ function PageBlock({
     if (stroke && stroke.points.length > 1) onStroke(pageNum, stroke)
   }
 
-  const placeholderH = Math.round(containerWidth * 1.414 * zoom) || 400
+  const placeholderW = Math.round(Math.min(containerWidth, 1100) * zoom)
+  const placeholderH = Math.round(placeholderW * 1.414) || 400
 
   return (
     <div
       ref={wrapRef}
       data-page={pageNum}
-      className="relative mx-auto mb-4"
-      style={{ width: rendered ? undefined : containerWidth, minHeight: rendered ? undefined : placeholderH }}
+      className={`relative mx-auto mb-4 ${rendered ? 'w-fit' : ''}`}
+      style={{ width: rendered ? undefined : placeholderW, minHeight: rendered ? undefined : placeholderH }}
     >
       {!rendered && (
         <div
           className="flex items-center justify-center rounded-lg bg-slate-900/60 border border-slate-800/40 animate-pulse"
-          style={{ width: containerWidth, height: placeholderH }}
+          style={{ width: placeholderW, height: placeholderH }}
         >
           <span className="text-[11px] text-slate-600">Page {pageNum}</span>
         </div>
@@ -326,6 +371,9 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   const [currentPage, setCurrentPage] = useState(1) // derived from scroll position, for the floating indicator
   const [containerWidth, setContainerWidth] = useState(800)
   const [zoom, setZoom] = useState(1)
+  // Two-finger pinch (phone/tablet) + Ctrl/trackpad pinch (desktop) — zooms only the PDF area.
+  const pageContentRef = useRef(null)
+  const { pinchingRef } = usePinchZoom({ containerRef: viewerContainerRef, contentRef: pageContentRef, zoom, setZoom, min: 0.5, max: 4 })
   const [tool, setTool] = useState('none') // 'none' = read/scroll mode (default) — pen kabhi apne aap select nahi rehta
   const [showMarks, setShowMarks] = useState(true) // "Clean" view toggle — strokes stay in data either way, just hidden
   const [color, setColor] = useState(COLORS[0].hex)
@@ -452,7 +500,12 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   // ── Measure the stable scroll container's width (drives page fit-scale) ─
   useLayoutEffect(() => {
     function measure() {
-      if (viewerContainerRef.current) setContainerWidth(viewerContainerRef.current.clientWidth - 32)
+      const el = viewerContainerRef.current
+      if (!el) return
+      // exact inner width (minus the container's own padding) so a page at 100% never
+      // overflows sideways — the area is now horizontally scrollable for when you zoom in.
+      const cs = getComputedStyle(el)
+      setContainerWidth(Math.max(200, el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)))
     }
     measure()
     window.addEventListener('resize', measure)
@@ -1047,7 +1100,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
             {Math.round(zoom * 100)}%
           </button>
           <button
-            onClick={() => setZoom((z) => Math.min(3, +(z + 0.2).toFixed(2)))}
+            onClick={() => setZoom((z) => Math.min(4, +(z + 0.2).toFixed(2)))}
             title="Zoom in"
             className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-400 flex items-center justify-center"
           >
@@ -1089,7 +1142,8 @@ export default function PdfReader({ doc, onClose, onSaved }) {
           a small floating pill shows the current page while you scroll. */}
       <div
         ref={viewerContainerRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-6 py-4"
+        className="flex-1 overflow-auto px-3 sm:px-6 py-4"
+        style={{ touchAction: 'pan-x pan-y', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
         onPointerDownCapture={() => panelOpen && setPanelOpen(null)}
         onScroll={handleViewerScroll}
       >
@@ -1106,7 +1160,9 @@ export default function PdfReader({ doc, onClose, onSaved }) {
           </div>
         )}
 
-        {!loading && !error && pdfReady && Array.from({ length: numPages }, (_, i) => i + 1).map((pn) => (
+        {!loading && !error && pdfReady && (
+        <div ref={pageContentRef} style={{ width: 'max-content', margin: '0 auto' }}>
+        {Array.from({ length: numPages }, (_, i) => i + 1).map((pn) => (
           <PageBlock
             key={pn}
             pageNum={pn}
@@ -1125,8 +1181,11 @@ export default function PdfReader({ doc, onClose, onSaved }) {
             onErase={handleErase}
             registerRenderObserver={registerRenderObserver}
             registerViewObserver={registerViewObserver}
+            pinchingRef={pinchingRef}
           />
         ))}
+        </div>
+        )}
 
         {!loading && !error && numPages > 1 && (
           <div className="sticky bottom-3 flex justify-center pointer-events-none">
