@@ -34,6 +34,50 @@ import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
+// ── Selectable / copyable text ──────────────────────────────────────────────
+// The page itself is drawn onto a <canvas> (just pixels), so by itself no text
+// can be selected. pdf.js can also build an invisible "text layer" — one
+// transparent <span> per piece of text, positioned exactly over the pixels — and
+// that's what the mouse/finger actually selects. These are the (trimmed) rules
+// pdf.js's own viewer uses for it. Sizes follow --scale-factor, so zooming just
+// updates that one CSS variable (no re-layout of the text needed).
+const TEXT_LAYER_CSS = `
+.tpTextLayer{position:absolute;left:0;top:0;overflow:clip;opacity:1;line-height:1;text-align:initial;
+  -webkit-text-size-adjust:none;text-size-adjust:none;forced-color-adjust:none;transform-origin:0 0;z-index:0;
+  -webkit-user-select:text;user-select:text}
+.tpTextLayer :is(span,br){color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0% 0%}
+.tpTextLayer > :not(.markedContent),.tpTextLayer .markedContent span:not(.markedContent){z-index:1}
+.tpTextLayer span.markedContent{top:0;height:0}
+.tpTextLayer ::selection{background:rgba(251,146,60,.38)}
+.tpTextLayer br::selection{background:transparent}
+.tpTextLayer .endOfContent{display:block;position:absolute;inset:100% 0 0;z-index:0;cursor:default;-webkit-user-select:none;user-select:none}
+.tpTextLayer.selecting .endOfContent{top:0}
+`
+function ensureTextLayerStyles() {
+  if (typeof document === 'undefined' || document.getElementById('tp-textlayer-css')) return
+  const s = document.createElement('style')
+  s.id = 'tp-textlayer-css'
+  s.textContent = TEXT_LAYER_CSS
+  document.head.appendChild(s)
+  // pdf.js's trick for smooth drag-selection across gaps between words
+  window.addEventListener('pointerup', () => {
+    document.querySelectorAll('.tpTextLayer.selecting').forEach((el) => el.classList.remove('selecting'))
+  })
+}
+ensureTextLayerStyles()
+
+async function buildTextLayer(page, container, viewport) {
+  container.replaceChildren()
+  container.style.setProperty('--scale-factor', String(viewport.scale))
+  const textContent = await page.getTextContent()
+  if (pdfjsLib.TextLayer) {
+    const layer = new pdfjsLib.TextLayer({ textContentSource: textContent, container, viewport })
+    await layer.render()
+    return layer
+  }
+  return null
+}
+
 const PDFLIB_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js'
 // Single draft "kind" now — there's only ever one live editable copy per
 // doc (always built on the original + persisted strokes), no more
@@ -145,6 +189,9 @@ function PageBlock({
   const wrapRef = useRef(null)
   const baseCanvasRef = useRef(null)
   const overlayCanvasRef = useRef(null)
+  const textLayerRef = useRef(null)
+  const textLayerObjRef = useRef(null)
+  const textDoneRef = useRef(false) // text layer is built once per page; zoom just rescales it via --scale-factor
   const renderTaskRef = useRef(null)
   const drawingRef = useRef(false)
   const currentStrokeRef = useRef(null)
@@ -226,6 +273,12 @@ function PageBlock({
     base.getContext('2d').drawImage(tmp, 0, 0)
     tmp.width = 0 // free the offscreen bitmap right away
     setRendered(true)
+    if (!textDoneRef.current && textLayerRef.current) {
+      textDoneRef.current = true
+      buildTextLayer(page, textLayerRef.current, viewport)
+        .then((layer) => { textLayerObjRef.current = layer })
+        .catch(() => { textDoneRef.current = false }) // try again on the next render
+    }
     cssSizeRef.current = { w: viewport.width, h: viewport.height }
     const ctx = overlay.getContext('2d')
     ctx.imageSmoothingEnabled = true
@@ -248,7 +301,10 @@ function PageBlock({
     for (const c of [baseCanvasRef.current, overlayCanvasRef.current]) {
       if (c) { c.style.width = `${w}px`; c.style.height = `${h}px` }
     }
+    textLayerRef.current?.style.setProperty('--scale-factor', String(fit * zoom))
   }, [zoom, containerWidth, rendered])
+
+  useEffect(() => () => { try { textLayerObjRef.current?.cancel() } catch { /* already finished */ } }, [])
 
   useEffect(() => { if (shouldRender) render() }, [shouldRender, render])
 
@@ -339,6 +395,14 @@ function PageBlock({
         </div>
       )}
       <canvas ref={baseCanvasRef} className={`rounded-lg shadow-xl block mx-auto ${rendered ? '' : 'hidden'}`} />
+      {/* Invisible, selectable text. Sits under the drawing overlay, which lets mouse/touch
+          straight through while no pen/marker/eraser is active — so you can select & copy. */}
+      <div
+        ref={textLayerRef}
+        className={`tpTextLayer ${rendered ? '' : 'hidden'}`}
+        style={{ pointerEvents: tool === 'none' ? 'auto' : 'none' }}
+        onPointerDown={(e) => e.currentTarget.classList.add('selecting')}
+      />
       <canvas
         ref={overlayCanvasRef}
         className={`absolute inset-0 ${tool === 'none' ? 'pointer-events-none' : 'touch-none'} ${rendered ? '' : 'hidden'}`}
