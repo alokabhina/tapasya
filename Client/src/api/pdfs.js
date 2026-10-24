@@ -152,3 +152,21 @@ export async function deletePdf(id) {
   const res = await api.delete(`/pdfs/${id}`)
   return res.data
 }
+// ── Reading analytics (admins only can read them) ───────────────────────────
+// Heartbeat from the reader / pics viewer — see hooks/useReadTracker.js.
+export async function pingPdfRead(id, { seconds = 0, kind = 'pdf', start = false } = {}) {
+  const res = await api.post(`/pdfs/${id}/read`, { seconds, kind, start })
+  return res.data
+}
+
+// [{ pdfDocId, readers, seconds, opens, lastReadAt }] — one row per item anyone has read
+export async function getReadOverview() {
+  const res = await api.get('/pdfs/admin/overview')
+  return res.data
+}
+
+// { readers: [{ name, email, photoURL, pdfSeconds, picSeconds, seconds, opens, firstReadAt, lastReadAt }], totals }
+export async function getPdfReaders(id) {
+  const res = await api.get(`/pdfs/${id}/readers`)
+  return res.data
+}

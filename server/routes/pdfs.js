@@ -22,7 +22,8 @@ import cloudinary from 'cloudinary'
 import { Readable } from 'stream'
 import authMiddleware from '../middleware/auth.js'
 import { isCaAdmin } from '../middleware/caAdmin.js'
-import PdfDoc, { PdfAnnotation } from '../models/PdfDoc.js'
+import PdfDoc, { PdfAnnotation, PdfReadStat } from '../models/PdfDoc.js'
+import User from '../models/User.js'
 
 const MAX_IMAGES = 10
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -156,6 +157,96 @@ router.use(authMiddleware)
 router.get('/is-admin', async (req, res) => {
   try {
     res.json({ isAdmin: await isPdfAdmin(req.user.id) })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── Reading analytics (global items only) ──────────────────────────────────
+// POST /api/pdfs/:id/read   body: { seconds?, kind?: 'pdf'|'pics', start?: bool }
+// Heartbeat from the reader: `start` bumps the open-count, `seconds` (≤ 60 per
+// ping, so a bug or a hand-made request can't inflate the numbers) is added to
+// that person's total. The two admins aren't tracked — their own test reads
+// would just pollute the numbers they're trying to look at.
+router.post('/:id/read', async (req, res) => {
+  try {
+    if (!/^[a-f\d]{24}$/i.test(req.params.id)) return res.json({ tracked: false })
+    const doc = await PdfDoc.findById(req.params.id).select('isGlobal userId unlockAt')
+    if (!doc || !doc.isGlobal) return res.json({ tracked: false })
+    if (await isPdfAdmin(req.user.id)) return res.json({ tracked: false })
+    if (doc.unlockAt && doc.unlockAt.getTime() > Date.now()) return res.json({ tracked: false }) // still locked — nothing to read
+
+    const seconds = Math.max(0, Math.min(60, Math.round(Number(req.body.seconds) || 0)))
+    const start = req.body.start === true
+    if (!seconds && !start) return res.json({ tracked: true })
+
+    const inc = {}
+    if (seconds) inc[req.body.kind === 'pics' ? 'picSeconds' : 'pdfSeconds'] = seconds
+    if (start) inc.opens = 1
+    await PdfReadStat.updateOne(
+      { userId: req.user.id, pdfDocId: doc._id },
+      { $inc: inc, $set: { lastReadAt: new Date() }, $setOnInsert: { firstReadAt: new Date() } },
+      { upsert: true }
+    )
+    res.json({ tracked: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// GET /api/pdfs/admin/overview   → admins only. One row per item that anyone has read:
+// { pdfDocId, readers, seconds, opens, lastReadAt } — drives the little "👁 5 · 2h" badge on each card.
+router.get('/admin/overview', async (req, res) => {
+  try {
+    if (!(await isPdfAdmin(req.user.id))) return res.status(403).json({ error: 'Admin access only' })
+    const rows = await PdfReadStat.aggregate([
+      { $group: {
+        _id: '$pdfDocId',
+        readers: { $sum: 1 },
+        seconds: { $sum: { $add: ['$pdfSeconds', '$picSeconds'] } },
+        opens: { $sum: '$opens' },
+        lastReadAt: { $max: '$lastReadAt' },
+      } },
+    ])
+    res.json(rows.map((r) => ({ pdfDocId: String(r._id), readers: r.readers, seconds: r.seconds, opens: r.opens, lastReadAt: r.lastReadAt })))
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// GET /api/pdfs/:id/readers   → admins only. Who read this item, and for how long.
+router.get('/:id/readers', async (req, res) => {
+  try {
+    if (!(await isPdfAdmin(req.user.id))) return res.status(403).json({ error: 'Admin access only' })
+    if (!/^[a-f\d]{24}$/i.test(req.params.id)) return res.status(404).json({ error: 'Not found' })
+    const stats = await PdfReadStat.find({ pdfDocId: req.params.id }).lean()
+    const users = await User.find({ _id: { $in: stats.map((s) => s.userId) } }).select('displayName email photoURL').lean()
+    const byId = new Map(users.map((u) => [String(u._id), u]))
+    const readers = stats
+      .map((s) => {
+        const u = byId.get(String(s.userId))
+        return {
+          userId: String(s.userId),
+          name: u?.displayName || 'Unknown',
+          email: u?.email || '',
+          photoURL: u?.photoURL || '',
+          pdfSeconds: s.pdfSeconds || 0,
+          picSeconds: s.picSeconds || 0,
+          seconds: (s.pdfSeconds || 0) + (s.picSeconds || 0),
+          opens: s.opens || 0,
+          firstReadAt: s.firstReadAt,
+          lastReadAt: s.lastReadAt,
+        }
+      })
+      .sort((a, b) => b.seconds - a.seconds)
+    res.json({
+      readers,
+      totals: {
+        readers: readers.length,
+        seconds: readers.reduce((n, r) => n + r.seconds, 0),
+        opens: readers.reduce((n, r) => n + r.opens, 0),
+      },
+    })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -452,6 +543,7 @@ router.delete('/:id', async (req, res) => {
     for (const im of doc.images || []) {
       await cloud.uploader.destroy(im.publicId, { resource_type: 'image' }).catch(() => {})
     }
+    await PdfReadStat.deleteMany({ pdfDocId: doc._id }).catch(() => {})
     // Clean up everyone else's personal annotations on this now-deleted doc too
     // (their Cloudinary copies as well, so nothing is left orphaned).
     const personal = await PdfAnnotation.find({ pdfDocId: doc._id }).catch(() => [])

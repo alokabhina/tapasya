@@ -9,6 +9,7 @@
 // Only the picture zooms — the rest of the site is untouched.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import useReadTracker from '@/hooks/useReadTracker'
 
 const MIN_S = 1
 const MAX_S = 5
@@ -16,7 +17,8 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 // resistance past an edge: moves with the finger, but less and less (capped), then springs back
 const soft = (v, m) => (Math.abs(v) <= m ? v : Math.sign(v) * (m + Math.min(90, (Math.abs(v) - m) * 0.35)))
 
-export default function ImageViewer({ images = [], startIndex = 0, title = '', onClose }) {
+export default function ImageViewer({ images = [], startIndex = 0, title = '', onClose, trackDocId = null, trackEnabled = false }) {
+  useReadTracker(trackDocId, { kind: 'pics', enabled: trackEnabled })
   const [index, setIndex] = useState(clamp(startIndex, 0, Math.max(0, images.length - 1)))
   const [loaded, setLoaded] = useState(false)
   const stageRef = useRef(null)

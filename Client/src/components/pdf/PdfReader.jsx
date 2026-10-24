@@ -26,6 +26,7 @@
 import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react'
 import { saveAnnotatedPdf } from '@/api/pdfs'
 import usePinchZoom from '@/hooks/usePinchZoom'
+import useReadTracker from '@/hooks/useReadTracker'
 import { getPdfFileOffline, savePdfFileOffline } from '@/utils/offlineDB'
 import * as pdfjsLib from 'pdfjs-dist'
 // Vite: `?url` gives us a hashed, served URL for the worker file instead of
@@ -70,12 +71,23 @@ async function buildTextLayer(page, container, viewport) {
   container.replaceChildren()
   container.style.setProperty('--scale-factor', String(viewport.scale))
   const textContent = await page.getTextContent()
+  let task = null
   if (pdfjsLib.TextLayer) {
-    const layer = new pdfjsLib.TextLayer({ textContentSource: textContent, container, viewport })
-    await layer.render()
-    return layer
+    // pdf.js 4.1+
+    task = new pdfjsLib.TextLayer({ textContentSource: textContent, container, viewport })
+    await task.render()
+  } else if (pdfjsLib.renderTextLayer) {
+    // pdf.js 4.0.x only exports the older function form — same output, same --scale-factor sizing
+    task = pdfjsLib.renderTextLayer({ textContentSource: textContent, container, viewport, textDivs: [], textContentItemsStr: [] })
+    await task.promise
+  } else {
+    throw new Error('This pdfjs-dist version has no text layer API')
   }
-  return null
+  // pdf.js's viewer adds this spacer so a drag-selection doesn't jump around in the gaps between lines
+  const end = document.createElement('div')
+  end.className = 'endOfContent'
+  container.append(end)
+  return task
 }
 
 const PDFLIB_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js'
@@ -191,6 +203,7 @@ function PageBlock({
   const overlayCanvasRef = useRef(null)
   const textLayerRef = useRef(null)
   const textLayerObjRef = useRef(null)
+  const textTriesRef = useRef(0)
   const textDoneRef = useRef(false) // text layer is built once per page; zoom just rescales it via --scale-factor
   const renderTaskRef = useRef(null)
   const drawingRef = useRef(false)
@@ -277,7 +290,10 @@ function PageBlock({
       textDoneRef.current = true
       buildTextLayer(page, textLayerRef.current, viewport)
         .then((layer) => { textLayerObjRef.current = layer })
-        .catch(() => { textDoneRef.current = false }) // try again on the next render
+        .catch((err) => {
+          console.warn('[PdfReader] text layer failed for page', pageNum, err)
+          if (++textTriesRef.current < 3) textDoneRef.current = false // retry on the next render, a couple of times at most
+        })
     }
     cssSizeRef.current = { w: viewport.width, h: viewport.height }
     const ctx = overlay.getContext('2d')
@@ -383,8 +399,10 @@ function PageBlock({
     <div
       ref={wrapRef}
       data-page={pageNum}
-      className={`relative mx-auto mb-4 ${rendered ? 'w-fit' : ''}`}
-      style={{ width: rendered ? undefined : placeholderW, minHeight: rendered ? undefined : placeholderH }}
+      className={`relative mx-auto ${rendered ? 'w-fit' : ''}`}
+      // the gap between pages scales with zoom too, so the whole stack grows in exact proportion —
+      // that's what lets a pinch keep the spot under your fingers fixed when it's released
+      style={{ width: rendered ? undefined : placeholderW, minHeight: rendered ? undefined : placeholderH, marginBottom: Math.round(16 * zoom) }}
     >
       {!rendered && (
         <div
@@ -417,6 +435,8 @@ function PageBlock({
 }
 
 export default function PdfReader({ doc, onClose, onSaved }) {
+  // lets the admins see who read this global PDF and for how long (active time only)
+  useReadTracker(doc._id, { kind: 'pdf', enabled: !!doc.isGlobal })
   const viewerContainerRef = useRef(null)
   const pdfDocRef = useRef(null) // pdf.js document proxy (for viewing)
 
@@ -897,7 +917,8 @@ export default function PdfReader({ doc, onClose, onSaved }) {
   const activeThickness = tool === 'marker' ? markerWidth : penWidth
 
   return (
-    <div className="fixed inset-0 z-[110] bg-black/95 flex flex-col">
+    // touch-action on the whole reader: one finger scrolls, two fingers never zoom the *website* — only our own pinch handler runs
+    <div className="fixed inset-0 z-[110] bg-black/95 flex flex-col" style={{ touchAction: 'pan-x pan-y' }}>
       {/* Single merged top bar — header + toolbar together so the PDF gets
           all the remaining vertical space. Scrolls horizontally on narrow
           screens instead of wrapping to a second row. */}
@@ -1207,7 +1228,7 @@ export default function PdfReader({ doc, onClose, onSaved }) {
       <div
         ref={viewerContainerRef}
         className="flex-1 overflow-auto px-3 sm:px-6 py-4"
-        style={{ touchAction: 'pan-x pan-y', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+        style={{ touchAction: 'pan-x pan-y', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', scrollbarGutter: 'stable' }}
         onPointerDownCapture={() => panelOpen && setPanelOpen(null)}
         onScroll={handleViewerScroll}
       >

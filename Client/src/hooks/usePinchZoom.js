@@ -2,14 +2,20 @@
 // Two-finger pinch (touch) + Ctrl/⌘-scroll / trackpad-pinch (desktop) zoom for
 // a scrollable viewer — ONLY the viewer zooms, never the whole website.
 //
-// How it works (why it's smooth):
-//  • While the fingers are moving we apply the CSS `zoom` property to the
-//    content wrapper. That's layout-affecting, so the scroll extents stay
-//    correct and we can keep the point between the fingers fixed on screen
-//    by adjusting scrollLeft/scrollTop on every move. No canvas re-render yet.
-//  • When the gesture ends we commit the final value to the `zoom` state
-//    (flushSync), drop the temporary CSS zoom in the same frame, and the
-//    pages re-render crisp at the new scale.
+// How it works:
+//  • While the fingers move we only change a CSS `transform` (translate + scale)
+//    on the content wrapper, with transform-origin pinned to the spot between
+//    the fingers. That's GPU-composited — no layout, no canvas re-render, no
+//    scroll changes — so it stays smooth even on a phone with 20 pages.
+//  • On touch we also freeze native scrolling for the length of the pinch
+//    (overflow:hidden). Otherwise, if one finger had already started a scroll,
+//    the browser keeps scrolling underneath the pinch and the page "fights" you.
+//  • When the gesture ends we commit the final zoom to React state (flushSync),
+//    drop the temporary transform in the same frame, then set scrollLeft/Top so
+//    the exact point that was between your fingers is still between them. The
+//    pages re-render crisp at the new scale a moment later. (This only lines up
+//    because the whole page stack scales in exact proportion with `zoom`,
+//    including the gaps between pages — see PageBlock in PdfReader.)
 //
 // Usage:
 //   const contentRef = useRef(null)
@@ -33,7 +39,7 @@ export default function usePinchZoom({ containerRef, contentRef, zoom, setZoom, 
     const el = containerRef.current
     if (!el) return undefined
 
-    let g = null // active gesture: { kind, z0, r, ox, oy, wx, wy, d0 }
+    let g = null // active gesture: { kind, z0, r, wx, wy, cx0, cy0, dx, dy, d0, prevOverflow }
     let wheelTimer = null
 
     const clampR = (r, z0) => Math.min(max / z0, Math.max(min / z0, r))
@@ -42,36 +48,50 @@ export default function usePinchZoom({ containerRef, contentRef, zoom, setZoom, 
       const r = el.getBoundingClientRect()
       return { x: (t[0].clientX + t[1].clientX) / 2 - r.left, y: (t[0].clientY + t[1].clientY) / 2 - r.top }
     }
+    // content wrapper's top-left, in the container's scroll coordinates
+    function contentOrigin() {
+      const content = contentRef.current
+      const cr = el.getBoundingClientRect()
+      const tr = content.getBoundingClientRect()
+      return { ox: tr.left - cr.left + el.scrollLeft, oy: tr.top - cr.top + el.scrollTop }
+    }
 
     // cx/cy = focal point in the container's viewport coords.
     function begin(kind, cx, cy) {
       const content = contentRef.current
       if (!content) return null
-      const cr = el.getBoundingClientRect()
-      const tr = content.getBoundingClientRect()
-      const ox = tr.left - cr.left + el.scrollLeft // content origin, in scroll coords
-      const oy = tr.top - cr.top + el.scrollTop
-      return { kind, z0: zoomRef.current, r: 1, ox, oy, wx: el.scrollLeft + cx - ox, wy: el.scrollTop + cy - oy, d0: 0 }
+      const { ox, oy } = contentOrigin()
+      const wx = el.scrollLeft + cx - ox // focal point in content coords (at the current zoom)
+      const wy = el.scrollTop + cy - oy
+      content.style.transformOrigin = `${wx}px ${wy}px`
+      return { kind, z0: zoomRef.current, r: 1, wx, wy, cx0: cx, cy0: cy, dx: 0, dy: 0, d0: 0, prevOverflow: '' }
     }
 
     function apply(cx, cy) {
       const content = contentRef.current
       if (!content || !g) return
-      content.style.zoom = String(g.r)
-      el.scrollLeft = g.ox + g.wx * g.r - cx
-      el.scrollTop = g.oy + g.wy * g.r - cy
+      g.dx = cx - g.cx0
+      g.dy = cy - g.cy0
+      content.style.transform = `translate3d(${g.dx}px, ${g.dy}px, 0) scale(${g.r})`
     }
 
     function commit() {
       if (!g) return
-      const content = contentRef.current
-      const next = Math.round(g.z0 * g.r * 1000) / 1000
+      const cur = g
       g = null
       clearTimeout(wheelTimer)
+      const content = contentRef.current
+      if (cur.kind === 'touch') el.style.overflow = cur.prevOverflow
       if (!content) return
-      if (Math.abs(next - zoomRef.current) < 0.001) { content.style.zoom = ''; return }
-      flushSync(() => setZoomRef.current(next))
-      content.style.zoom = ''
+      content.style.transform = ''
+      content.style.transformOrigin = ''
+      const next = Math.round(cur.z0 * cur.r * 1000) / 1000
+      if (Math.abs(next - zoomRef.current) < 0.001) return
+      flushSync(() => setZoomRef.current(next)) // pages take their new size now (before the next paint)
+      const rr = next / cur.z0
+      const { ox, oy } = contentOrigin()
+      el.scrollLeft = ox + cur.wx * rr - (cur.cx0 + cur.dx)
+      el.scrollTop = oy + cur.wy * rr - (cur.cy0 + cur.dy)
     }
 
     function onTouchStart(e) {
@@ -82,12 +102,14 @@ export default function usePinchZoom({ containerRef, contentRef, zoom, setZoom, 
       if (!next) return
       g = next
       g.d0 = dist(e.touches) || 1
+      g.prevOverflow = el.style.overflow
+      el.style.overflow = 'hidden' // stop any native scroll that one finger already started
       pinchingRef.current = true
     }
 
     function onTouchMove(e) {
       if (!g || g.kind !== 'touch' || e.touches.length < 2) return
-      e.preventDefault() // stop the browser scrolling / page-zooming under the fingers
+      if (e.cancelable) e.preventDefault()
       const m = mid(e.touches)
       g.r = clampR(dist(e.touches) / g.d0, g.z0)
       apply(m.x, m.y)
@@ -117,19 +139,30 @@ export default function usePinchZoom({ containerRef, contentRef, zoom, setZoom, 
       wheelTimer = setTimeout(commit, 180)
     }
 
+    // iOS Safari has its own pinch events that would zoom the whole page
+    const blockGesture = (e) => e.preventDefault()
+
     el.addEventListener('touchstart', onTouchStart, { passive: true })
     el.addEventListener('touchmove', onTouchMove, { passive: false })
     el.addEventListener('touchend', onTouchEnd)
     el.addEventListener('touchcancel', onTouchEnd)
     el.addEventListener('wheel', onWheel, { passive: false })
+    el.addEventListener('gesturestart', blockGesture)
+    el.addEventListener('gesturechange', blockGesture)
+    el.addEventListener('gestureend', blockGesture)
     return () => {
       el.removeEventListener('touchstart', onTouchStart)
       el.removeEventListener('touchmove', onTouchMove)
       el.removeEventListener('touchend', onTouchEnd)
       el.removeEventListener('touchcancel', onTouchEnd)
       el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('gesturestart', blockGesture)
+      el.removeEventListener('gesturechange', blockGesture)
+      el.removeEventListener('gestureend', blockGesture)
       clearTimeout(wheelTimer)
-      if (contentRef.current) contentRef.current.style.zoom = ''
+      if (g?.kind === 'touch') el.style.overflow = g.prevOverflow
+      const content = contentRef.current
+      if (content) { content.style.transform = ''; content.style.transformOrigin = '' }
     }
   }, [containerRef, contentRef, min, max])
 

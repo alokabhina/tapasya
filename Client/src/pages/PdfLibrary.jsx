@@ -2,9 +2,9 @@
 // Personal PDF library: upload study PDFs (single or bulk), organize them
 // into folders (e.g. "Quant", "English"), and open them to read/mark up
 // (see PdfReader.jsx) without ever touching the original file.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { getPdfs, uploadBundle, updatePdf, deletePdf, checkPdfAdmin, renamePdfFolder, addPdfImages, removePdfImage, isoToLocalInput } from '@/api/pdfs'
+import { getPdfs, uploadBundle, updatePdf, deletePdf, checkPdfAdmin, renamePdfFolder, addPdfImages, removePdfImage, isoToLocalInput, getReadOverview, getPdfReaders } from '@/api/pdfs'
 import PdfReader from '@/components/pdf/PdfReader'
 import ImageViewer from '@/components/pdf/ImageViewer'
 import { getPdfsOffline, savePdfsOffline, getPdfFileOffline, savePdfFileOffline, deletePdfFileOffline, deletePdfOffline } from '@/utils/offlineDB'
@@ -31,6 +31,30 @@ function pickMeta(u = {}) {
     if (u[k] !== undefined) out[k] = u[k]
   }
   return out
+}
+
+// 3725 → "1h 2m", 750 → "12m", 45 → "45s", 0 → "—"
+function fmtDuration(totalSeconds = 0) {
+  const s = Math.round(totalSeconds)
+  if (s < 1) return '—'
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  if (h > 0) return m ? `${h}h ${m}m` : `${h}h`
+  if (m > 0) return `${m}m`
+  return `${s}s`
+}
+
+function timeAgo(iso) {
+  if (!iso) return ''
+  const diff = Math.max(0, Date.now() - new Date(iso).getTime())
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return 'abhi abhi'
+  if (min < 60) return `${min} min pehle`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} ghante pehle`
+  const d = Math.floor(hr / 24)
+  if (d < 30) return `${d} din pehle`
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function formatSize(bytes = 0) {
@@ -78,7 +102,7 @@ function useCountdown(targetIso, onUnlock) {
 
 // ── PDF grid card — handles its own scheduled-unlock countdown (needs its
 // own hook instance, hence a separate component rather than inline JSX) ────
-function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, handleMoveTo, handleDelete, openItem, startEdit, onUnlocked }) {
+function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, handleMoveTo, handleDelete, openItem, startEdit, onUnlocked, isAdmin, readStat, onShowReaders }) {
   const isLocked = doc.locked === true
   const hasPdf = doc.hasPdf ?? !!doc.originalUrl
   const picCount = doc.imageCount ?? doc.images?.length ?? 0
@@ -188,6 +212,16 @@ function PdfCard({ doc, activeFolder, folders, moveMenuDoc, setMoveMenuDoc, hand
         <p className="text-[10px] text-slate-500 mt-1">
           {isLocked ? 'Locked' : [hasPdf && formatSize(doc.fileSizeBytes), picCount > 0 && `${picCount} pic${picCount !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
         </p>
+        {isAdmin && doc.isGlobal && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onShowReaders(doc) }}
+            className="mt-1.5 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300"
+            title="Kisne padha, kitni der — dekhne ke liye tap karo"
+          >
+            <i className="ti ti-eye text-[11px] text-orange-400" />
+            {readStat ? `${readStat.readers} ${readStat.readers === 1 ? 'reader' : 'readers'} · ${fmtDuration(readStat.seconds)}` : 'Abhi tak kisi ne nahi padha'}
+          </button>
+        )}
         {isLocked && summary && <p className="text-[10px] text-slate-400 mt-1 line-clamp-3 leading-snug whitespace-pre-line">{summary}</p>}
       </div>
     </div>
@@ -214,6 +248,8 @@ export default function PdfLibrary() {
   const [chooserDoc, setChooserDoc] = useState(null) // item that has BOTH a PDF and pics → ask which to open
   const [viewer, setViewer] = useState(null) // { doc, index } → full-screen pics viewer
   const editPicsInputRef = useRef(null)
+  const [readStats, setReadStats] = useState({}) // admins only: pdfDocId → { readers, seconds, opens, lastReadAt }
+  const [readersModal, setReadersModal] = useState(null) // { doc, loading, error, data }
   const [activeFolder, setActiveFolder] = useState(null) // null = folder grid view
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
@@ -403,6 +439,27 @@ export default function PdfLibrary() {
     setMoveMenuDoc(null)
     const updated = await updatePdf(doc._id, { folder: folderName === UNGROUPED ? '' : folderName })
     setDocs((prev) => prev.map((d) => (d._id === doc._id ? { ...d, folder: updated.folder } : d)))
+  }
+
+  // --- Reading analytics (admins only) -----------------------------------------
+  const loadReadStats = useCallback(async () => {
+    try {
+      const rows = await getReadOverview()
+      setReadStats(Object.fromEntries(rows.map((r) => [r.pdfDocId, r])))
+    } catch { /* not an admin / offline — the badges just stay empty */ }
+  }, [])
+
+  useEffect(() => { if (isAdmin) loadReadStats() }, [isAdmin, loadReadStats])
+
+  async function showReaders(doc) {
+    setReadersModal({ doc, loading: true, error: '', data: null })
+    try {
+      const data = await getPdfReaders(doc._id)
+      setReadersModal({ doc, loading: false, error: '', data })
+      loadReadStats() // keep the card badges fresh too
+    } catch (e) {
+      setReadersModal({ doc, loading: false, error: e?.response?.data?.error || 'Load nahi ho paya', data: null })
+    }
   }
 
   // --- Open an item: PDF → reader, pics → viewer, both → chooser ---------------
@@ -630,7 +687,7 @@ export default function PdfLibrary() {
 
       {/* New-folder mini modal */}
       {showNewFolder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowNewFolder(false)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" onClick={() => setShowNewFolder(false)}>
           <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm font-semibold text-slate-200 mb-1">Naya Folder</p>
             <p className="text-xs text-slate-500 mb-3">Naam do — folder banate hi PDFs upload karne ka option aayega</p>
@@ -722,6 +779,9 @@ export default function PdfLibrary() {
                 openItem={openItem}
                 startEdit={startEdit}
                 onUnlocked={load}
+                isAdmin={isAdmin}
+                readStat={readStats[doc._id]}
+                onShowReaders={showReaders}
               />
             ))}
           </div>
@@ -730,8 +790,8 @@ export default function PdfLibrary() {
 
       {/* Edit item — title, summary shown on the card, pics, unlock time */}
       {editDoc && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={() => !editBusy && setEditDocId(null)}>
-          <div className="w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" onClick={() => !editBusy && setEditDocId(null)}>
+          <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-1.5"><i className="ti ti-pencil text-orange-400" /> Item edit karo</p>
 
             <label className="block text-[11px] text-slate-500 mb-1">Naam</label>
@@ -809,8 +869,8 @@ export default function PdfLibrary() {
 
       {/* PDF + pics item → pick what to open */}
       {chooserDoc && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={() => setChooserDoc(null)}>
-          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" onClick={() => setChooserDoc(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm font-semibold text-slate-200 line-clamp-2 mb-1">{chooserDoc.title}</p>
             <p className="text-xs text-slate-500 mb-4">Kya kholna hai?</p>
             <div className="grid grid-cols-2 gap-3">
@@ -833,11 +893,87 @@ export default function PdfLibrary() {
         </div>
       )}
 
+      {/* Admins only — who read this item and for how long */}
+      {readersModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" onClick={() => setReadersModal(null)}>
+          <div className="w-full max-w-md max-h-[85vh] flex flex-col rounded-2xl border border-slate-800 bg-slate-900" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-2 px-5 pt-5 pb-3 border-b border-slate-800">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-200 flex items-center gap-1.5"><i className="ti ti-eye text-orange-400" /> Kisne padha</p>
+                <p className="text-xs text-slate-500 truncate mt-0.5">{readersModal.doc.title}</p>
+              </div>
+              <button onClick={() => showReaders(readersModal.doc)} className="w-8 h-8 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center shrink-0" title="Refresh">
+                <i className={`ti ti-refresh text-base ${readersModal.loading ? 'animate-spin' : ''}`} />
+              </button>
+              <button onClick={() => setReadersModal(null)} className="w-8 h-8 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center shrink-0" title="Band karo">
+                <i className="ti ti-x text-base" />
+              </button>
+            </div>
+
+            {readersModal.loading && !readersModal.data && (
+              <div className="py-10 flex justify-center"><div className="w-6 h-6 rounded-full border-2 border-slate-600 border-t-orange-400 animate-spin" /></div>
+            )}
+            {readersModal.error && <p className="px-5 py-6 text-sm text-red-400 text-center">{readersModal.error}</p>}
+
+            {readersModal.data && (
+              <>
+                <div className="grid grid-cols-3 gap-2 px-5 py-3">
+                  {[
+                    ['Readers', readersModal.data.totals.readers],
+                    ['Total time', fmtDuration(readersModal.data.totals.seconds)],
+                    ['Opens', readersModal.data.totals.opens],
+                  ].map(([label, val]) => (
+                    <div key={label} className="rounded-xl bg-slate-800/60 px-3 py-2 text-center">
+                      <p className="text-base font-bold text-slate-100 tabular-nums">{val}</p>
+                      <p className="text-[10px] text-slate-500">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="overflow-y-auto px-3 pb-4 flex-1">
+                  {readersModal.data.readers.length === 0 ? (
+                    <p className="text-sm text-slate-500 text-center py-8">Abhi tak kisi ne ise nahi padha.</p>
+                  ) : (
+                    readersModal.data.readers.map((r) => (
+                      <div key={r.userId} className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-slate-800/50">
+                        {r.photoURL ? (
+                          <img src={r.photoURL} alt="" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-slate-700 text-slate-200 text-sm font-semibold flex items-center justify-center shrink-0">
+                            {(r.name || '?').trim().charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-slate-100 truncate">{r.name}</p>
+                          <p className="text-[11px] text-slate-500 truncate">{r.email || 'email nahi'}</p>
+                          <p className="text-[10px] text-slate-600 mt-0.5">
+                            {r.opens} baar khola · aakhri baar {timeAgo(r.lastReadAt)}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-semibold text-orange-400 tabular-nums">{fmtDuration(r.seconds)}</p>
+                          {r.pdfSeconds > 0 && r.picSeconds > 0 && (
+                            <p className="text-[10px] text-slate-500">PDF {fmtDuration(r.pdfSeconds)} · pics {fmtDuration(r.picSeconds)}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <p className="px-5 pb-4 text-[10px] text-slate-600">Sirf active time ginta hai — tab band ya 3 min tak koi activity na ho to time nahi judta. Aap dono admins ka khud ka padhna count nahi hota.</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {viewer && (
         <ImageViewer
           images={(viewer.doc.images || []).map((im) => ({ ...im, url: viewUrl(im.url) }))}
           startIndex={viewer.index}
           title={viewer.doc.title}
+          trackDocId={viewer.doc._id}
+          trackEnabled={!!viewer.doc.isGlobal}
           onClose={() => setViewer(null)}
         />
       )}

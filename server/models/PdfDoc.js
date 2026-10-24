@@ -74,4 +74,23 @@ const pdfAnnotationSchema = new mongoose.Schema({
 pdfAnnotationSchema.index({ userId: 1, pdfDocId: 1 }, { unique: true })
 
 export const PdfAnnotation = mongoose.model('PdfAnnotation', pdfAnnotationSchema)
+
+// Reading analytics for GLOBAL items — one row per (user, item). Fed by small
+// heartbeat pings from the reader / pics viewer (only while the tab is visible
+// and the person is actually active), so `*Seconds` is real time spent, not
+// "tab left open overnight". Only the two admins can read these (routes/pdfs.js).
+const pdfReadStatSchema = new mongoose.Schema({
+  pdfDocId:    { type: mongoose.Schema.Types.ObjectId, ref: 'PdfDoc', required: true },
+  userId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  pdfSeconds:  { type: Number, default: 0 }, // time in the PDF reader
+  picSeconds:  { type: Number, default: 0 }, // time in the revision-pics viewer
+  opens:       { type: Number, default: 0 }, // how many times they opened it
+  firstReadAt: { type: Date, default: Date.now },
+  lastReadAt:  { type: Date, default: Date.now },
+}, { timestamps: true })
+
+pdfReadStatSchema.index({ userId: 1, pdfDocId: 1 }, { unique: true })
+pdfReadStatSchema.index({ pdfDocId: 1 })
+
+export const PdfReadStat = mongoose.model('PdfReadStat', pdfReadStatSchema)
 export default mongoose.model('PdfDoc', pdfDocSchema)
