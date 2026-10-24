@@ -12,10 +12,11 @@
 //    the browser keeps scrolling underneath the pinch and the page "fights" you.
 //  • When the gesture ends we commit the final zoom to React state (flushSync),
 //    drop the temporary transform in the same frame, then set scrollLeft/Top so
-//    the exact point that was between your fingers is still between them. The
-//    pages re-render crisp at the new scale a moment later. (This only lines up
-//    because the whole page stack scales in exact proportion with `zoom`,
-//    including the gaps between pages — see PageBlock in PdfReader.)
+//    the exact point that was between your fingers is still between them. That
+//    point is remembered as "this far down THIS page" (like pdf.js / Google Drive
+//    do), not as a share of the whole document, so it stays exact no matter how
+//    the pages above it happen to be sized. The pages re-render crisp at the new
+//    scale a moment later.
 //
 // Usage:
 //   const contentRef = useRef(null)
@@ -39,8 +40,12 @@ export default function usePinchZoom({ containerRef, contentRef, zoom, setZoom, 
     const el = containerRef.current
     if (!el) return undefined
 
-    let g = null // active gesture: { kind, z0, r, wx, wy, cx0, cy0, dx, dy, d0, prevOverflow }
+    let g = null // active gesture: { kind, z0, r, wx, wy, anchor, cx0, cy0, dx, dy, d0 }
     let wheelTimer = null
+    let locked = false // native scrolling frozen (touch pinch only) — released once ALL fingers are up
+    let prevOverflow = ''
+    const lock = () => { if (!locked) { locked = true; prevOverflow = el.style.overflow; el.style.overflow = 'hidden' } }
+    const unlock = () => { if (locked) { locked = false; el.style.overflow = prevOverflow } }
 
     const clampR = (r, z0) => Math.min(max / z0, Math.max(min / z0, r))
     const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
@@ -64,7 +69,24 @@ export default function usePinchZoom({ containerRef, contentRef, zoom, setZoom, 
       const wx = el.scrollLeft + cx - ox // focal point in content coords (at the current zoom)
       const wy = el.scrollTop + cy - oy
       content.style.transformOrigin = `${wx}px ${wy}px`
-      return { kind, z0: zoomRef.current, r: 1, wx, wy, cx0: cx, cy0: cy, dx: 0, dy: 0, d0: 0, prevOverflow: '' }
+
+      // Which page is under the focal point, and how far across / down it (0..1)?
+      const cr = el.getBoundingClientRect()
+      const fxClient = cr.left + cx
+      const fyClient = cr.top + cy
+      let anchor = null
+      let bestDist = Infinity
+      for (const pageEl of content.children) {
+        const r = pageEl.getBoundingClientRect()
+        if (!r.height || !r.width) continue
+        const d = fyClient < r.top ? r.top - fyClient : fyClient > r.bottom ? fyClient - r.bottom : 0
+        if (d < bestDist) {
+          bestDist = d
+          anchor = { el: pageEl, fx: (fxClient - r.left) / r.width, fy: (fyClient - r.top) / r.height }
+          if (d === 0) break
+        }
+      }
+      return { kind, z0: zoomRef.current, r: 1, wx, wy, anchor, cx0: cx, cy0: cy, dx: 0, dy: 0, d0: 0 }
     }
 
     function apply(cx, cy) {
@@ -81,17 +103,27 @@ export default function usePinchZoom({ containerRef, contentRef, zoom, setZoom, 
       g = null
       clearTimeout(wheelTimer)
       const content = contentRef.current
-      if (cur.kind === 'touch') el.style.overflow = cur.prevOverflow
       if (!content) return
       content.style.transform = ''
       content.style.transformOrigin = ''
       const next = Math.round(cur.z0 * cur.r * 1000) / 1000
       if (Math.abs(next - zoomRef.current) < 0.001) return
       flushSync(() => setZoomRef.current(next)) // pages take their new size now (before the next paint)
-      const rr = next / cur.z0
-      const { ox, oy } = contentOrigin()
-      el.scrollLeft = ox + cur.wx * rr - (cur.cx0 + cur.dx)
-      el.scrollTop = oy + cur.wy * rr - (cur.cy0 + cur.dy)
+
+      const cr = el.getBoundingClientRect()
+      const targetX = cr.left + cur.cx0 + cur.dx // where the focal point should be on screen now
+      const targetY = cr.top + cur.cy0 + cur.dy
+      if (cur.anchor && cur.anchor.el.isConnected) {
+        const r = cur.anchor.el.getBoundingClientRect()
+        el.scrollLeft += r.left + cur.anchor.fx * r.width - targetX
+        el.scrollTop += r.top + cur.anchor.fy * r.height - targetY
+      } else {
+        // fallback: proportional placement
+        const rr = next / cur.z0
+        const { ox, oy } = contentOrigin()
+        el.scrollLeft = ox + cur.wx * rr - (cur.cx0 + cur.dx)
+        el.scrollTop = oy + cur.wy * rr - (cur.cy0 + cur.dy)
+      }
     }
 
     function onTouchStart(e) {
@@ -102,8 +134,7 @@ export default function usePinchZoom({ containerRef, contentRef, zoom, setZoom, 
       if (!next) return
       g = next
       g.d0 = dist(e.touches) || 1
-      g.prevOverflow = el.style.overflow
-      el.style.overflow = 'hidden' // stop any native scroll that one finger already started
+      lock() // stop any native scroll that one finger already started
       pinchingRef.current = true
     }
 
@@ -116,10 +147,14 @@ export default function usePinchZoom({ containerRef, contentRef, zoom, setZoom, 
     }
 
     function onTouchEnd(e) {
-      if (!g || g.kind !== 'touch' || e.touches.length >= 2) return
-      commit()
-      // keep the flag up briefly so the lifting finger can't leave a stray pen dot
-      setTimeout(() => { pinchingRef.current = false }, 150)
+      if (g && g.kind === 'touch' && e.touches.length < 2) {
+        commit()
+        // keep the flag up briefly so the lifting finger can't leave a stray pen dot
+        setTimeout(() => { pinchingRef.current = false }, 150)
+      }
+      // Stay frozen until EVERY finger is off the glass — otherwise the finger that's still
+      // down would start a normal scroll the moment the pinch ends and drag the page up/down.
+      if (e.touches.length === 0) unlock()
     }
 
     function onWheel(e) {
@@ -160,7 +195,7 @@ export default function usePinchZoom({ containerRef, contentRef, zoom, setZoom, 
       el.removeEventListener('gesturechange', blockGesture)
       el.removeEventListener('gestureend', blockGesture)
       clearTimeout(wheelTimer)
-      if (g?.kind === 'touch') el.style.overflow = g.prevOverflow
+      unlock()
       const content = contentRef.current
       if (content) { content.style.transform = ''; content.style.transformOrigin = '' }
     }

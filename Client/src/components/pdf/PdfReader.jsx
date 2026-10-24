@@ -211,13 +211,16 @@ function PageBlock({
   const baseSizeRef = useRef(null) // unscaled page size — lets us resize the canvas instantly on zoom, before the crisp re-render lands
   const cssSizeRef = useRef({ w: 0, h: 0 }) // canvas CSS (logical) size — backing-store pixels are this × devicePixelRatio
   const [rendered, setRendered] = useState(false)
-  const [shouldRender, setShouldRender] = useState(false)
+  // true while this page is within ~1200px of the viewport. Only such pages (re)render, so a zoom
+  // re-draws the handful of pages you can actually see — not every page you ever scrolled past
+  // (that pile of heavy renders is what made phones stutter right after a pinch).
+  const [near, setNear] = useState(false)
 
   // Register with the shared lazy-render observer once on mount.
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return undefined
-    return registerRenderObserver(el, () => setShouldRender(true))
+    return registerRenderObserver(el, setNear)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -322,7 +325,7 @@ function PageBlock({
 
   useEffect(() => () => { try { textLayerObjRef.current?.cancel() } catch { /* already finished */ } }, [])
 
-  useEffect(() => { if (shouldRender) render() }, [shouldRender, render])
+  useEffect(() => { if (near) render() }, [near, render])
 
   // Redraw strokes whenever they change (new stroke added / erased / undone).
   useEffect(() => {
@@ -602,11 +605,8 @@ export default function PdfReader({ doc, onClose, onSaved }) {
     if (!root) return undefined
     renderObserverRef.current = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
-        if (!entry.isIntersecting) return
-        const cb = renderCallbacksRef.current.get(entry.target)
-        if (cb) cb()
-        renderObserverRef.current.unobserve(entry.target)
-        renderCallbacksRef.current.delete(entry.target)
+        // keep observing — pages report both "came near" and "went far"
+        renderCallbacksRef.current.get(entry.target)?.(entry.isIntersecting)
       })
     }, { root, rootMargin: '1200px 0px', threshold: 0.01 })
     return () => renderObserverRef.current?.disconnect()
